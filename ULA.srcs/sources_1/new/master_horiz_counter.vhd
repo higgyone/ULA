@@ -9,7 +9,9 @@
 -- Target Devices: 
 -- Tool Versions: 
 -- Description: 
--- 
+-- Horizontal clock counter block (see pg 90)
+-- counts 0 to 1101 1111 (447 dec). 
+-- 448 cycles in 64us
 -- Dependencies: 
 -- 
 -- Revision:
@@ -25,9 +27,9 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 entity master_horiz_counter is
 port(
-      clk7         : in     std_logic;
-      tclk_a       : in     std_logic := '0';
-      reset        : in     std_logic;
+      clk7         : in     std_logic;          -- master clock
+      tclk_a       : in     std_logic := '0';   -- always assumed to be '0'
+      reset        : in     std_logic;          
       c0           : out    std_logic;
       c1           : out    std_logic;
       c2           : out    std_logic;
@@ -37,8 +39,8 @@ port(
       c6           : out    std_logic;
       c7           : out    std_logic;
       c8           : out    std_logic;
-      clk_hc6      : out  std_logic;
-      hc_rst       : out  std_logic
+      clk_hc6      : out  std_logic;            -- clock for 3 bit counter, same as c5
+      hc_rst       : out  std_logic             -- horizontal counter reset
    );
 end master_horiz_counter;
 
@@ -73,9 +75,10 @@ begin
     clk_c4 <= not c3_n;
     clk_c5 <= c4_n nor c3_n;
     
-    s_clkhc6 <= not(tclk_a or c5_n);
+    s_clkhc6 <= tclk_a nor c5_n;
     clk_hc6 <= s_clkhc6;
     
+    -- do this as a  3 bit counter like ULA clocked by clk_hc6
     c6 <= clk8_6(0);
     c7 <= clk8_6(1);
     c8 <= clk8_6(2);
@@ -135,38 +138,9 @@ count_5: entity work.clk_div_2
 b3c: entity work.bit3_counter(Behavioral)
 port map(
       clk => s_clkhc6,        
-      reset => '0',
+      reset => reset,
       output => clk8_6,
       overflow => hc_rst
    );     
      
---count_6: entity work.trc_ff
---    port map(
---    clk => clk_c6_8,
---    reset => hc_rst,
---    carry => carry6,
---    q => c6,
---    qbar => open
---    );   
-    
---count_7: entity work.trce_ff
---    port map(
---    enable => enable7,
---    clk => clk_c6_8,
---    reset => hc_rst,
---    carry => carry7,
---    q => c7,
---    qbar => c7_n
---    );   
-    
---count_8: entity work.trce_ff
---    port map(
---    enable => enable8,
---    clk => clk_c6_8,
---    reset => hc_rst,
---    carry => open,
---    q => c8,
---    qbar => c8_n
---    );   
-
 end Behavioral;
