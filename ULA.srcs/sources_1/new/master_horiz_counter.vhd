@@ -10,7 +10,7 @@
 -- Tool Versions: 
 -- Description: 
 -- Horizontal clock counter block (see pg 90)
--- counts 0 to 1101 1111 (447 dec). 
+-- counts 0 to 1101 1111 (447 dec) for 448 cycles (pixels) per horizontal scan line
 -- 448 cycles in 64us
 -- Dependencies: 
 -- 
