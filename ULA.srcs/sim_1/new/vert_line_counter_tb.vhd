@@ -37,7 +37,7 @@ end vert_line_counter_tb;
 
 architecture Behavioral of vert_line_counter_tb is
     constant T    : time    := 143 ns; -- clk period
-    signal clk : std_logic;
+    signal clk    : std_logic;
     signal v0     : std_logic;
     signal v1     : std_logic;
     signal v2     : std_logic;
@@ -49,8 +49,11 @@ architecture Behavioral of vert_line_counter_tb is
     signal v8     : std_logic;
     signal clk_hc6     : std_logic;
     signal HC_rst     : std_logic;
+    signal Vrst : std_logic;
     signal reset : std_logic;
+    
 begin
+
 vlc: entity work.Vert_Line_counter(Behavioral)
     port map(
       HCrst_Enable => HC_rst,
@@ -63,7 +66,8 @@ vlc: entity work.Vert_Line_counter(Behavioral)
       v5 => v5,
       v6 => v6,
       v7 => v7,
-      v8 => v8
+      v8 => v8,
+      Vrst => Vrst
    );
 
 mhc: entity work.master_horiz_counter(Behavioral)
@@ -91,7 +95,8 @@ mhc: entity work.master_horiz_counter(Behavioral)
       clk <= '1';
       wait for T / 2;
    end process;
-      process   
+   
+   process   
    begin 
        reset <= '1';
        wait for 50ns;

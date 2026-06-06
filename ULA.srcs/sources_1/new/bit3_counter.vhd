@@ -9,7 +9,7 @@
 -- Target Devices: 
 -- Tool Versions: 
 -- Description: 
--- 
+-- This is a 3 bit counter that counts to '110'
 -- Dependencies: 
 -- 
 -- Revision:

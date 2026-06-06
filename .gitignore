@@ -493,3 +493,4 @@ ULA.sim/sim_1/behav/xsim/xsim.dir/horiz_timing_tb_behav/obj/xsim_1.c
 ULA.sim/sim_1/behav/xsim/xsim.dir/horiz_timing_tb_behav/Compile_Options.txt
 ULA.sim/sim_1/behav/xsim/video_sync_tb.tcl
 ULA.sim/sim_1/behav/xsim/horiz_timing_tb.tcl
+ULA.cache/sim/ssm.db

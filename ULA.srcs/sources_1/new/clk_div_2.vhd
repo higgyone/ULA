@@ -9,7 +9,7 @@
 -- Target Devices: 
 -- Tool Versions: 
 -- Description: 
--- 
+-- Divide by 2 clock with clk and n_clk outputs
 -- Dependencies: 
 -- 
 -- Revision:

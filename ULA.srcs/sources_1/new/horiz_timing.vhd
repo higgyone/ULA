@@ -9,7 +9,17 @@
 -- Target Devices: 
 -- Tool Versions: 
 -- Description: 
--- 
+-- hsync is 4.6us or 32 pixels
+-- front porch video blank before hsync is asserted is 2.29us or 16 pixels
+-- total blanking period is 13.7us or 96 pixels
+-- periods are derived from 16 clock cycles or 2.29us (143ns * 16)
+--
+-- pixel output 0-255 pixels 000 000 000
+-- right border 256-319 pixels 100 000 000
+-- video blanking period 320-415 pixels 101 000 000
+-- hsync pulse 344-375 pixels 101 011 000 (for 6c)
+-- left border 416-447 pixels 110 100 000
+-- sync counter reset 447-448 pixels 110 111 111 
 -- Dependencies: 
 -- 
 -- Revision:
@@ -74,13 +84,13 @@ mhc: entity work.master_horiz_counter(Behavioral)
       hc_rst  => open  
     );
 
-blank1 <= not((not c8) or c7 or (not c6)); -- 101 000 000
-blank2 <= not((not c8) or (not c7) or c5); -- 110 100 00
+blank1 <= not((not c8) or c7 or (not c6)); -- 101 000 000 video blanking period start
+blank2 <= not((not c8) or (not c7) or c5); -- 110 100 000 video blanking period ends
 nHblank <= not(blank1 or blank2); 
 
 nHSyncA_5c <= not(c5 or c4); -- front porch
 nHSyncB_5c <= not((not c5) or (not c4));
-nHSyncPulses_5c <= nHSyncA_5c or nHSyncB_5c; 
+nHSyncPulses_5c <=  nHSyncA_5c or nHSyncB_5c; 
 
 X <= not((not c4) or (not c3)); -- delayed by half a c3 period
 nHSyncA_6c <= not(c5 or X);
