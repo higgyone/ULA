@@ -8,6 +8,15 @@ Gate-accurate VHDL recreation of the Ferranti/Amstrad ULA chip used in the ZX Sp
 
 GitHub: https://github.com/higgyone/ULA
 
+## Multi-PC setup
+
+This project is developed across more than one PC. The Vivado project file (`ULA.xpr`) and all generated Vivado directories (`ULA.cache/`, `ULA.runs/`, `ULA.sim/`, `ULA.hw/`, `ULA.ip_user_files/`) live on a *different* machine — they are not in this working tree on every PC. Only the git-tracked sources under `ULA.srcs/`, plus repo metadata, are guaranteed to be present.
+
+Implications:
+- Don't suggest `git add ULA.xpr` unless it's actually on disk.
+- Synthesis, simulation, and bitstream generation happen on the PC that has Vivado and the `.xpr` — not necessarily the PC running Claude.
+- The constraints file `ULA.srcs/constrs_1/imports/constraints/Nexys4_DDR.xdc` still needs replacing with an Arty A7-35T XDC; that's best done on the PC running Vivado.
+
 ## Toolchain
 
 - **IDE/Synthesis**: Xilinx Vivado (no CLI build scripts — synthesis, simulation, and bitstream generation are done through the Vivado GUI or Tcl console)
