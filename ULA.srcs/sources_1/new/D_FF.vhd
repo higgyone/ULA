@@ -17,7 +17,9 @@ begin
         if falling_edge(clk) then
             d_sig <= d;
         end if;
-        q <= d_sig;
-        q <= not d_sig;
     end process;
+
+    q <= d_sig;
+    q_bar <= not d_sig;
+    
 end Behavourial;

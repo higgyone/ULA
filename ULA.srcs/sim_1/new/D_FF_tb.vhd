@@ -41,7 +41,6 @@ architecture arch of D_FF_tb is
     signal d    : std_logic :='0';
     signal q    : std_logic;
     signal q_bar : std_logic;
-    signal qb_out :std_logic;
 begin
     dFlipFlop: entity work.d_ff(Behavourial)
         port map(
@@ -63,12 +62,11 @@ begin
       wait for T / 2;
    end process;
     
-    process
-    begin
-       
-        d <= q_bar;
-        wait;
-   end process;
+    -- Tie d to q_bar so the FF toggles on every falling edge.
+    -- Concurrent assignment, so d tracks q_bar every time it changes
+    -- (not a one-shot sample at t=0 where q_bar is still 'U').
+
+    d <= q_bar;
    --process 
 --   begin 
 ----        d <= '1';
