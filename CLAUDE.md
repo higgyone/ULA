@@ -10,18 +10,17 @@ GitHub: https://github.com/higgyone/ULA
 
 ## Multi-PC setup
 
-This project is developed across more than one PC. The Vivado project file (`ULA.xpr`) and all generated Vivado directories (`ULA.cache/`, `ULA.runs/`, `ULA.sim/`, `ULA.hw/`, `ULA.ip_user_files/`) live on a *different* machine — they are not in this working tree on every PC. Only the git-tracked sources under `ULA.srcs/`, plus repo metadata, are guaranteed to be present.
+This project is developed across more than one PC. The Vivado project file (`ULA.xpr`) is tracked in git, but the generated Vivado directories (`ULA.cache/`, `ULA.runs/`, `ULA.sim/`, `ULA.hw/`, `ULA.ip_user_files/`, `ULA.gen/`) are gitignored and regenerated locally on each machine.
 
 Implications:
-- Don't suggest `git add ULA.xpr` unless it's actually on disk.
-- Synthesis, simulation, and bitstream generation happen on the PC that has Vivado and the `.xpr` — not necessarily the PC running Claude.
-- The constraints file `ULA.srcs/constrs_1/imports/constraints/Nexys4_DDR.xdc` still needs replacing with an Arty A7-35T XDC; that's best done on the PC running Vivado.
+- Synthesis, simulation, and bitstream generation happen on the PC that has Vivado installed — not necessarily the PC running Claude.
+- On a fresh checkout, opening `ULA.xpr` in Vivado will reconstruct the cache/runs/sim directories from `ULA.srcs/`.
 
 ## Toolchain
 
 - **IDE/Synthesis**: Xilinx Vivado (no CLI build scripts — synthesis, simulation, and bitstream generation are done through the Vivado GUI or Tcl console)
 - **Simulation**: Vivado's built-in simulator (xsim) via the testbenches in `ULA.srcs/sim_1/new/`
-- **Constraints**: `ULA.srcs/constrs_1/imports/constraints/Nexys4_DDR.xdc` — **needs replacing with an Arty A7-35T XDC**; pin assignments and bank voltages differ from the Nexys4 DDR
+- **Constraints**: `ULA.srcs/arty_35/imports/constraints/Arty-A7-35-Master.xdc` — Digilent's master XDC for the Arty A7-35T (Rev. D/E). All pins are commented out by default; uncomment and rename ports as the top-level design grows.
 
 To run a simulation in Vivado: set the target testbench as the active simulation source, then run *Simulation → Run Simulation → Run Behavioral Simulation*.
 

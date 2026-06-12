@@ -58,5 +58,11 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Vivado gate-level / cell-graph exports (regenerable)
+gate sim/
+
+# Third-party reference material (not part of this project's sources)
+spectrum_release_20110901/
+
 # Keep ULA.xpr (project file) and source/sim/constraint trees tracked.
 # Anything under ULA.srcs/ should be checked in.
