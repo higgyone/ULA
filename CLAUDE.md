@@ -21,6 +21,11 @@ Implications:
 - **IDE/Synthesis**: Xilinx Vivado (no CLI build scripts — synthesis, simulation, and bitstream generation are done through the Vivado GUI or Tcl console)
 - **Simulation**: Vivado's built-in simulator (xsim) via the testbenches in `ULA.srcs/sim_1/new/`
 - **Constraints**: `ULA.srcs/arty_35/imports/constraints/Arty-A7-35-Master.xdc` — Digilent's master XDC for the Arty A7-35T (Rev. D/E). All pins are commented out by default; uncomment and rename ports as the top-level design grows.
+- **Editor (non-Vivado PC)**: VS Code with `puorc.awesome-vhdl` (syntax) + `hbohlin.vhdl-ls` (language server). The repo ships a [`vhdl_ls.toml`](vhdl_ls.toml) at the root that puts every `.vhd` in `ULA.srcs/sources_1/new/` and `ULA.srcs/sim_1/new/` into a library called `defaultlib` (VHDL LS reserves `work` as the "current library" alias, so the actual library name must be different).
+
+### VHDL LS gotchas
+- **Time literals require whitespace** between the integer and the unit. `wait for 50ns;` is rejected as "Invalid integer character 'n'" — write `wait for 50 ns;`. Vivado tolerates the no-space form but VHDL LS is strict. All testbenches have been normalised.
+- **No BOMs.** PowerShell 5.1's `Set-Content -Encoding utf8` adds a UTF-8 BOM that some HDL tools choke on. Use `.NET`'s `UTF8Encoding($false)` when rewriting files from PS, or use VS Code (UTF-8 without BOM by default).
 
 To run a simulation in Vivado: set the target testbench as the active simulation source, then run *Simulation → Run Simulation → Run Behavioral Simulation*.
 
@@ -57,17 +62,17 @@ To run a simulation in Vivado: set the target testbench as the active simulation
 | `trce_ff` | `trce_ff.vhd` | T FF with reset, enable and carry |
 | `bit3_counter` | `bit3_counter.vhd` | 3-bit counter 0–6 (7 states) for C6–C8 |
 
-## Known Bugs (unfixed as of last sync)
+## Known Bugs
 
-**BUG 1 — `D_FF.vhd`**: `q` driven twice inside the process; `q_bar` never assigned. Both concurrent assignments must be moved outside the process.
+**BUG 1 — `D_FF.vhd`** *(fixed in 21e216a)*: `q` and `q_bar` assignments moved outside the process.
 
-**BUG 2 — `trc_ff.vhd`, `tce_ff.vhd`, `trce_ff.vhd`**: `carry` and `qbar` are identical (`not toggle`). `carry` is unused in `master_horiz_counter` (chaining is NOR-gated clocks, not carry pins). Either remove the `carry` port or leave it as a documented alias.
+**BUG 2 — `trc_ff.vhd`, `tce_ff.vhd`, `trce_ff.vhd`** *(resolved — kept as documented alias)*: `carry` is now explicitly aliased to `qbar` with a header comment. Port retained so existing port maps still compile; future code should prefer `qbar`.
 
-**BUG 3 — `3_bit counter.vhd`**: Duplicate entity `bit3_counter` with a filename containing a space. Only `bit3_counter.vhd` should be kept; `3_bit counter.vhd` should be deleted from the project.
+**BUG 3 — `3_bit counter.vhd`** *(fixed)*: file deleted. Removed from Vivado's project file too.
 
-**BUG 4 — `video_sync.vhd`**: `Vrst` port of `Vert_Line_counter` is not connected in the port map — compile error. Fix: add `Vrst => open` to the `vlc` port map.
+**BUG 4 — `video_sync.vhd`** *(unfixed)*: `Vrst` port of `Vert_Line_counter` is not connected in the port map. Fix: add `Vrst => open` to the `vlc` port map.
 
-**BUG 5 — `Vert_Line_counter.vhd`**: Comment on `v_max` says "312 lines" but the value `"100110111"` = 311. The logic is correct (0–311 = 312 states); only the comment is wrong.
+**BUG 5 — `Vert_Line_counter.vhd`** *(unfixed)*: Comment on `v_max` says "312 lines" but the value `"100110111"` = 311 decimal. The logic is correct (0–311 = 312 states); only the comment is wrong.
 
 ## Verified Correct — Do Not Change
 
@@ -80,9 +85,16 @@ The following combinational logic in `video_sync.vhd` has been verified against 
 - `nBorder` (border: HIGH lines 0–191, LOW lines 192–311)
 - `sVsync` (vsync pulse lines 248–251, 4 lines wide; the `not(v5)` vs `(not v4)` bracket inconsistency is cosmetic only)
 
+## Current status (as of this commit)
+
+- Timing backbone (Phases 1–4) is complete and verified against the Chris Smith spec.
+- Target board switched from Nexys4 DDR to Arty A7-35T; master XDC is in place but pin assignments are still commented out (waits on the top-level `ULA.vhd` ports being defined).
+- VS Code + VHDL LS tooling configured on the non-Vivado PC; testbenches normalised (`Nns` → `N ns`, BOMs stripped).
+- Bugs 1, 2, 3 resolved. Bugs 4 (`Vrst => open` in `video_sync.vhd`) and 5 (`v_max` comment) still open — both are one-line edits, deferred until next session in front of Vivado.
+
 ## What Needs Building Next
 
-Timing backbone (Phases 1–4) is complete. Remaining work in order:
+Remaining work in order:
 
 **Phase 5 — Video output**
 - `border_reg.vhd` — port 0xFE write, capture bits 2:0 as border colour
