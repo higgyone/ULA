@@ -52,11 +52,11 @@ port map(
    process   
    begin 
        reset <= '1';
-       wait for 50ns;
+       wait for 50 ns;
       reset <= '0';
-      wait for 50ns;
+      wait for 50 ns;
       reset <= '1';
-       wait for 50ns;
+       wait for 50 ns;
       reset <= '0';
       wait for T * 100;
       
