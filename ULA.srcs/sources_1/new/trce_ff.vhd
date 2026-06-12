@@ -1,61 +1,58 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date: 29.06.2020 15:02:08
--- Design Name: 
--- Module Name: trce_ff - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 
--- 
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
-----------------------------------------------------------------------------------
-
+----------------------------------------------------------------------
+-- trce_ff — Toggle FF with Reset, Carry and Enable (structural)
+--
+-- T-flip-flop built from d_ff_nor with reset + enable feeding the d
+-- input. Priority: reset > enable.
+--
+--   d = '0'   when reset='1'                  (sync clear)
+--   d = qbar  when reset='0' and enable='1'   (toggle)
+--   d = q     when reset='0' and enable='0'   (hold)
+--
+-- Falling-edge triggered. Reset is SYNCHRONOUS — q clears on the
+-- next falling edge of clk while reset is asserted.
+--
+-- NOTE: `carry` is electrically identical to `qbar`. Retained for
+-- schematic symmetry with the original ULA drawings; not consumed.
+--
+-- Characteristic table:
+--
+--   reset  enable  clk       |  q(next)   qbar(next)
+--   -----  ------  --------  |  -------   ----------
+--     1    X       ↓         |  0         1
+--     0    1       ↓         |  not q     not qbar    (toggle)
+--     0    0       ↓         |  q         qbar        (hold)
+--     X    X       no edge   |  q         qbar        (hold)
+----------------------------------------------------------------------
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
 entity trce_ff is
-    Port ( enable : in STD_LOGIC := '1';
-           clk : in STD_LOGIC;
-           reset : in STD_LOGIC;
-           carry : out STD_LOGIC;
-           q : out STD_LOGIC;
-           qbar : out STD_LOGIC);
+    Port ( enable : in  STD_LOGIC := '1';
+           clk    : in  STD_LOGIC;
+           reset  : in  STD_LOGIC;
+           carry  : out STD_LOGIC;
+           q      : out STD_LOGIC;
+           qbar   : out STD_LOGIC);
 end trce_ff;
 
 architecture Behavioral of trce_ff is
-
-signal toggle : std_logic :='0';
-
+    signal d_in     : std_logic;
+    signal q_int    : std_logic;
+    signal qbar_int : std_logic;
 begin
+    -- Priority: reset > enable.
+    d_in <= '0'      when reset  = '1'
+       else qbar_int when enable = '1'
+       else q_int;
 
-    process(clk, reset, enable, toggle)
-    begin
-        if (reset = '1') then
-            toggle <= '0';
-        elsif ((falling_edge(clk)) and (enable = '1')) then
-            toggle <= not toggle;      
-        end if;
-    end process;
-        
-    q <= toggle;
-    carry <= not toggle;
-    qbar <= not toggle;
+    ff : entity work.d_ff_nor(Behavioral)
+        port map ( clk  => clk,
+                   d    => d_in,
+                   q    => q_int,
+                   qbar => qbar_int );
+
+    q     <= q_int;
+    qbar  <= qbar_int;
+    carry <= qbar_int;  -- alias of qbar (documented in header)
 end Behavioral;

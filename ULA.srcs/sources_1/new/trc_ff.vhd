@@ -1,62 +1,53 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date: 29.06.2020 15:02:08
--- Design Name: 
--- Module Name: trce_ff - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 
--- 
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
-----------------------------------------------------------------------------------
-
+----------------------------------------------------------------------
+-- trc_ff — Toggle FF with Reset and Carry (structural)
+--
+-- T-flip-flop built from d_ff_nor by tying d to qbar. Falling-edge
+-- triggered. Reset is SYNCHRONOUS — d is forced to '0' while reset is
+-- asserted, so q clears on the next falling edge of clk.
+--
+-- Originally drawn in Chris Smith's schematic as part of the
+-- horizontal/vertical counter chains, where chaining between stages
+-- is done via NOR-gated clocks rather than the `carry` pin.
+--
+-- NOTE: `carry` is electrically identical to `qbar`. The port is
+-- retained for schematic symmetry with the original drawings;
+-- nothing in this design consumes it.
+--
+-- Characteristic table:
+--
+--   reset  clk       |  q(next)   qbar(next)   carry(next)
+--   -----  --------  |  -------   ----------   -----------
+--     1    ↓         |  0         1            1
+--     0    ↓         |  not q     not qbar     not qbar
+--     X    no edge   |  q         qbar         carry        (hold)
+----------------------------------------------------------------------
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
 entity trc_ff is
-    Port ( 
-           clk : in STD_LOGIC;
-           reset : in STD_LOGIC;
+    Port ( clk   : in  STD_LOGIC;
+           reset : in  STD_LOGIC;
            carry : out STD_LOGIC;
-           q : out STD_LOGIC;
-           qbar : out STD_LOGIC);
+           q     : out STD_LOGIC;
+           qbar  : out STD_LOGIC);
 end trc_ff;
 
 architecture Behavioral of trc_ff is
-
-signal toggle : std_logic := '0';
-
+    signal d_in     : std_logic;
+    signal q_int    : std_logic;
+    signal qbar_int : std_logic;
 begin
+    -- T with sync reset: d = '0' on reset; otherwise d = qbar (toggle).
+    d_in <= '0' when reset = '1' else qbar_int;
 
-    process(clk, reset, toggle)
-    begin
-        if (reset = '1') then
-            toggle <= '0';
-        elsif falling_edge(clk) then
-            toggle <= not toggle;         
-        end if;    
-    end process;
-    
-    q <= toggle;
-    carry <= not toggle;
-    qbar <= not toggle;
+    ff : entity work.d_ff_nor(Behavioral)
+        port map ( clk  => clk,
+                   d    => d_in,
+                   q    => q_int,
+                   qbar => qbar_int );
 
+    q     <= q_int;
+    qbar  <= qbar_int;
+    carry <= qbar_int;  -- alias of qbar (documented in header)
 end Behavioral;
