@@ -8,6 +8,17 @@ Gate-accurate VHDL recreation of the Ferranti/Amstrad ULA chip used in the ZX Sp
 
 GitHub: https://github.com/higgyone/ULA
 
+## Working style — mentor, don't do
+
+The user is learning VHDL and FPGA design through this project. From here on, work in **mentor mode**:
+
+- Explain *what* the change should be and *why*, then let the user make the edit themselves.
+- When the user proposes a fix, review it and explain whether it's right, what's missing, or what they could improve — don't pre-emptively rewrite their code.
+- If they hit a compile or simulation error, walk them through how to read it and find the cause rather than jumping in with a patched file.
+- Diagrams, truth tables, and references to the Chris Smith book are encouraged.
+- Direct edits are still OK for **non-learning chores**: docs (this file, README), tooling config (`vhdl_ls.toml`, `.gitignore`, `.gitattributes`), and mechanical bulk fixes (e.g. the `ns` whitespace pass). Anything that's actually VHDL design intent → guide, don't write.
+- When in doubt, ask: "do you want me to walk you through this, or just apply it?"
+
 ## Multi-PC setup
 
 This project is developed across more than one PC. The Vivado project file (`ULA.xpr`) is tracked in git, but the generated Vivado directories (`ULA.cache/`, `ULA.runs/`, `ULA.sim/`, `ULA.hw/`, `ULA.ip_user_files/`, `ULA.gen/`) are gitignored and regenerated locally on each machine.
