@@ -16,7 +16,7 @@
 -- against the Behavioral reference (preserved commented-out in
 -- bit3_counter.vhd):
 --
---   1. Run with `(Structural)` active (the current configuration) and
+--   1. Run the testbench with the Structural architecture active and
 --      capture the `output` and `overflow` waveforms.
 --   2. Swap to the Behavioral reference architecture (uncomment it in
 --      bit3_counter.vhd; comment out Structural) and re-run.
@@ -24,15 +24,21 @@
 --      every reset event. Any divergence is a bug in the structural
 --      next-state logic or wrap detection.
 --
--- Coverage still to add:
---   * All 7 legal states (000..110) visited at least once — the
---     existing 100×T run after the second deassert should achieve this
---     but should be confirmed by inspection.
+-- Coverage to add before declaring the structural arch correct:
+--   * All 7 legal states (000..110) visited at least once.
+--   * Wrap from 110 → 000 observed.
 --   * Reset asserted from each legal state — verify count clears on
 --     the next falling edge, not before (sync reset semantics).
 --   * Force the FF state to "111" (illegal) and verify the counter
---     self-corrects to "000" on the next clock — the glitch-recovery
---     property documented in the source.
+--     self-corrects to "000" on the next clock — this is the
+--     don't-care/glitch-recovery property documented in the source.
+--   * `overflow` asserts only while output = "110".
+--
+-- KNOWN ISSUES in this testbench (fix before re-running):
+--   * Port map names architecture as `(Behavioral)` but the entity's
+--     active architecture is now `Structural`. Update to match.
+--   * `overflow` output of the UUT is not connected — add a signal
+--     and wire it up so it can be observed in the waveform.
 ----------------------------------------------------------------------
 
 
@@ -57,7 +63,7 @@ port map(
       clk => clk,        
       reset => reset,
       output => output,
-      overflow => overflow,
+      overflow => overflow
    );
    
    process
