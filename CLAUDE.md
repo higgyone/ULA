@@ -96,12 +96,37 @@ The following combinational logic in `video_sync.vhd` has been verified against 
 - `nBorder` (border: HIGH lines 0–191, LOW lines 192–311)
 - `sVsync` (vsync pulse lines 248–251, 4 lines wide; the `not(v5)` vs `(not v4)` bracket inconsistency is cosmetic only)
 
+## Vivado-PC TODO list
+
+Things that must be done in Vivado on the Vivado PC, because they require touching `ULA.xpr` through the IDE (raw edits to the project file are risky):
+
+- **Delete stale auto-disabled imports duplicates** of testbenches. Currently in the repo and `ULA.xpr` as auto-disabled (Vivado isn't using them):
+  - `ULA.srcs/sources_1/imports/new/master_horiz_counter_tb.vhd` — duplicate of `ULA.srcs/sim_1/new/master_horiz_counter_tb.vhd`. Only difference was `T := 143 ns` vs `10 ns`; the 143 ns value (real 7 MHz period) is now captured as a comment in the active testbench.
+  - `ULA.srcs/sim_1/imports/new/horiz_timing_tb.vhd` — likely the same auto-disabled-duplicate situation; check `ULA.xpr` for the `AutoDisabled` flag and confirm it's a copy of the version in `sim_1/new/`.
+
+  In Vivado: right-click each file in the Sources panel → *Remove File from Project*, then `git rm` the file on disk and commit. Doing it any other way risks leaving `ULA.xpr` out of sync.
+
 ## Current status (as of this commit)
 
 - Timing backbone (Phases 1–4) is complete and verified against the Chris Smith spec.
 - Target board switched from Nexys4 DDR to Arty A7-35T; master XDC is in place but pin assignments are still commented out (waits on the top-level `ULA.vhd` ports being defined).
 - VS Code + VHDL LS tooling configured on the non-Vivado PC; testbenches normalised (`Nns` → `N ns`, BOMs stripped).
 - Bugs 1, 2, 3 resolved. Bugs 4 (`Vrst => open` in `video_sync.vhd`) and 5 (`v_max` comment) still open — both are one-line edits, deferred until next session in front of Vivado.
+- **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives).
+- **`bit3_counter` converted to structural**: three `d_ff_nor` cells + per-bit next-state combinational logic (binary +1 rule + wrap suppression at `"110"` + sync reset). Old behavioural arch preserved commented-out as the simulation oracle. `master_horiz_counter` instantiation updated to `(Structural)`.
+- **`bit3_counter_tb` self-checks** the invariant `overflow = '1'` iff `output = "110"` on every falling edge via assert.
+- **Open verification task**: cross-check `bit3_counter` Structural vs commented-out Behavioural architectures — swap which arch is active, re-simulate, confirm `output`/`overflow` waveforms overlay exactly across every state and reset.
+
+## Walk-through progress (mentor-mode log)
+
+Files covered so far, in order, by the post-`6e59d6e` walk-through:
+- `D_FF.vhd` (Bug 1) — async-vs-sync, concurrent-vs-process patterns
+- `trc_ff.vhd` — behavioural → structural d_ff_nor, sync reset via d-mux
+- `tce_ff.vhd` — enable as a d-mux, hold-via-self-loopback pattern
+- `trce_ff.vhd` — three-way d-mux with priority (reset > enable)
+- `bit3_counter.vhd` — per-bit binary +1 rule + wrap suppression + sync reset; structural conversion derived from a state table
+
+**Next on the list:** `clk_div_2` (simplest structural composition — `d_ff_nor` + a single inverted feedback wire).
 
 ## What Needs Building Next
 

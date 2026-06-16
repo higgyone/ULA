@@ -28,7 +28,11 @@ entity master_horiz_counter_tb is
 end master_horiz_counter_tb;
 
 architecture Behavioral of master_horiz_counter_tb is
-    constant T    : time    := 10 ns; -- clk period
+    -- Speed-knob: real ULA pixel clock is 7 MHz (period 143 ns). Set
+    -- T to 143 ns for timing-accurate simulation; 10 ns runs ~14x
+    -- faster and is fine for functional verification of counter
+    -- bits and overflow.
+    constant T    : time    := 10 ns; -- clk period (10 ns fast / 143 ns real)
     signal clk_7   : std_logic;
     signal tclk_a : std_logic   := '0';
     signal reset  : std_logic;
