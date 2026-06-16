@@ -30,9 +30,9 @@
 --
 -- Characteristic table:
 --
---   clk        d  |  q(next)   qbar(next)
---   --------   -- |  -------   ----------
---   no edge    X  |  q         not q       (hold)
+--   clk          d  |  q(next)   qbar(next)
+--   --------     -- |  -------   ----------
+--   no edge      X  |  q         not q  (hold)
 --   ↓ (fall)   0  |  0         1
 --   ↓ (fall)   1  |  1         0
 --

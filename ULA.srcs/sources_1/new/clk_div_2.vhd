@@ -18,8 +18,8 @@
 --
 --   reset  clk_in    |  q(next)
 --   -----  --------  |  -------
---     1    ↓         |  0
---     0    ↓         |  not q   (toggle)
+--     1    ↓       |  0
+--     0    ↓       |  not q   (toggle)
 --     X    no edge   |  q       (hold)
 --
 --   clk_out   = q     (divided clock)

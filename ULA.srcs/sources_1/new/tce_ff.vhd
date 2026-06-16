@@ -15,8 +15,8 @@
 --
 --   enable  clk       |  q(next)   qbar(next)   carry(next)
 --   ------  --------  |  -------   ----------   -----------
---     1     ↓         |  not q     not qbar     not qbar
---     0     ↓         |  q         qbar         carry        (hold)
+--     1     ↓       |  not q     not qbar     not qbar
+--     0     ↓       |  q         qbar         carry        (hold)
 --     X     no edge   |  q         qbar         carry        (hold)
 ----------------------------------------------------------------------
 

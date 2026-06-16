@@ -17,8 +17,8 @@
 --
 --   reset  clk       |  q(next)   qbar(next)   carry(next)
 --   -----  --------  |  -------   ----------   -----------
---     1    ↓         |  0         1            1
---     0    ↓         |  not q     not qbar     not qbar
+--     1    ↓       |  0         1            1
+--     0    ↓       |  not q     not qbar     not qbar
 --     X    no edge   |  q         qbar         carry        (hold)
 ----------------------------------------------------------------------
 

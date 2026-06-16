@@ -11,6 +11,9 @@
 -- Falling-edge triggered. Reset is SYNCHRONOUS — q clears on the
 -- next falling edge of clk while reset is asserted.
 --
+-- All ports must be driven explicitly. Use `enable => '1'` at the
+-- instantiation site for stages that should always toggle.
+--
 -- NOTE: `carry` is electrically identical to `qbar`. Retained for
 -- schematic symmetry with the original ULA drawings; not consumed.
 --
@@ -18,9 +21,9 @@
 --
 --   reset  enable  clk       |  q(next)   qbar(next)
 --   -----  ------  --------  |  -------   ----------
---     1    X       ↓         |  0         1
---     0    1       ↓         |  not q     not qbar    (toggle)
---     0    0       ↓         |  q         qbar        (hold)
+--     1    X       ↓       |  0         1
+--     0    1       ↓       |  not q     not qbar    (toggle)
+--     0    0       ↓       |  q         qbar        (hold)
 --     X    X       no edge   |  q         qbar        (hold)
 ----------------------------------------------------------------------
 
@@ -28,7 +31,7 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
 entity trce_ff is
-    Port ( enable : in  STD_LOGIC := '1';
+    Port ( enable : in  STD_LOGIC;
            clk    : in  STD_LOGIC;
            reset  : in  STD_LOGIC;
            carry  : out STD_LOGIC;
