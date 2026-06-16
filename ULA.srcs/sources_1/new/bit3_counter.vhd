@@ -13,11 +13,27 @@
 -- Reset is synchronous: when reset='1', the count clears on the next
 -- falling edge of clk.
 --
--- Implementation is still behavioural (arithmetic on an unsigned
--- signal), NOT a structural chain of d_ff_nor cells. A future refactor
--- could decompose this into three d_ff_nor instances plus the
--- appropriate NOR-gated combinational logic for full gate-accurate
--- parity with the original ULA schematic.
+-- Structural implementation: three d_ff_nor cells (one per bit) with
+-- combinational next-state logic on each d input. The next-state per
+-- bit follows the standard binary ripple-carry "+1 rule":
+--
+--   d(0) = not q(0)                       (LSB always flips)
+--   d(1) = q(1) xor q(0)                  (flip when q(0)=1)
+--   d(2) = q(2) xor (q(1) and q(0))       (flip when q(1) and q(0)=1)
+--
+-- Modulo-7 wrap is enforced by ANDing every d-bit with `not wrap`,
+-- where `wrap = q(2) and q(1) and not q(0)` detects state "110".
+-- Synchronous reset uses the same trick: AND every d-bit with
+-- `not reset`. Both reset and wrap leave the clock path untouched —
+-- they only change what gets sampled on the next falling edge.
+--
+-- A glitch into the unused state "111" is self-correcting: wrap is 0
+-- there (it requires q(0)=0), the +1 rule gives "000", and the
+-- counter rejoins the legal sequence on the next clock.
+--
+-- A reference behavioural architecture is preserved below (commented
+-- out) as the simulation oracle for the structural design — both must
+-- produce identical output and overflow waveforms for every state.
 --
 -- State sequence:
 --
@@ -36,23 +52,45 @@ entity bit3_counter is
            overflow : out std_logic );
 end bit3_counter;
 
-architecture Behavioral of bit3_counter is
-    signal outputint : unsigned(2 downto 0) := "000";
+architecture Structural of bit3_counter is
+    signal q       : std_logic_vector(2 downto 0);  -- current state
+    signal d       : std_logic_vector(2 downto 0);  -- next state into FFs
+    signal wrap    : std_logic;                     -- 1 when at "110"
 begin
-    process (clk, reset)
-    begin
-        if falling_edge(clk) then
-            if reset = '1' then
-                outputint <= "000";
-            else
-                outputint <= outputint + 1;
-                if outputint = "110" then
-                    outputint <= "000";
-                end if;
-            end if;
-        end if;
-    end process;
+    -- detect we're at the wrap state
+    wrap <= q(2) and q(1) and (not q(0));   -- "110"
 
-    output   <= std_logic_vector(outputint);
-    overflow <= '1' when outputint = "110" else '0';
-end Behavioral;
+    -- next-state combinational logic per bit (binary +1, forced to 0 at wrap, forced to 0 at reset)
+    d(0) <= (not reset) and (not wrap) and (not q(0));
+    d(1) <= (not reset) and (not wrap) and (q(1) xor q(0));
+    d(2) <= (not reset) and (not wrap) and (q(2) xor (q(1) and q(0)));
+
+    -- three d_ff_nor instances — one per bit
+    ff0 : entity work.d_ff_nor port map (clk => clk, d => d(0), q => q(0), qbar => open);
+    ff1 : entity work.d_ff_nor port map (clk => clk, d => d(1), q => q(1), qbar => open);
+    ff2 : entity work.d_ff_nor port map (clk => clk, d => d(2), q => q(2), qbar => open);
+
+    output   <= q;
+    overflow <= wrap;
+end Structural;
+
+-- architecture Behavioral of bit3_counter is
+--     signal outputint : unsigned(2 downto 0) := "000";
+-- begin
+--     process (clk, reset)
+--     begin
+--         if falling_edge(clk) then
+--             if reset = '1' then
+--                 outputint <= "000";
+--             else
+--                 outputint <= outputint + 1;
+--                 if outputint = "110" then
+--                     outputint <= "000";
+--                 end if;
+--             end if;
+--         end if;
+--     end process;
+
+--     output   <= std_logic_vector(outputint);
+--     overflow <= '1' when outputint = "110" else '0';
+-- end Behavioral;

@@ -135,7 +135,7 @@ count_5: entity work.clk_div_2
      clk_out_n => c5_n
      );     
      
-b3c: entity work.bit3_counter(Behavioral)
+b3c: entity work.bit3_counter(Structural)
 port map(
       clk => s_clkhc6,        
       reset => reset,
