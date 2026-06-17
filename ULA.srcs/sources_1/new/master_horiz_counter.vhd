@@ -65,10 +65,6 @@ architecture Behavioral of master_horiz_counter is
     signal c3_n : std_logic;
     signal c4_n : std_logic;
     signal c5_n : std_logic;
-    signal c6_n : std_logic;
-    signal c7_n : std_logic;
-    signal c8_n : std_logic;
-    
     signal clk_c0 : std_logic;
     signal clk_c1 : std_logic;
     signal clk_c2 : std_logic;
