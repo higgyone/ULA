@@ -66,7 +66,6 @@ architecture Behavioral of master_horiz_counter is
     signal clk8_6 : std_logic_vector (2 downto 0);
     signal s_clkhc6 : std_logic;
 
-
 begin
     clk_c0 <= not clk7;
     clk_c1 <= c0_n nor clk7;
@@ -82,7 +81,6 @@ begin
     c6 <= clk8_6(0);
     c7 <= clk8_6(1);
     c8 <= clk8_6(2);
-
 
 --******************************************************************
 --  Counter initialisation  

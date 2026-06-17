@@ -57,9 +57,15 @@ To run a simulation in Vivado: set the target testbench as the active simulation
 - Counts 0–311 (312 lines per frame); emits `Vrst` on wrap
 - `v_max = "100110111"` = 311 decimal (counts 0–311 = 312 states — the comment in the file saying "312 lines" is misleading)
 
+### Horizontal timing block (`horiz_timing`)
+- Owns the `master_horiz_counter` instance and derives `hsync_5c` / `hsync_6c` / `nHblank` from the C0–C8 taps
+- Also exposes `clk_hc6` and `hc_rst` outward so the vertical counter can be clocked from them
+- All combinational logic in NOR-with-inverted-inputs style (Chris Smith pg 90)
+
 ### Video sync top level (`video_sync`)
-- Instantiates `master_horiz_counter` and `Vert_Line_counter`
-- Derives `nHblank`, `hsync_5c`/`hsync_6c`, `vsync`, `nBorder`, `sync_5c`/`sync_6c` purely from combinational logic on C0–C8 and V0–V8
+- Instantiates `horiz_timing` (which brings in the MHC) and `Vert_Line_counter`
+- Derives `nBorder` and `sVsync` from V counter taps; passes `hsync_5c`/`hsync_6c`/`nHblank` through from `horiz_timing`; combines hsync+vsync into composite `sync_5c`/`sync_6c`
+- All vertical-region combinational logic uses named intermediate signals (`VBorderLower`, `VBorderUpper`, `v3_n`..`v7_n`) matching the schematic
 - The 5c/6c suffix refers to issue 5 and issue 6 ULA chips with slightly different hsync timing
 
 ### Primitive flip-flops
@@ -111,7 +117,13 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - Timing backbone (Phases 1–4) is complete and verified against the Chris Smith spec.
 - Target board switched from Nexys4 DDR to Arty A7-35T; master XDC is in place but pin assignments are still commented out (waits on the top-level `ULA.vhd` ports being defined).
 - VS Code + VHDL LS tooling configured on the non-Vivado PC; testbenches normalised (`Nns` → `N ns`, BOMs stripped).
-- **All five original bugs resolved.** Open verification task remains: cross-check `bit3_counter` Structural vs Behavioural waveforms in Vivado. Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
+- **All five original bugs resolved.**
+- **`video_sync` slimmed down**: hsync/blanking logic now lives in `horiz_timing` (which was previously dead code). `video_sync` instantiates `horiz_timing` rather than inlining the equations. Single MHC instance across the design.
+- **`nBorder` and `sVsync` converted to NOR-faithful form** with named intermediates (`VBorderLower`, `VBorderUpper`, `v3_n`..`v7_n`).
+- Open verification tasks before declaring the timing backbone done:
+  - Cross-check `bit3_counter` Structural vs Behavioural waveforms in Vivado.
+  - Re-run `video_sync_tb` after the `horiz_timing` extraction; confirm `hsync_5c`/`hsync_6c`/`nHblank`/`sync_5c`/`sync_6c`/`vsync`/`nBorder` waveforms are identical to pre-refactor.
+- Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
 - **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives).
 - **`bit3_counter` converted to structural**: three `d_ff_nor` cells + per-bit next-state combinational logic (binary +1 rule + wrap suppression at `"110"` + sync reset). Old behavioural arch preserved commented-out as the simulation oracle. `master_horiz_counter` instantiation updated to `(Structural)`.
 - **`bit3_counter_tb` self-checks** the invariant `overflow = '1'` iff `output = "110"` on every falling edge via assert.

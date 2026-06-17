@@ -1,23 +1,18 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date: 09.07.2020 14:45:07
--- Design Name: 
--- Module Name: horiz_timing - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 
--- 
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
-----------------------------------------------------------------------------------
-
+----------------------------------------------------------------------
+-- video_sync — top-level timing for the ULA recreation
+--
+-- Instantiates horiz_timing (which owns the master horizontal counter)
+-- and Vert_Line_counter, then derives:
+--   * vertical border       (nBorder)        — Chris Smith pg 92
+--   * vertical sync pulse   (vsync)          — Chris Smith pg 92
+--   * composite sync        (sync_5c/sync_6c)
+--
+-- The horizontal sync and blanking signals (hsync_5c/hsync_6c/nHblank)
+-- come directly from horiz_timing and are passed through.
+--
+-- All combinational logic uses NORs with inverted inputs (the Ferranti
+-- gate style), with named intermediate signals matching the schematic.
+----------------------------------------------------------------------
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -25,129 +20,95 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity video_sync is
     Port (
-        clk : in std_logic;
-        tclk_a : in std_logic;
-        reset : in std_logic;
+        clk      : in  std_logic;
+        tclk_a   : in  std_logic;    -- retained for backwards compatibility; unused (horiz_timing ties internally to '0')
+        reset    : in  std_logic;
         hsync_5c : out std_logic;
         hsync_6c : out std_logic;
-        nHblank : out std_logic;
-        vsync : out std_logic;
-        nBorder : out std_logic;
-        sync_5c : out std_logic;
-        sync_6c : out std_logic
-     );
+        nHblank  : out std_logic;
+        vsync    : out std_logic;
+        nBorder  : out std_logic;
+        sync_5c  : out std_logic;
+        sync_6c  : out std_logic
+    );
 end video_sync;
 
 architecture Behavioral of video_sync is
-signal c0 : std_logic;
-signal c1 : std_logic;
-signal c2 : std_logic;
-signal c3 : std_logic;
-signal c4 : std_logic;
-signal c5 : std_logic;
-signal c6 : std_logic;
-signal c7 : std_logic;
-signal c8 : std_logic;
+    -- horizontal-timing outputs we consume locally
+    signal h_5c    : std_logic;
+    signal h_6c    : std_logic;
+    signal h_blank : std_logic;
+    signal hc6     : std_logic;
+    signal hcrst   : std_logic;
 
-signal v0     : std_logic;
-signal v1     : std_logic;
-signal v2     : std_logic;
-signal v3     : std_logic;
-signal v4     : std_logic;
-signal v5     : std_logic;
-signal v6     : std_logic;
-signal v7     : std_logic;
-signal v8     : std_logic;
-signal clk_hc6     : std_logic;
-signal HC_rst     : std_logic;
+    -- vertical counter taps
+    signal v0, v1, v2, v3, v4, v5, v6, v7, v8 : std_logic;
 
-signal blank1 : std_logic;
-signal blank2 : std_logic;
-signal nHSyncA_5c : std_logic;
-signal nHSyncB_5c : std_logic;
-signal nHSyncA_6c : std_logic;
-signal nHSyncB_6c : std_logic;
-signal nHSyncPulses_5c : std_logic;
-signal nHSyncPulses_6c : std_logic;
-signal X : std_logic;
-signal nHSyncSelect : std_logic;
+    -- vertical border intermediates
+    signal VBorderLower, VBorderUpper : std_logic;
 
-signal VBorderLower : std_logic;
-signal VBorderUpper : std_logic;
+    -- inverted V bits used by the vsync NOR
+    signal v3_n, v4_n, v5_n, v6_n, v7_n : std_logic;
 
-signal sHsync_5c : std_logic;
-signal sHsync_6c : std_logic;
-signal sVsync : std_logic;
-
+    -- composite-sync intermediates
+    signal sVsync : std_logic;
 begin
-mhc: entity work.master_horiz_counter(Behavioral)
-    port map(
-      clk7 => clk,
-      tclk_a => tclk_a,
-      reset => reset,
-      c0 => c0,       
-      c1 => c1,       
-      c2 => c2,      
-      c3 => c3,       
-      c4 => c4,
-      c5 => c5,       
-      c6 => c6,       
-      c7 => c7,       
-      c8 => c8,       
-      clk_hc6 => clk_hc6, 
-      hc_rst  => HC_rst  
-    );
-    
-vlc: entity work.Vert_Line_counter(Behavioral)
-    port map(
-      HCrst_Enable => HC_rst,
-      Clk_HC6 => clk_hc6,
-      v0 => v0,
-      v1 => v1,
-      v2 => v2,
-      v3 => v3,
-      v4 => v4,
-      v5 => v5,
-      v6 => v6,
-      v7 => v7,
-      v8 => v8,
-      Vrst => open
-   );
+    ----------------------------------------------------------------
+    -- Horizontal timing block (owns master_horiz_counter)
+    ----------------------------------------------------------------
+    ht: entity work.horiz_timing(Behavioral)
+        port map(
+            clk      => clk,
+            reset    => reset,
+            hsync_5c => h_5c,
+            hsync_6c => h_6c,
+            nHblank  => h_blank,
+            clk_hc6  => hc6,
+            hc_rst   => hcrst
+        );
 
------------------------------------------------------------
--- Horizontal sync
------------------------------------------------------------
-blank1 <= not((not c8) or c7 or (not c6)); -- 101 000 000
-blank2 <= not((not c8) or (not c7) or c5); -- 110 100 00
-nHblank <= not(blank1 or blank2); 
+    hsync_5c <= h_5c;
+    hsync_6c <= h_6c;
+    nHblank  <= h_blank;
 
-nHSyncA_5c <= not(c5 or c4); -- front porch
-nHSyncB_5c <= not((not c5) or (not c4));
-nHSyncPulses_5c <= nHSyncA_5c or nHSyncB_5c; 
+    ----------------------------------------------------------------
+    -- Vertical line counter (clocked by clk_hc6, advanced by hc_rst)
+    ----------------------------------------------------------------
+    vlc: entity work.Vert_Line_counter(Behavioral)
+        port map(
+            HCrst_Enable => hcrst,
+            Clk_HC6      => hc6,
+            v0 => v0, v1 => v1, v2 => v2, v3 => v3, v4 => v4,
+            v5 => v5, v6 => v6, v7 => v7, v8 => v8,
+            Vrst         => open
+        );
 
-X <= not((not c4) or (not c3)); -- delayed by half a c3 period
-nHSyncA_6c <= not(c5 or X);
-nHSyncB_6c <= not((not c5) or (not X));
-nHSyncPulses_6c <= nHSyncA_6c or nHSyncB_6c;
-    
-nHSyncSelect <= (not c8) or c7 or (not c6);
-sHsync_5c <= nHSyncSelect or nHSyncPulses_5c;
-sHsync_6c <= nHSyncSelect or nHSyncPulses_6c;
+    ----------------------------------------------------------------
+    -- Vertical border (Chris Smith pg 92)
+    -- nBorder LOW during border lines (192..311), HIGH during 0..191.
+    ----------------------------------------------------------------
+    VBorderLower <= not((not v6) or (not v7));   -- v6 AND v7 -> lines 192..255
+    VBorderUpper <= v8;                          --           -> lines 256..311
+    nBorder      <= not(VBorderLower or VBorderUpper);
 
-hsync_5c <= sHsync_5c;
-hsync_6c <= sHsync_6c;
------------------------------------------------------------
--- Vertical sync
------------------------------------------------------------
---VBorderLower <= not((not v7) or (not v6)); -- v6 and V7
---VBorderUpper <= v8;
---nVBorder <= not(VBorderLower or VBorderUpper); -- Border is not displayed when (v6 and v7) or v8
-nBorder <= not((v6 and v7) or v8);
+    ----------------------------------------------------------------
+    -- Vertical sync pulse — 4 lines wide, lines 248..251
+    -- sVsync = NOR((not v7..v3), v2)
+    -- The v2 = 0 term limits the pulse to 4 lines; without it the
+    -- pulse would extend to lines 252..255 as well.
+    ----------------------------------------------------------------
+    v3_n <= not v3;
+    v4_n <= not v4;
+    v5_n <= not v5;
+    v6_n <= not v6;
+    v7_n <= not v7;
 
-sVsync <= not((not v7) or (not v6) or not (v5) or (not v4) or (not v3) or v2);
+    sVsync <= not(v7_n or v6_n or v5_n or v4_n or v3_n or v2);
 
-sync_5c <= sHsync_5c nor sVsync;
-sync_6c <= sHsync_6c nor sVsync;
-vsync <= sVsync;
-
+    ----------------------------------------------------------------
+    -- Composite sync (active LOW combines hsync + vsync)
+    ----------------------------------------------------------------
+    sync_5c <= h_5c nor sVsync;
+    sync_6c <= h_6c nor sVsync;
+    vsync   <= sVsync;
 end Behavioral;
