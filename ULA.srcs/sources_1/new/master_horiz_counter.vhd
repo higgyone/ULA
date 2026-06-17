@@ -52,8 +52,8 @@ port(
       c6           : out    std_logic;
       c7           : out    std_logic;
       c8           : out    std_logic;
-      clk_hc6      : out  std_logic;            -- clock for 3 bit counter, same as c5
-      hc_rst       : out  std_logic             -- horizontal counter reset
+      clk_hc6      : out    std_logic;            -- clock for 3 bit counter, same as c5
+      hc_rst       : out    std_logic             -- horizontal counter reset
    );
 end master_horiz_counter;
 

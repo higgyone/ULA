@@ -73,24 +73,3 @@ begin
     output   <= q;
     overflow <= wrap;
 end Structural;
-
--- architecture Behavioral of bit3_counter is
---     signal outputint : unsigned(2 downto 0) := "000";
--- begin
---     process (clk, reset)
---     begin
---         if falling_edge(clk) then
---             if reset = '1' then
---                 outputint <= "000";
---             else
---                 outputint <= outputint + 1;
---                 if outputint = "110" then
---                     outputint <= "000";
---                 end if;
---             end if;
---         end if;
---     end process;
-
---     output   <= std_logic_vector(outputint);
---     overflow <= '1' when outputint = "110" else '0';
--- end Behavioral;
