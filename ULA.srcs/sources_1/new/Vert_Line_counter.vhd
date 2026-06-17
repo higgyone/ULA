@@ -40,14 +40,13 @@ entity Vert_Line_counter is
            V5 : out STD_LOGIC;
            V6 : out STD_LOGIC;
            V7 : out STD_LOGIC;
-           V8 : out STD_LOGIC;
-           
-           Vrst : out std_logic     -- vertical reset @ 312 lines 
+           V8 : out STD_LOGIC;    
+           Vrst : out std_logic     -- vertical reset pulse on wrap (line 311 → 0) which is 312 PAL lines
            );
 end Vert_Line_counter;
 
 architecture Behavioral of Vert_Line_counter is
-constant v_max : unsigned( 8 downto 0 ) := "100110111"; -- 312 lines
+constant v_max : unsigned( 8 downto 0 ) := "100110111"; -- 312 lines per PAL frame; counter wraps at v_max (= 312 - 1 = 311)
 signal output_cnt:  unsigned( 8 downto 0 ) := (others => '0');
 signal vrst_set : std_logic := '0';
 begin
