@@ -81,7 +81,7 @@ To run a simulation in Vivado: set the target testbench as the active simulation
 
 **BUG 3 — `3_bit counter.vhd`** *(fixed)*: file deleted. Removed from Vivado's project file too.
 
-**BUG 4 — `video_sync.vhd`** *(unfixed)*: `Vrst` port of `Vert_Line_counter` is not connected in the port map. Fix: add `Vrst => open` to the `vlc` port map.
+**BUG 4 — `video_sync.vhd`** *(fixed)*: `Vrst` port of `Vert_Line_counter` now wired as `Vrst => open` in the `vlc` port map. Replace `open` with a real consumer signal when Phase 5 needs the wrap pulse for the flash / frame counter.
 
 **BUG 5 — `Vert_Line_counter.vhd`** *(fixed)*: `v_max` and `Vrst` port comments now state that the counter wraps at 311 and that 312 lines per PAL frame is achieved via 312 states (0..311).
 
@@ -111,7 +111,7 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - Timing backbone (Phases 1–4) is complete and verified against the Chris Smith spec.
 - Target board switched from Nexys4 DDR to Arty A7-35T; master XDC is in place but pin assignments are still commented out (waits on the top-level `ULA.vhd` ports being defined).
 - VS Code + VHDL LS tooling configured on the non-Vivado PC; testbenches normalised (`Nns` → `N ns`, BOMs stripped).
-- Bugs 1, 2, 3, 5 resolved. Bug 4 (`Vrst => open` in `video_sync.vhd`) still open — one-line edit, deferred until next session in front of Vivado.
+- **All five original bugs resolved.** Open verification task remains: cross-check `bit3_counter` Structural vs Behavioural waveforms in Vivado. Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
 - **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives).
 - **`bit3_counter` converted to structural**: three `d_ff_nor` cells + per-bit next-state combinational logic (binary +1 rule + wrap suppression at `"110"` + sync reset). Old behavioural arch preserved commented-out as the simulation oracle. `master_horiz_counter` instantiation updated to `(Structural)`.
 - **`bit3_counter_tb` self-checks** the invariant `overflow = '1'` iff `output = "110"` on every falling edge via assert.

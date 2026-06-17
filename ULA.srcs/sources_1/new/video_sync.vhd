@@ -110,7 +110,8 @@ vlc: entity work.Vert_Line_counter(Behavioral)
       v5 => v5,
       v6 => v6,
       v7 => v7,
-      v8 => v8
+      v8 => v8,
+      Vrst => open
    );
 
 -----------------------------------------------------------
