@@ -13,6 +13,38 @@
 -- All combinational logic is built from NORs with inverted inputs,
 -- matching the Ferranti gate library (Chris Smith pg 90).
 --
+-- Why two hsync outputs (5c vs 6c)?
+-- The original ZX Spectrum shipped with two distinct ULA revisions
+-- that handled hsync differently:
+--   * Issue 5 (5c) — the earlier chip. Hsync pulse aligned to the
+--     start of the blanking window (pixels 336..367).
+--   * Issue 6 (6c) — later revision. Hsync shifted by half a C3
+--     period (~1.14 us / ~8 pixels) to fix compatibility issues
+--     with certain TVs and the original PAL standard
+--     (pixels 344..375).
+-- Both outputs are generated together; whichever the board uses
+-- depends on which chip variant is being emulated.
+--
+-- Horizontal line structure (PAL composite, sync in blanking):
+--   active video → front porch → sync pulse → back porch → next line
+--
+--   * Blanking (nHblank LOW) — the off-time window during which
+--     the beam flies back to the start of the next line. Holds
+--     the signal at black level so retrace leaves no streak.
+--   * Front porch — flat black-level region BEFORE the sync pulse.
+--     Lets the signal settle from active video to black before the
+--     sync edge, so the receiver's sync detector triggers cleanly.
+--   * Sync pulse — the active-LOW pulse the TV locks onto; the
+--     falling edge is the time reference for the next line.
+--   * Back porch — flat black-level region AFTER the sync pulse.
+--     The receiver uses it for clamping (re-establishing black
+--     level) and AGC settling.
+--
+-- No colour burst is generated here. The Spectrum outputs digital
+-- RGB + sync; the burst (used by a colour TV to phase-lock its
+-- chrominance decoder) is added downstream by the RF modulator,
+-- not by the ULA.
+--
 -- Pixel reference (448 pixels per line, 7 MHz, 64 us PAL):
 --   pixel output           0..255   C[8:6] = 000
 --   right border         256..319   C[8:6] = 100
