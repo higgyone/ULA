@@ -148,9 +148,9 @@ count_5: entity work.clk_div_2
      );     
      
 b3c: entity work.bit3_counter(Structural)
-port map(
-      clk => s_clkhc6,        
+port map(        
       reset => reset,
+      clk => s_clkhc6,
       output => clk8_6,
       overflow => hc_rst
    );     
