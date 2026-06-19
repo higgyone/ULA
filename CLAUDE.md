@@ -83,7 +83,7 @@ To run a simulation in Vivado: set the target testbench as the active simulation
 
 **BUG 1 — `D_FF.vhd`** *(fixed in 21e216a)*: `q` and `q_bar` assignments moved outside the process.
 
-**BUG 2 — `trc_ff.vhd`, `tce_ff.vhd`, `trce_ff.vhd`** *(resolved — kept as documented alias)*: `carry` is now explicitly aliased to `qbar` with a header comment. Port retained so existing port maps still compile; future code should prefer `qbar`.
+**BUG 2 — `trc_ff.vhd`, `tce_ff.vhd`, `trce_ff.vhd`** *(resolved — `carry` redefined as a real carry-out)*: `carry` was formerly aliased to `qbar` and unused. It is now the stage carry-out `carry = enable AND q` (for `trc_ff`, which has no enable, `carry = q`), built gate-faithfully as `NOR(not enable, qbar)`. It is consumed by `bit3_counter(T_Structure)` to chain C6 → C7 → C8 (each stage's `carry` drives the next stage's `enable`). Headers/truth tables updated. The three FF unit TBs are stimulus-only (no asserts on `carry`), so nothing else needed changing.
 
 **BUG 3 — `3_bit counter.vhd`** *(fixed)*: file deleted. Removed from Vivado's project file too.
 
@@ -130,6 +130,17 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 
 ### bit3_counter verification — WIP cliffhanger
 
+**TB hardening — Tier 1 added (not yet run).** `bit3_counter_tb.vhd` now carries an
+independent coverage witness for the Reference instance (`states_visited_r`),
+mirroring the existing `states_visited` (Structural). The coverage `process(clk)`
+latches both `out_s` and `out_r` states each falling edge; the end-of-sim report
+tags gaps `[STRUCTURAL]` / `[REFERENCE]` so the transcript names the broken
+instance in plain text instead of requiring a waveform read. Purpose: the
+"Reference not counting" bug below should now self-report as `[REFERENCE] state
+1..6 never visited` on the next run. **Still needs running on the Vivado PC to
+confirm.** (Tier 2 severity bump and Tier 3 external-name binding probe were
+discussed but not implemented.)
+
 Mid-debugging session interrupted. Reached a working sim that reproduces a real divergence, but the root cause is still open. Sequence of steps to pick up from:
 
 1. **Oscillation at t=45 ns** when TB used `wait until rising_edge(clk)`-style stimulus — xsim hit the 10000-delta iteration limit. Diagnosed as a delta-cycle ordering quirk in xsim with the cross-coupled NOR slave latch.
@@ -140,7 +151,16 @@ Mid-debugging session interrupted. Reached a working sim that reproduces a real 
 6. **Investigation revealed**: Structural's `q` correctly transitions `"000" → "001"` at t=50, but Reference's `outputint` stays at `"000"` for the entire simulation. Reference simply isn't counting.
 7. **CURRENT clue — possible port-binding bug**: user observed in the waveform that `/bit3_counter_tb/uut_ref/clk` shows the *reset* signal's behaviour (1 until t=45, then 0) and `/bit3_counter_tb/uut_ref/reset` shows the *clock* signal's behaviour (10 ns square wave). I.e. the ports inside `uut_ref` appear to be swapped relative to the TB-level signals — even though the port map in `bit3_counter_tb.vhd` is named (`clk => clk`, `reset => reset`) which should be order-independent. Identical syntax in `uut_struct`'s port map works correctly. Unconfirmed whether this is a real port-binding bug, a Vivado waveform display issue, or a user signal-row misread.
 
-**Next step when resuming**: run these in the Vivado Tcl Console with the sim paused, paste the output to disambiguate:
+**Leading hypothesis (this session):** the symptom can't originate in the source —
+the port map is *named*, so it cannot swap `clk`/`reset`, and positional fallback
+would break `uut_struct` too (it doesn't). That points to **stale elaboration**:
+`Reference` / `d_ff_nor` init values were edited mid-session and xsim may have run a
+cached snapshot, with the waveform viewer mapping rows from the stale scope (looks
+like a "swap"). So on resume, **first** force a clean rebuild — `reset_simulation
+-simset sim_1` (or *Simulation → Reset Behavioral Simulation*), confirm no source
+shows out-of-date, then re-run the now-hardened TB and read the coverage report.
+
+**If it still misbehaves after a clean rebuild**, run these in the Vivado Tcl Console with the sim paused, paste the output to disambiguate:
 
 ```tcl
 get_value /bit3_counter_tb/clk
@@ -173,10 +193,10 @@ Files covered so far, in order, by the post-`6e59d6e` walk-through:
 ## What Needs Building Next
 
 Remaining work in order:
-**Phase 4 - Real bit3_counter**
-- make bit3_counter equivalent to the book with tcr_ff for c6, trce_ff for c7 and trce_ff for c8
-- add resets to the t flip flops
-- NOR the two trce_ffs q bar to create HCrst
+**Phase 4 - Real bit3_counter** *(T_Structure written — pending sim verification)*
+- DONE (in source): `architecture T_Structure of bit3_counter` built from `trc_ff` (C6) + two `trce_ff` (C7, C8). Enable-chaining via the redefined `carry` out (`carry6=q6 → C7.enable`; `carry7=q6·q7 → C8.enable`). `s_HCrst <= not(qbar7 or qbar8)` (= q7·q8); `s_ff_rst <= reset or s_HCrst` feeds all three FF resets; `output <= q8&q7&q6`; `overflow <= s_HCrst`. Hand-traced 000→…→110→000 (modulo-7), matches `Reference`.
+- TODO on Vivado PC: verify `T_Structure` against `Reference` in the hardened oracle TB (add as 3rd instance or rebind `uut_struct`). Confirm coverage report is clean.
+- original intent (for reference): tcr_ff for c6, trce_ff for c7 and c8; resets on the t flip flops; NOR the two trce_ff qbars to create HCrst.
 **Phase 5 — Video output**
 - `border_reg.vhd` — port 0xFE write, capture bits 2:0 as border colour
 - `pixel_fetch.vhd` — VRAM address generation using C/V counters; ZX scrambled address format

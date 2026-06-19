@@ -9,17 +9,18 @@
 -- horizontal/vertical counter chains, where chaining between stages
 -- is done via NOR-gated clocks rather than the `carry` pin.
 --
--- NOTE: `carry` is electrically identical to `qbar`. The port is
--- retained for schematic symmetry with the original drawings;
--- nothing in this design consumes it.
+-- NOTE: `carry` is the stage carry-out. trc_ff has no enable (it always
+-- toggles), so carry = q. It feeds the `enable` of the next counter stage.
+-- Consumed by bit3_counter(T_Structure) as C6's carry into C7's enable.
+-- (Formerly aliased to qbar; redefined to a real carry-out.)
 --
--- Characteristic table:
+-- Characteristic table (q/qbar are edge-driven; carry = q is combinational):
 --
---   reset  clk       |  q(next)   qbar(next)   carry(next)
---   -----  --------  |  -------   ----------   -----------
---     1    ↓       |  0         1            1
---     0    ↓       |  not q     not qbar     not qbar
---     X    no edge   |  q         qbar         carry        (hold)
+--   reset  clk       |  q(next)   qbar(next)
+--   -----  --------  |  -------   ----------
+--     1    ↓       |  0         1
+--     0    ↓       |  not q     not qbar
+--     X    no edge   |  q         qbar
 ----------------------------------------------------------------------
 
 library IEEE;
@@ -49,5 +50,5 @@ begin
 
     q     <= q_int;
     qbar  <= qbar_int;
-    carry <= qbar_int;  -- alias of qbar (documented in header)
+    carry <= q_int;   -- enable hardwired '1', so carry-out = q
 end Behavioral;

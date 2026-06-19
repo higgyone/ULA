@@ -78,31 +78,53 @@ begin
 end Structural;
 
 
--- architecture T_Structure of bit3_counter is
---    signal carry_count_6       : std_logic
---    signal count_6_q_out       : std_logic_vector(2 downto 0);  -- next state into FFs
---   signal wrap    : std_logic;                     -- 1 when at "110"
--- begin
+architecture T_Structure of bit3_counter is
+   signal carry_count_6       : std_logic;
+   signal count_6_q_out       : std_logic; 
+   signal carry_count_7       : std_logic;
+   signal count_7_q_out       : std_logic;
+   signal count_7_qbar_out    : std_logic;
+   signal count_8_q_out       : std_logic;
+   signal count_8_qbar_out    : std_logic;
+   signal s_ff_rst            : std_logic;
+   signal s_HCrst             : std_logic; 
+begin
 
--- count_6: entity work.trc_ff
---  port map(
---            clk   => clk,
---            reset => reset,
---            carry => carry_count_6,
---            q     => count_6_q_out,
---            qbar  => open
---     );
+count_6: entity work.trc_ff
+ port map(
+           clk   => clk,
+           reset => s_ff_rst,
+           carry => carry_count_6,
+           q     => count_6_q_out,
+           qbar  => open
+    );
      
--- count_6: entity work.trce_ff
---  port map(
---            clk   => clk,
---            reset => reset,
---            carry => carry_count_6,
---            q     => count_6_q_out,
---            qbar  => open
---     );
+count_7: entity work.trce_ff
+ port map(
+           enable => carry_count_6,
+           clk   => clk,
+           reset => s_ff_rst,
+           carry => carry_count_7,
+           q     => count_7_q_out,
+           qbar  => count_7_qbar_out
+    );
+
+count_8: entity work.trce_ff
+ port map(
+           enable => carry_count_7,
+           clk   => clk,
+           reset => s_ff_rst,
+           carry => open,
+           q     => count_8_q_out,
+           qbar  => count_8_qbar_out
+    );
+
+    s_HCrst <= not (count_7_qbar_out or count_8_qbar_out);
+    s_ff_rst <= reset or s_HCrst;
+    output   <= count_8_q_out & count_7_q_out & count_6_q_out;
+    overflow <= s_HCrst;
      
--- end T_Structure;
+end T_Structure;
 
 ----------------------------------------------------------------------
 -- Reference architecture — behavioural arithmetic oracle.

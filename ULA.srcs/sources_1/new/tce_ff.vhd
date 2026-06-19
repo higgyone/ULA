@@ -8,16 +8,19 @@
 --
 -- Falling-edge triggered. No reset port — for that, use trce_ff.
 --
--- NOTE: `carry` is electrically identical to `qbar`. Retained for
--- schematic symmetry with the original ULA drawings; not consumed.
+-- NOTE: `carry` is the stage carry-out, combinational:
+--   carry = enable AND q   (built as NOR(not enable, qbar), gate-faithful).
+-- It feeds the `enable` of the next counter stage. Consumed by
+-- bit3_counter(T_Structure) to chain C6 → C7 → C8. (Formerly aliased to
+-- qbar; redefined to a real carry-out for enable-chaining.)
 --
--- Characteristic table:
+-- Characteristic table (q/qbar are edge-driven; carry is combinational):
 --
---   enable  clk       |  q(next)   qbar(next)   carry(next)
---   ------  --------  |  -------   ----------   -----------
---     1     ↓       |  not q     not qbar     not qbar
---     0     ↓       |  q         qbar         carry        (hold)
---     X     no edge   |  q         qbar         carry        (hold)
+--   enable  clk       |  q(next)   qbar(next)
+--   ------  --------  |  -------   ----------
+--     1     ↓       |  not q     not qbar     (toggle)
+--     0     ↓       |  q         qbar         (hold)
+--     X     no edge   |  q         qbar         (hold)
 ----------------------------------------------------------------------
 
 library IEEE;
@@ -47,5 +50,5 @@ begin
 
     q     <= q_int;
     qbar  <= qbar_int;
-    carry <= qbar_int;  -- alias of qbar (documented in header)
+    carry <= not ((not enable) or qbar_int);   -- = enable and q : stage carry-out
 end Behavioral;

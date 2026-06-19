@@ -14,8 +14,10 @@
 -- All ports must be driven explicitly. Use `enable => '1'` at the
 -- instantiation site for stages that should always toggle.
 --
--- NOTE: `carry` is electrically identical to `qbar`. Retained for
--- schematic symmetry with the original ULA drawings; not consumed.
+-- NOTE: `carry` is the stage carry-out, combinational: carry = enable AND q
+-- (built as NOR(not enable, qbar), gate-faithful). It feeds the `enable` of the
+-- next counter stage. Consumed by bit3_counter(T_Structure) to chain
+-- C6 → C7 → C8. (Formerly aliased to qbar; redefined for enable-chaining.)
 --
 -- Characteristic table:
 --
@@ -57,5 +59,5 @@ begin
 
     q     <= q_int;
     qbar  <= qbar_int;
-    carry <= qbar_int;  -- alias of qbar (documented in header)
+    carry <= not ((not enable) or qbar_int);   -- = enable and q : stage carry-out
 end Behavioral;

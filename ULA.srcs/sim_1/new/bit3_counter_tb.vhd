@@ -79,8 +79,9 @@ architecture Behavioral of bit3_counter_tb is
     signal out_r  : std_logic_vector(2 downto 0);
     signal ov_r   : std_logic;
 
-    -- Coverage: bit k is set once the UUT has been observed in state k.
-    signal states_visited : std_logic_vector(6 downto 0) := (others => '0');
+    -- Coverage: bit k is set once the instance has been observed in state k.
+    signal states_visited   : std_logic_vector(6 downto 0) := (others => '0');  -- structural UUT
+    signal states_visited_r : std_logic_vector(6 downto 0) := (others => '0');  -- reference oracle
 
     -- End-of-sim flag — gates the final coverage report.
     signal sim_done : boolean := false;
@@ -174,33 +175,49 @@ begin
     end process;
 
     -- Coverage tracker: latch every legal state the UUT visits.
-    process(clk)
-    begin
-        if falling_edge(clk) then
-            if out_s = "000" then states_visited(0) <= '1';
-            elsif out_s = "001" then states_visited(1) <= '1';
-            elsif out_s = "010" then states_visited(2) <= '1';
-            elsif out_s = "011" then states_visited(3) <= '1';
-            elsif out_s = "100" then states_visited(4) <= '1';
-            elsif out_s = "101" then states_visited(5) <= '1';
-            elsif out_s = "110" then states_visited(6) <= '1';
-            end if;
+process(clk)
+begin
+    if falling_edge(clk) then
+        -- structural UUT
+        if    out_s = "000" then states_visited(0) <= '1';
+        elsif out_s = "001" then states_visited(1) <= '1';
+        elsif out_s = "010" then states_visited(2) <= '1';
+        elsif out_s = "011" then states_visited(3) <= '1';
+        elsif out_s = "100" then states_visited(4) <= '1';
+        elsif out_s = "101" then states_visited(5) <= '1';
+        elsif out_s = "110" then states_visited(6) <= '1';
         end if;
-    end process;
+
+        -- reference oracle (independent witness)
+        if    out_r = "000" then states_visited_r(0) <= '1';
+        elsif out_r = "001" then states_visited_r(1) <= '1';
+        elsif out_r = "010" then states_visited_r(2) <= '1';
+        elsif out_r = "011" then states_visited_r(3) <= '1';
+        elsif out_r = "100" then states_visited_r(4) <= '1';
+        elsif out_r = "101" then states_visited_r(5) <= '1';
+        elsif out_r = "110" then states_visited_r(6) <= '1';
+        end if;
+    end if;
+end process;
 
     -- End-of-sim coverage report. Warns (not errors) if any legal
     -- state was missed by the stimulus.
-    process(sim_done)
-    begin
-        if sim_done then
-            for k in 0 to 6 loop
-                assert states_visited(k) = '1'
-                    report "Coverage gap: state " & integer'image(k) &
-                           " was never visited."
-                    severity warning;
-            end loop;
-            report "bit3_counter_tb: simulation complete." severity note;
-        end if;
-    end process;
+process(sim_done)
+begin
+    if sim_done then
+        for k in 0 to 6 loop
+            assert states_visited(k) = '1'
+                report "Coverage gap [STRUCTURAL]: state " & integer'image(k) &
+                       " was never visited."
+                severity warning;
+
+            assert states_visited_r(k) = '1'
+                report "Coverage gap [REFERENCE]: state " & integer'image(k) &
+                       " was never visited."
+                severity warning;
+        end loop;
+        report "bit3_counter_tb: simulation complete." severity note;
+    end if;
+end process;
 
 end Behavioral;
