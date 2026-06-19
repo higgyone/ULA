@@ -57,6 +57,7 @@ webtalk*.wdm
 Thumbs.db
 .vscode/
 .idea/
+*.code-workspace
 
 # Vivado gate-level / cell-graph exports (regenerable)
 gate sim/
