@@ -52,12 +52,27 @@ entity d_ff_nor is
 end d_ff_nor;
 
 architecture Behavioral of d_ff_nor is
-    signal a_o : std_logic;
-    signal b_o : std_logic;
-    signal c_o : std_logic;
-    signal d_o : std_logic;
-    signal e_o : std_logic;
-    signal f_o : std_logic;
+    -- All six internal NOR-network signals are initialised to the
+    -- "Case A" stable state:  d=0 captured, clk='0' phase, q='0'.
+    --
+    -- Check: a_o = NOR(d_o, b_o) = NOR(1, 1) = 0 ✓
+    --        b_o = NOR(a_o, clk) = NOR(0, 0) = 1 ✓
+    --        c_o = NOR(b_o, clk, d_o) = NOR(1, 0, 1) = 0 ✓
+    --        d_o = NOR(d, c_o) = NOR(0, 0) = 1 ✓     (d=0 from reset)
+    --        e_o = NOR(b_o, f_o) = NOR(1, 1) = 0 ✓ => q=0
+    --        f_o = NOR(c_o, e_o) = NOR(0, 0) = 1 ✓ => qbar=1
+    --
+    -- Synthesis ignores these — real silicon power-up state is whatever
+    -- the layout produces. The init values exist solely to give xsim a
+    -- consistent starting point and avoid a known U-propagation quirk
+    -- where cross-coupled NORs with one input still 'U' would never
+    -- trigger their partner's re-evaluation.
+    signal a_o : std_logic := '0';
+    signal b_o : std_logic := '1';
+    signal c_o : std_logic := '0';
+    signal d_o : std_logic := '1';
+    signal e_o : std_logic := '0';
+    signal f_o : std_logic := '1';
 begin
     a_o <= not (d_o or b_o);
     b_o <= not (a_o or clk);

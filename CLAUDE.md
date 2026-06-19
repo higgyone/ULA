@@ -125,9 +125,39 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
   - Re-run `video_sync_tb` after the `horiz_timing` extraction; confirm `hsync_5c`/`hsync_6c`/`nHblank`/`sync_5c`/`sync_6c`/`vsync`/`nBorder` waveforms are identical to pre-refactor.
 - Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
 - **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives).
-- **`bit3_counter` converted to structural**: three `d_ff_nor` cells + per-bit next-state combinational logic (binary +1 rule + wrap suppression at `"110"` + sync reset). Old behavioural arch preserved commented-out as the simulation oracle. `master_horiz_counter` instantiation updated to `(Structural)`.
-- **`bit3_counter_tb` self-checks** the invariant `overflow = '1'` iff `output = "110"` on every falling edge via assert.
-- **Open verification task**: cross-check `bit3_counter` Structural vs commented-out Behavioural architectures — swap which arch is active, re-simulate, confirm `output`/`overflow` waveforms overlay exactly across every state and reset.
+- **`bit3_counter` converted to structural**: three `d_ff_nor` cells + per-bit next-state combinational logic (binary +1 rule + wrap suppression at `"110"` + sync reset). `master_horiz_counter` instantiation updated to `(Structural)`.
+- **`bit3_counter_tb` upgraded to oracle pattern (in progress)**: TB now instantiates both `bit3_counter(Structural)` and `bit3_counter(Reference)` in parallel off the same `clk`/`reset`, with a `process(clk)` self-check that asserts `out_s = out_r` AND `ov_s = ov_r` on every falling edge. The Reference architecture (behavioural `unsigned` arithmetic with sync reset) was reinstated as `architecture Reference of bit3_counter` (lives in the same `.vhd` file as Structural). Coverage tracker logs every legal state visited; end-of-sim report warns about any state not reached.
+
+### bit3_counter verification — WIP cliffhanger
+
+Mid-debugging session interrupted. Reached a working sim that reproduces a real divergence, but the root cause is still open. Sequence of steps to pick up from:
+
+1. **Oscillation at t=45 ns** when TB used `wait until rising_edge(clk)`-style stimulus — xsim hit the 10000-delta iteration limit. Diagnosed as a delta-cycle ordering quirk in xsim with the cross-coupled NOR slave latch.
+2. **Fixed** by switching TB stimulus back to `wait for X ns;` with offsets that land every reset transition on a rising edge of clk (clk='1' phase, half a period of settling time before the next falling edge). Phase 1: 45 ns. Phase 2: 200 ns. Phase 3 loop: `wait for 30 ns` (not 25 ns) inside, plus `wait for k*T`. Phase 4 mirrors Phase 1.
+3. **Then** the FF still never resolved out of `'U'` — out_s stayed `"UUU"` for the whole sim, all 7 coverage warnings fired, asserts gated off. Diagnosed as xsim failing to trigger U→defined re-evaluation on the d_ff_nor's cross-coupled NORs.
+4. **Fixed** by initialising all six internal signals of `d_ff_nor` to the Case A stable state (`a_o=0, b_o=1, c_o=0, d_o=1, e_o=0, f_o=1` — corresponds to "d=0 captured, clk='0' phase, q=0"). Documented in source as gate-modelling only (synthesis ignores).
+5. **Then** the sim runs cleanly but throws oracle mismatches at every Phase 2 falling edge (t=50, 60, 70, ...).
+6. **Investigation revealed**: Structural's `q` correctly transitions `"000" → "001"` at t=50, but Reference's `outputint` stays at `"000"` for the entire simulation. Reference simply isn't counting.
+7. **CURRENT clue — possible port-binding bug**: user observed in the waveform that `/bit3_counter_tb/uut_ref/clk` shows the *reset* signal's behaviour (1 until t=45, then 0) and `/bit3_counter_tb/uut_ref/reset` shows the *clock* signal's behaviour (10 ns square wave). I.e. the ports inside `uut_ref` appear to be swapped relative to the TB-level signals — even though the port map in `bit3_counter_tb.vhd` is named (`clk => clk`, `reset => reset`) which should be order-independent. Identical syntax in `uut_struct`'s port map works correctly. Unconfirmed whether this is a real port-binding bug, a Vivado waveform display issue, or a user signal-row misread.
+
+**Next step when resuming**: run these in the Vivado Tcl Console with the sim paused, paste the output to disambiguate:
+
+```tcl
+get_value /bit3_counter_tb/clk
+get_value /bit3_counter_tb/reset
+get_value /bit3_counter_tb/uut_struct/clk
+get_value /bit3_counter_tb/uut_struct/reset
+get_value /bit3_counter_tb/uut_ref/clk
+get_value /bit3_counter_tb/uut_ref/reset
+report_objects -recursive /bit3_counter_tb/uut_ref
+```
+
+If `uut_ref/clk` differs from `uut_struct/clk` → real binding bug. If they match → waveform display issue, look elsewhere (the Reference process not firing for some other reason).
+
+**Files relevant to this WIP**:
+- `ULA.srcs/sim_1/new/bit3_counter_tb.vhd` (oracle TB)
+- `ULA.srcs/sources_1/new/bit3_counter.vhd` (both `architecture Structural` and `architecture Reference`)
+- `ULA.srcs/sources_1/new/d_ff_nor.vhd` (init values added)
 
 ## Walk-through progress (mentor-mode log)
 

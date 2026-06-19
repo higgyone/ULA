@@ -31,9 +31,12 @@
 -- there (it requires q(0)=0), the +1 rule gives "000", and the
 -- counter rejoins the legal sequence on the next clock.
 --
--- A reference behavioural architecture is preserved below (commented
--- out) as the simulation oracle for the structural design — both must
--- produce identical output and overflow waveforms for every state.
+-- A behavioural reference architecture is preserved below as
+-- `architecture Reference` — selectable at instantiation by name.
+-- The testbench instantiates BOTH architectures in parallel as a
+-- design-oracle pattern: same clk/reset into both, assert their
+-- outputs match cycle-by-cycle. Any divergence is a bug in the
+-- structural next-state logic or wrap detection.
 --
 -- State sequence:
 --
@@ -73,3 +76,59 @@ begin
     output   <= q;
     overflow <= wrap;
 end Structural;
+
+
+-- architecture T_Structure of bit3_counter is
+--    signal carry_count_6       : std_logic
+--    signal count_6_q_out       : std_logic_vector(2 downto 0);  -- next state into FFs
+--   signal wrap    : std_logic;                     -- 1 when at "110"
+-- begin
+
+-- count_6: entity work.trc_ff
+--  port map(
+--            clk   => clk,
+--            reset => reset,
+--            carry => carry_count_6,
+--            q     => count_6_q_out,
+--            qbar  => open
+--     );
+     
+-- count_6: entity work.trce_ff
+--  port map(
+--            clk   => clk,
+--            reset => reset,
+--            carry => carry_count_6,
+--            q     => count_6_q_out,
+--            qbar  => open
+--     );
+     
+-- end T_Structure;
+
+----------------------------------------------------------------------
+-- Reference architecture — behavioural arithmetic oracle.
+--
+-- Increments an `unsigned` counter on every falling edge of clk;
+-- wraps from "110" to "000"; synchronous reset clears the count.
+-- Not synthesised in the real design — used only by bit3_counter_tb
+-- as the side-by-side reference for the Structural architecture.
+----------------------------------------------------------------------
+architecture Reference of bit3_counter is
+    signal outputint : unsigned(2 downto 0) := "000";
+begin
+    process (clk)
+    begin
+        if falling_edge(clk) then
+            if reset = '1' then
+                outputint <= "000";
+            else
+                outputint <= outputint + 1;
+                if outputint = "110" then
+                    outputint <= "000";
+                end if;
+            end if;
+        end if;
+    end process;
+
+    output   <= std_logic_vector(outputint);
+    overflow <= '1' when outputint = "110" else '0';
+end Reference;
