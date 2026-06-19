@@ -173,7 +173,10 @@ Files covered so far, in order, by the post-`6e59d6e` walk-through:
 ## What Needs Building Next
 
 Remaining work in order:
-
+**Phase 4 - Real bit3_counter**
+- make bit3_counter equivalent to the book with tcr_ff for c6, trce_ff for c7 and trce_ff for c8
+- add resets to the t flip flops
+- NOR the two trce_ffs q bar to create HCrst
 **Phase 5 — Video output**
 - `border_reg.vhd` — port 0xFE write, capture bits 2:0 as border colour
 - `pixel_fetch.vhd` — VRAM address generation using C/V counters; ZX scrambled address format
