@@ -42,13 +42,31 @@
 -- d-input mux). Real silicon has gate-propagation delays so the new
 -- reset always reaches `d` first; zero-delay simulation does not.
 --
--- HISTORICAL NOTE: an earlier revision of this TB used `wait until
--- rising_edge(clk)` for stimulus synchronisation. That triggered a
--- 10000-iteration zero-delay oscillation in xsim at t=45 ns where
--- reset releases — the staggered delta-cycle ordering of clk and
--- reset transitions appears to interact badly with the d_ff_nor's
--- cross-coupled NOR slave latch. Time-based waits with the
--- alignment below avoid that path entirely and work cleanly.
+-- KNOWN xsim ISSUES (see CLAUDE.md "bit3_counter verification" notes):
+--
+--   1. Dual-instantiation transposition. With BOTH uut_struct and
+--      uut_ref bound to the same sysclk/sysrst nets, xsim mis-binds
+--      the instance clk/reset ports (each instance sees clk<->reset
+--      swapped). A SINGLE instance binds correctly. Root cause looks
+--      like xsim input-port net collapsing across two instances of
+--      the same entity. Workaround until fixed: verify one
+--      architecture at a time (comment out the other instance), or
+--      drive each instance from its own clk/reset copy.
+--
+--   2. Structural (d_ff_nor) zero-delay oscillation. Run alone, the
+--      Structural arch hits the 10000-delta iteration limit at t=0:
+--      the cross-coupled NOR feedback loops in d_ff_nor have no gate
+--      delay, so xsim cannot settle them. The fix is to add small
+--      `after` delays to the NOR assignments in d_ff_nor.vhd (synthesis
+--      ignores `after`; it only affects simulation and is physically
+--      faithful). NOT yet applied.
+--
+--   The Reference arch (pure behavioural) verifies CLEAN on its own:
+--   counts 0..6, wraps, overflow only at "110".
+--
+-- The `wait for X ns` stimulus below is timed so every reset
+-- transition lands on a rising clk edge (t = 5+10n), half a period
+-- before the next falling-edge sample.
 --
 -- Not testable through entity ports alone:
 --   * The illegal state "111" self-correction property. Forcing the
@@ -68,8 +86,8 @@ end bit3_counter_tb;
 architecture Behavioral of bit3_counter_tb is
     constant T : time := 10 ns;
 
-    signal clk    : std_logic;
-    signal reset  : std_logic;
+    signal sysclk : std_logic;
+    signal sysrst : std_logic;
 
     -- UUT under test (structural d_ff_nor chain)
     signal out_s  : std_logic_vector(2 downto 0);
@@ -87,24 +105,28 @@ architecture Behavioral of bit3_counter_tb is
     signal sim_done : boolean := false;
 begin
 
+    -- NOTE: dual-instantiation oracle (both UUTs sharing sysclk/sysrst)
+    -- currently triggers an xsim port-transposition quirk — see the
+    -- header block above and the CLAUDE.md WIP notes. Until resolved,
+    -- verify ONE architecture at a time by commenting out the other.
     uut_struct : entity work.bit3_counter(Structural)
-        port map ( clk      => clk,
-                   reset    => reset,
+        port map ( clk      => sysclk,
+                   reset    => sysrst,
                    output   => out_s,
                    overflow => ov_s );
 
     uut_ref : entity work.bit3_counter(Reference)
-        port map ( clk      => clk,
-                   reset    => reset,
+        port map ( clk      => sysclk,
+                   reset    => sysrst,
                    output   => out_r,
                    overflow => ov_r );
 
     -- Free-running 10 ns clock. Falling edges at t = 10, 20, 30, ...
     process
     begin
-        clk <= '0';
+        sysclk <= '0';
         wait for T / 2;
-        clk <= '1';
+        sysclk <= '1';
         wait for T / 2;
     end process;
 
@@ -119,12 +141,12 @@ begin
     begin
         -- Phase 1: hold reset for 45 ns (covers 4 falling edges).
         -- Ends at t=45 ns, which is a rising edge of clk (clk='1' phase).
-        reset <= '1';
+        sysrst <= '1';
         wait for 45 ns;
 
         -- Phase 2: 200 ns free run.
         -- Ends at t=245 ns, also a rising edge.
-        reset <= '0';
+        sysrst <= '0';
         wait for 200 ns;
 
         -- Phase 3: targeted reset-from-state-K for K = 1..6.
@@ -132,17 +154,17 @@ begin
         -- k*T release. Total iter time = 30 + k*10 ns. All transitions
         -- land at rising edges of clk.
         for k in 1 to 6 loop
-            reset <= '1';
+            sysrst <= '1';
             wait for 30 ns;
-            reset <= '0';
+            sysrst <= '0';
             wait for k * T;
         end loop;
 
         -- Phase 4: one more reset/clear, then final free run for
         -- coverage padding, then end-of-sim.
-        reset <= '1';
+        sysrst <= '1';
         wait for 30 ns;
-        reset <= '0';
+        sysrst <= '0';
         wait for 200 ns;
 
         sim_done <= true;
@@ -154,9 +176,9 @@ begin
     -- to escape its 'U' initial state). The Reference arch has an
     -- initialised signal and is "000" from t=0, so once UUT resolves
     -- both should be "000" together and the asserts engage.
-    process(clk)
+    process(sysclk)
     begin
-        if falling_edge(clk) then
+        if falling_edge(sysclk) then
             -- Wait for UUT to escape 'U' before checking anything.
             if out_s /= "UUU" then
                 assert (out_s = out_r) and (ov_s = ov_r)
@@ -175,9 +197,9 @@ begin
     end process;
 
     -- Coverage tracker: latch every legal state the UUT visits.
-process(clk)
+process(sysclk)
 begin
-    if falling_edge(clk) then
+    if falling_edge(sysclk) then
         -- structural UUT
         if    out_s = "000" then states_visited(0) <= '1';
         elsif out_s = "001" then states_visited(1) <= '1';

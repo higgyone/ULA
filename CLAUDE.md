@@ -128,56 +128,63 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - **`bit3_counter` converted to structural**: three `d_ff_nor` cells + per-bit next-state combinational logic (binary +1 rule + wrap suppression at `"110"` + sync reset). `master_horiz_counter` instantiation updated to `(Structural)`.
 - **`bit3_counter_tb` upgraded to oracle pattern (in progress)**: TB now instantiates both `bit3_counter(Structural)` and `bit3_counter(Reference)` in parallel off the same `clk`/`reset`, with a `process(clk)` self-check that asserts `out_s = out_r` AND `ov_s = ov_r` on every falling edge. The Reference architecture (behavioural `unsigned` arithmetic with sync reset) was reinstated as `architecture Reference of bit3_counter` (lives in the same `.vhd` file as Structural). Coverage tracker logs every legal state visited; end-of-sim report warns about any state not reached.
 
-### bit3_counter verification — WIP cliffhanger
+### bit3_counter verification — root causes found (2 open sim issues)
 
-**TB hardening — Tier 1 added (not yet run).** `bit3_counter_tb.vhd` now carries an
-independent coverage witness for the Reference instance (`states_visited_r`),
-mirroring the existing `states_visited` (Structural). The coverage `process(clk)`
-latches both `out_s` and `out_r` states each falling edge; the end-of-sim report
-tags gaps `[STRUCTURAL]` / `[REFERENCE]` so the transcript names the broken
-instance in plain text instead of requiring a waveform read. Purpose: the
-"Reference not counting" bug below should now self-report as `[REFERENCE] state
-1..6 never visited` on the next run. **Still needs running on the Vivado PC to
-confirm.** (Tier 2 severity bump and Tier 3 external-name binding probe were
-discussed but not implemented.)
+A very long debugging session resolved the "Reference not counting / swapped
+ports" mystery. **None of it was a logic bug in the VHDL** — the entity, both
+architectures, and the testbench port maps are all correct. The symptoms came
+from the simulator (xsim 2025.2), compounded by a sticky incremental-compile
+cache that kept running stale snapshots through most of the session. Key
+debugging lesson: after any source edit, `restart` does NOT recompile — use
+`close_sim -force; launch_simulation` and confirm `[VRFC 10-163] Analyzing ...`
+appears (a planted `report` marker is the only reliable freshness proof; the
+cache will happily reuse an old object and show no error).
 
-Mid-debugging session interrupted. Reached a working sim that reproduces a real divergence, but the root cause is still open. Sequence of steps to pick up from:
+**Verified so far:**
+- **Reference architecture** (behavioural `unsigned` counter) — ✅ CORRECT.
+  Run as the *only* instance it counts 0→6, wraps, `overflow` asserts only at
+  "110". Confirmed via `get_value` (out_r = 1 @ t=52, 3 @ t=75, etc.).
 
-1. **Oscillation at t=45 ns** when TB used `wait until rising_edge(clk)`-style stimulus — xsim hit the 10000-delta iteration limit. Diagnosed as a delta-cycle ordering quirk in xsim with the cross-coupled NOR slave latch.
-2. **Fixed** by switching TB stimulus back to `wait for X ns;` with offsets that land every reset transition on a rising edge of clk (clk='1' phase, half a period of settling time before the next falling edge). Phase 1: 45 ns. Phase 2: 200 ns. Phase 3 loop: `wait for 30 ns` (not 25 ns) inside, plus `wait for k*T`. Phase 4 mirrors Phase 1.
-3. **Then** the FF still never resolved out of `'U'` — out_s stayed `"UUU"` for the whole sim, all 7 coverage warnings fired, asserts gated off. Diagnosed as xsim failing to trigger U→defined re-evaluation on the d_ff_nor's cross-coupled NORs.
-4. **Fixed** by initialising all six internal signals of `d_ff_nor` to the Case A stable state (`a_o=0, b_o=1, c_o=0, d_o=1, e_o=0, f_o=1` — corresponds to "d=0 captured, clk='0' phase, q=0"). Documented in source as gate-modelling only (synthesis ignores).
-5. **Then** the sim runs cleanly but throws oracle mismatches at every Phase 2 falling edge (t=50, 60, 70, ...).
-6. **Investigation revealed**: Structural's `q` correctly transitions `"000" → "001"` at t=50, but Reference's `outputint` stays at `"000"` for the entire simulation. Reference simply isn't counting.
-7. **CURRENT clue — possible port-binding bug**: user observed in the waveform that `/bit3_counter_tb/uut_ref/clk` shows the *reset* signal's behaviour (1 until t=45, then 0) and `/bit3_counter_tb/uut_ref/reset` shows the *clock* signal's behaviour (10 ns square wave). I.e. the ports inside `uut_ref` appear to be swapped relative to the TB-level signals — even though the port map in `bit3_counter_tb.vhd` is named (`clk => clk`, `reset => reset`) which should be order-independent. Identical syntax in `uut_struct`'s port map works correctly. Unconfirmed whether this is a real port-binding bug, a Vivado waveform display issue, or a user signal-row misread.
+**Two open xsim issues blocking the oracle TB (both need fixing on Vivado PC):**
 
-**Leading hypothesis (this session):** the symptom can't originate in the source —
-the port map is *named*, so it cannot swap `clk`/`reset`, and positional fallback
-would break `uut_struct` too (it doesn't). That points to **stale elaboration**:
-`Reference` / `d_ff_nor` init values were edited mid-session and xsim may have run a
-cached snapshot, with the waveform viewer mapping rows from the stale scope (looks
-like a "swap"). So on resume, **first** force a clean rebuild — `reset_simulation
--simset sim_1` (or *Simulation → Reset Behavioral Simulation*), confirm no source
-shows out-of-date, then re-run the now-hardened TB and read the coverage report.
+1. **Dual-instantiation port transposition.** With BOTH `uut_struct` and
+   `uut_ref` bound to the *same* `sysclk`/`sysrst` nets, xsim mis-binds the
+   instance `clk`/`reset` ports — each instance sees clk↔reset swapped, so
+   neither counts. A SINGLE instance binds correctly. Reproduced on a
+   marker-verified fresh build with named *and* positional port maps, and after
+   renaming the TB actuals to `sysclk`/`sysrst` (so it is not a formal/actual
+   name-collision). Looks like an xsim input-port net-collapse defect across two
+   instances of the same entity. **Workarounds:** (a) verify one architecture at
+   a time (comment out the other instance — current TB state has both enabled
+   with a note), or (b) drive each instance from its own buffered clk/reset copy
+   (`sclk <= sysclk; rclk <= sysclk; ...`) so there is no shared net to collapse.
+   Option (b) is the proper fix for keeping the oracle pattern — TRY IT FIRST on
+   resume.
 
-**If it still misbehaves after a clean rebuild**, run these in the Vivado Tcl Console with the sim paused, paste the output to disambiguate:
+2. **Structural (d_ff_nor) zero-delay oscillation.** Run alone, the Structural
+   arch hits the 10000-delta iteration limit at t=0. The cross-coupled NOR
+   feedback loops in `d_ff_nor` are zero-delay, so xsim cannot settle them; the
+   Case-A init values get it *started* but the first clk/d transitions re-trigger
+   the loop. **Fix (not yet applied):** add small `after` delays to the NOR
+   assignments in `d_ff_nor.vhd`, e.g. `a_o <= not (d_o or b_o) after 1 ns;` on
+   all six gates. Synthesis ignores `after`; it only affects simulation and is
+   physically faithful (real gates have propagation delay). With ~1 ns delays vs
+   a 10 ns clock it behaves as a clean FF and the loop can't oscillate.
 
-```tcl
-get_value /bit3_counter_tb/clk
-get_value /bit3_counter_tb/reset
-get_value /bit3_counter_tb/uut_struct/clk
-get_value /bit3_counter_tb/uut_struct/reset
-get_value /bit3_counter_tb/uut_ref/clk
-get_value /bit3_counter_tb/uut_ref/reset
-report_objects -recursive /bit3_counter_tb/uut_ref
-```
+**Resume plan:** (1) add `after 1 ns` to the six d_ff_nor NOR gates; (2) verify
+Structural alone counts 0→6 cleanly; (3) apply oracle workaround (b) — per-
+instance clk/reset copies — and run the full dual-instance oracle; (4) once it
+passes, also bring in `T_Structure` as a third instance / rebind and verify it
+against Reference; (5) strip the one-instance-at-a-time note from the TB.
 
-If `uut_ref/clk` differs from `uut_struct/clk` → real binding bug. If they match → waveform display issue, look elsewhere (the Reference process not firing for some other reason).
-
-**Files relevant to this WIP**:
-- `ULA.srcs/sim_1/new/bit3_counter_tb.vhd` (oracle TB)
-- `ULA.srcs/sources_1/new/bit3_counter.vhd` (both `architecture Structural` and `architecture Reference`)
-- `ULA.srcs/sources_1/new/d_ff_nor.vhd` (init values added)
+**Files involved:**
+- `ULA.srcs/sim_1/new/bit3_counter_tb.vhd` (oracle TB; TB actuals renamed to
+  `sysclk`/`sysrst`; both instances enabled with a workaround note; full
+  KNOWN-ISSUES block in the header)
+- `ULA.srcs/sources_1/new/bit3_counter.vhd` (`Structural`, `T_Structure`,
+  `Reference` architectures — all markers removed)
+- `ULA.srcs/sources_1/new/d_ff_nor.vhd` (Case-A init values present; `after`
+  delays still TO ADD)
 
 ## Walk-through progress (mentor-mode log)
 
