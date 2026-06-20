@@ -39,6 +39,23 @@
 -- No reset/preset inputs. Reset semantics for the wrapper FFs
 -- (clk_div_2, trc_ff, trce_ff) are implemented synchronously by
 -- gating the d input — not by extending this NOR network.
+--
+-- Gate delay `TG` (simulation only). Each of the six NOR assignments
+-- carries an `after TG` inertial delay. Without it the cross-coupled
+-- pairs (a_o↔b_o, c_o↔d_o, e_o↔f_o) re-evaluate within the same
+-- simulation instant: a change to one re-triggers its partner in the
+-- next delta cycle, which re-triggers the first, and so on. An
+-- unsettled latch then spins delta cycles at a fixed `t` until xsim
+-- hits its 10000-iteration guard (observed as a t=0 hang in
+-- bit3_counter_tb). Real gates have propagation delay, so the loop
+-- advances through time and settles; `after TG` models exactly that.
+--
+-- TG is kept small (1 ns) on purpose: the worst-case master-latch path
+-- is ~4 gates ≈ 4·TG, which must settle inside the testbench's setup
+-- margin (T/2 = 5 ns before the falling-edge sample on the 10 ns sim
+-- clock). A larger TG would miss that sample. `after` is ignored by
+-- synthesis — like the init values above, this affects simulation only;
+-- real silicon timing comes from place-and-route.
 ----------------------------------------------------------------------
 
 library IEEE;
@@ -73,13 +90,15 @@ architecture Behavioral of d_ff_nor is
     signal d_o : std_logic := '1';
     signal e_o : std_logic := '0';
     signal f_o : std_logic := '1';
+
+    constant TG : time := 1 ns;   -- modelled NOR propagation delay (sim only)
 begin
-    a_o <= not (d_o or b_o);
-    b_o <= not (a_o or clk);
-    c_o <= not (b_o or clk or d_o);
-    d_o <= not (d   or c_o);
-    e_o <= not (b_o or f_o);
-    f_o <= not (c_o or e_o);
+    a_o <= not (d_o or b_o)        after TG;
+    b_o <= not (a_o or clk)        after TG;
+    c_o <= not (b_o or clk or d_o) after TG;
+    d_o <= not (d   or c_o)        after TG;
+    e_o <= not (b_o or f_o)        after TG;
+    f_o <= not (c_o or e_o)        after TG;
 
     q    <= e_o;
     qbar <= f_o;

@@ -165,14 +165,16 @@ cache will happily reuse an old object and show no error).
    arch hits the 10000-delta iteration limit at t=0. The cross-coupled NOR
    feedback loops in `d_ff_nor` are zero-delay, so xsim cannot settle them; the
    Case-A init values get it *started* but the first clk/d transitions re-trigger
-   the loop. **Fix (not yet applied):** add small `after` delays to the NOR
-   assignments in `d_ff_nor.vhd`, e.g. `a_o <= not (d_o or b_o) after 1 ns;` on
-   all six gates. Synthesis ignores `after`; it only affects simulation and is
-   physically faithful (real gates have propagation delay). With ~1 ns delays vs
-   a 10 ns clock it behaves as a clean FF and the loop can't oscillate.
+   the loop. **Fix APPLIED:** all six NOR assignments in `d_ff_nor.vhd` now carry
+   `after TG` where `constant TG : time := 1 ns;`. Synthesis ignores `after`; it
+   only affects simulation and is physically faithful (real gates have
+   propagation delay). TG is kept at 1 ns so the ~4-gate master-latch path
+   (~4·TG) settles inside the TB setup margin (T/2 = 5 ns). A header note in
+   d_ff_nor.vhd explains it. **Still needs a sim run on the Vivado PC to confirm
+   the t=0 hang is gone.**
 
-**Resume plan:** (1) add `after 1 ns` to the six d_ff_nor NOR gates; (2) verify
-Structural alone counts 0→6 cleanly; (3) apply oracle workaround (b) — per-
+**Resume plan:** (1) DONE — `after TG` (1 ns) added to all six d_ff_nor NOR
+gates; (2) verify Structural alone counts 0→6 cleanly (needs Vivado run); (3) apply oracle workaround (b) — per-
 instance clk/reset copies — and run the full dual-instance oracle; (4) once it
 passes, also bring in `T_Structure` as a third instance / rebind and verify it
 against Reference; (5) strip the one-instance-at-a-time note from the TB.
@@ -183,8 +185,8 @@ against Reference; (5) strip the one-instance-at-a-time note from the TB.
   KNOWN-ISSUES block in the header)
 - `ULA.srcs/sources_1/new/bit3_counter.vhd` (`Structural`, `T_Structure`,
   `Reference` architectures — all markers removed)
-- `ULA.srcs/sources_1/new/d_ff_nor.vhd` (Case-A init values present; `after`
-  delays still TO ADD)
+- `ULA.srcs/sources_1/new/d_ff_nor.vhd` (Case-A init values present; `after TG`
+  delays applied to all six NOR gates, with explanatory header note)
 
 ## Walk-through progress (mentor-mode log)
 
