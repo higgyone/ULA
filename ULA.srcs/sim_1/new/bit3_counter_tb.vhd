@@ -207,6 +207,22 @@ begin
         end if;
     end process;
 
+    -- *** TEMPORARY monitor — prints settled counts mid-period (rising
+    -- edge), where both DUTs are fully settled. Read these MON lines from
+    -- the auto-run launch transcript (no restart / get_value needed). ***
+    mon : process(sysclk)
+    begin
+        if rising_edge(sysclk) then
+            if is_x(out_s) or is_x(out_r) then
+                report "MON " & time'image(now) & "  s/r = X/U" severity note;
+            else
+                report "MON " & time'image(now) &
+                       "  s=" & integer'image(to_integer(unsigned(out_s))) &
+                       "  r=" & integer'image(to_integer(unsigned(out_r))) severity note;
+            end if;
+        end if;
+    end process;
+
     -- Coverage tracker: latch every legal state the UUT visits.
 process(sysclk)
 begin
