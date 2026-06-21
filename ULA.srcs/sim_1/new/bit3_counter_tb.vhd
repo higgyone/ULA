@@ -131,7 +131,11 @@ begin
                 cnt := cnt + 1;
             end if;
             exp_out <= std_logic_vector(cnt);
-            exp_ov  <= '1' when cnt = "110" else '0';
+            if cnt = "110" then
+                exp_ov <= '1';
+            else
+                exp_ov <= '0';
+            end if;
         end if;
     end process;
 
