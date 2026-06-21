@@ -114,10 +114,16 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
   fileset. **Lesson:** if edits to a TB never take effect, check `get_files -all
   *name*` — there may be a second copy under `imports/` that's the one actually
   compiled.
-- **Still TODO — `ULA.srcs/sim_1/imports/new/horiz_timing_tb.vhd`** — likely the same
-  auto-disabled-duplicate situation; check `ULA.xpr` for the `AutoDisabled` flag and
-  confirm it's a copy of the version in `sim_1/new/`. In Vivado: right-click in the
-  Sources panel → *Remove File from Project*, then `git rm` the file and commit.
+- **`horiz_timing_tb` imports duplicate — DONE.** Was an identical copy at
+  `sim_1/imports/new/` (referenced by the project) plus an unreferenced `sim_1/new/`
+  copy. Switched the project to the conventional `sim_1/new/horiz_timing_tb.vhd` via
+  the Tcl console (`remove_files [get_files {*imports/new/horiz_timing_tb.vhd}]`;
+  `add_files -fileset sim_1 -norecurse .../sim_1/new/horiz_timing_tb.vhd`; Save
+  Project), then `git rm`'d the orphan. **Tip:** `remove_files` with a literal path
+  can silently no-match — use `remove_files [get_files {*pattern*}]` instead.
+- **Full project audit (complete):** every `.vhd` referenced by `ULA.xpr` now maps
+  1:1 to its working copy under `sources_1/new/` or `sim_1/new/`. No `imports/`
+  source duplicates remain anywhere (only `arty_35/imports/constraints/` for the XDC).
 
 ## Current status (as of this commit)
 
