@@ -42,24 +42,23 @@
 -- d-input mux). Real silicon has gate-propagation delays so the new
 -- reset always reaches `d` first; zero-delay simulation does not.
 --
--- KNOWN xsim ISSUES (see CLAUDE.md "bit3_counter verification" notes):
+-- xsim ISSUES — both now worked around (see CLAUDE.md notes):
 --
---   1. Dual-instantiation transposition. With BOTH uut_struct and
---      uut_ref bound to the same sysclk/sysrst nets, xsim mis-binds
---      the instance clk/reset ports (each instance sees clk<->reset
---      swapped). A SINGLE instance binds correctly. Root cause looks
---      like xsim input-port net collapsing across two instances of
---      the same entity. Workaround until fixed: verify one
---      architecture at a time (comment out the other instance), or
---      drive each instance from its own clk/reset copy.
+--   1. Dual-instantiation transposition [WORKED AROUND]. With BOTH
+--      uut_struct and uut_ref bound to the SAME sysclk/sysrst nets,
+--      xsim mis-binds the instance clk/reset ports (each instance sees
+--      clk<->reset swapped); a single instance binds correctly. Looks
+--      like xsim input-port net collapsing across two instances of the
+--      same entity. FIX APPLIED HERE: each instance is driven from its
+--      own buffered clk/reset copy (sclk/srst, rclk/rrst) so there is
+--      no shared net to collapse. See the buffer assignments below.
 --
---   2. Structural (d_ff_nor) zero-delay oscillation. Run alone, the
---      Structural arch hits the 10000-delta iteration limit at t=0:
---      the cross-coupled NOR feedback loops in d_ff_nor have no gate
---      delay, so xsim cannot settle them. The fix is to add small
---      `after` delays to the NOR assignments in d_ff_nor.vhd (synthesis
---      ignores `after`; it only affects simulation and is physically
---      faithful). NOT yet applied.
+--   2. Structural (d_ff_nor) zero-delay oscillation [FIXED in source].
+--      Run alone, the Structural arch hit the 10000-delta iteration
+--      limit at t=0 because the cross-coupled NOR feedback loops in
+--      d_ff_nor were zero-delay. d_ff_nor.vhd now carries `after TG`
+--      (1 ns) on all six NOR gates so the loop advances and settles.
+--      Synthesis ignores `after`; simulation only.
 --
 --   The Reference arch (pure behavioural) verifies CLEAN on its own:
 --   counts 0..6, wraps, overflow only at "110".
@@ -89,6 +88,15 @@ architecture Behavioral of bit3_counter_tb is
     signal sysclk : std_logic;
     signal sysrst : std_logic;
 
+    -- Per-instance clk/reset copies (oracle workaround for xsim issue #1).
+    -- Each UUT is driven from its OWN net rather than the shared sysclk/
+    -- sysrst, so xsim cannot collapse the two instances' input ports onto
+    -- a common net and transpose clk<->reset. The copies are plain delta-
+    -- delayed buffers of the masters; both instances stay phase-aligned, so
+    -- the oracle comparison (out_s = out_r) remains valid.
+    signal sclk, srst : std_logic;   -- -> uut_struct
+    signal rclk, rrst : std_logic;   -- -> uut_ref
+
     -- UUT under test (structural d_ff_nor chain)
     signal out_s  : std_logic_vector(2 downto 0);
     signal ov_s   : std_logic;
@@ -105,19 +113,22 @@ architecture Behavioral of bit3_counter_tb is
     signal sim_done : boolean := false;
 begin
 
-    -- NOTE: dual-instantiation oracle (both UUTs sharing sysclk/sysrst)
-    -- currently triggers an xsim port-transposition quirk — see the
-    -- header block above and the CLAUDE.md WIP notes. Until resolved,
-    -- verify ONE architecture at a time by commenting out the other.
+    -- Per-instance clk/reset buffers (workaround for the xsim dual-
+    -- instantiation port transposition — see header / CLAUDE.md issue #1).
+    sclk <= sysclk;
+    srst <= sysrst;
+    rclk <= sysclk;
+    rrst <= sysrst;
+
     uut_struct : entity work.bit3_counter(Structural)
-        port map ( clk      => sysclk,
-                   reset    => sysrst,
+        port map ( clk      => sclk,
+                   reset    => srst,
                    output   => out_s,
                    overflow => ov_s );
 
     uut_ref : entity work.bit3_counter(Reference)
-        port map ( clk      => sysclk,
-                   reset    => sysrst,
+        port map ( clk      => rclk,
+                   reset    => rrst,
                    output   => out_r,
                    overflow => ov_r );
 

@@ -145,48 +145,51 @@ cache will happily reuse an old object and show no error).
   Run as the *only* instance it counts 0→6, wraps, `overflow` asserts only at
   "110". Confirmed via `get_value` (out_r = 1 @ t=52, 3 @ t=75, etc.).
 
-**Two open xsim issues blocking the oracle TB (both need fixing on Vivado PC):**
+**Two xsim issues — both now addressed in source (pending a Vivado sim run):**
 
-1. **Dual-instantiation port transposition.** With BOTH `uut_struct` and
-   `uut_ref` bound to the *same* `sysclk`/`sysrst` nets, xsim mis-binds the
-   instance `clk`/`reset` ports — each instance sees clk↔reset swapped, so
-   neither counts. A SINGLE instance binds correctly. Reproduced on a
+1. **Dual-instantiation port transposition [WORKED AROUND].** With BOTH
+   `uut_struct` and `uut_ref` bound to the *same* `sysclk`/`sysrst` nets, xsim
+   mis-binds the instance `clk`/`reset` ports — each instance sees clk↔reset
+   swapped, so neither counts. A SINGLE instance binds correctly. Reproduced on a
    marker-verified fresh build with named *and* positional port maps, and after
    renaming the TB actuals to `sysclk`/`sysrst` (so it is not a formal/actual
    name-collision). Looks like an xsim input-port net-collapse defect across two
-   instances of the same entity. **Workarounds:** (a) verify one architecture at
-   a time (comment out the other instance — current TB state has both enabled
-   with a note), or (b) drive each instance from its own buffered clk/reset copy
-   (`sclk <= sysclk; rclk <= sysclk; ...`) so there is no shared net to collapse.
-   Option (b) is the proper fix for keeping the oracle pattern — TRY IT FIRST on
-   resume.
+   instances of the same entity. **Fix applied (workaround b):** the TB now
+   drives each instance from its own buffered copy — `sclk/srst <= sysclk/sysrst`
+   for `uut_struct`, `rclk/rrst <= sysclk/sysrst` for `uut_ref` — so there is no
+   shared net to collapse. Both buffers are delta-delayed equally, so the two
+   instances stay phase-aligned and the oracle comparison stays valid. (The
+   per-edge assert samples on `sysclk` while the FFs clock on the 1-delta-later
+   buffered copies, so the assert reads the consistent *pre-edge* state of both
+   instances — still a valid equality check.)
 
-2. **Structural (d_ff_nor) zero-delay oscillation.** Run alone, the Structural
-   arch hits the 10000-delta iteration limit at t=0. The cross-coupled NOR
-   feedback loops in `d_ff_nor` are zero-delay, so xsim cannot settle them; the
-   Case-A init values get it *started* but the first clk/d transitions re-trigger
-   the loop. **Fix APPLIED:** all six NOR assignments in `d_ff_nor.vhd` now carry
-   `after TG` where `constant TG : time := 1 ns;`. Synthesis ignores `after`; it
-   only affects simulation and is physically faithful (real gates have
-   propagation delay). TG is kept at 1 ns so the ~4-gate master-latch path
-   (~4·TG) settles inside the TB setup margin (T/2 = 5 ns). A header note in
-   d_ff_nor.vhd explains it. **Still needs a sim run on the Vivado PC to confirm
-   the t=0 hang is gone.**
+2. **Structural (d_ff_nor) zero-delay oscillation [FIXED in source].** Run alone,
+   the Structural arch hit the 10000-delta iteration limit at t=0. The
+   cross-coupled NOR feedback loops in `d_ff_nor` were zero-delay, so xsim could
+   not settle them; the Case-A init values got it *started* but the first clk/d
+   transitions re-triggered the loop. **Fix:** all six NOR assignments in
+   `d_ff_nor.vhd` carry `after TG` where `constant TG : time := 1 ns;`. Synthesis
+   ignores `after`; simulation only, and physically faithful (real gates have
+   propagation delay). TG is 1 ns so the ~4-gate master path (~4·TG) settles
+   inside the TB setup margin (T/2 = 5 ns).
 
-**Resume plan:** (1) DONE — `after TG` (1 ns) added to all six d_ff_nor NOR
-gates; (2) verify Structural alone counts 0→6 cleanly (needs Vivado run); (3) apply oracle workaround (b) — per-
-instance clk/reset copies — and run the full dual-instance oracle; (4) once it
-passes, also bring in `T_Structure` as a third instance / rebind and verify it
-against Reference; (5) strip the one-instance-at-a-time note from the TB.
+**Resume plan (NEXT: run the oracle on the Vivado PC):**
+(1) DONE — `after TG` on all six d_ff_nor NOR gates.
+(2) DONE — oracle workaround (b): per-instance clk/reset buffers in the TB.
+(3) RUN on Vivado PC — `close_sim -force; launch_simulation`, confirm `Analyzing
+    ...`. Expect: no t=0 hang, no `Oracle mismatch`, no coverage gaps, ends with
+    `bit3_counter_tb: simulation complete.` Both `out_s` and `out_r` count 0→6.
+(4) If clean — bring in `T_Structure` as a third instance (own `tclk/trst`
+    buffers) and assert it against Reference too.
+(5) Then strip the oracle from "WIP" status and mark Phase 4 verified.
 
 **Files involved:**
-- `ULA.srcs/sim_1/new/bit3_counter_tb.vhd` (oracle TB; TB actuals renamed to
-  `sysclk`/`sysrst`; both instances enabled with a workaround note; full
-  KNOWN-ISSUES block in the header)
+- `ULA.srcs/sim_1/new/bit3_counter_tb.vhd` (oracle TB; per-instance clk/reset
+  buffers `sclk/srst`, `rclk/rrst`; both instances active; KNOWN-ISSUES header)
 - `ULA.srcs/sources_1/new/bit3_counter.vhd` (`Structural`, `T_Structure`,
-  `Reference` architectures — all markers removed)
-- `ULA.srcs/sources_1/new/d_ff_nor.vhd` (Case-A init values present; `after TG`
-  delays applied to all six NOR gates, with explanatory header note)
+  `Reference` architectures)
+- `ULA.srcs/sources_1/new/d_ff_nor.vhd` (Case-A init values + `after TG` on all
+  six NOR gates)
 
 ## Walk-through progress (mentor-mode log)
 
