@@ -115,10 +115,15 @@ begin
 
     -- Per-instance clk/reset buffers (workaround for the xsim dual-
     -- instantiation port transposition — see header / CLAUDE.md issue #1).
-    sclk <= sysclk;
-    srst <= sysrst;
-    rclk <= sysclk;
-    rrst <= sysrst;
+    -- The buffers carry DISTINCT tiny transport delays (1 ps for struct,
+    -- 2 ps for ref) so xsim cannot prove the nets equal and collapse them
+    -- back together (a plain `sclk <= sysclk` copy gets collapsed, which
+    -- re-triggers the transposition). 1–2 ps is invisible against the
+    -- 10 ns clock; both instances stay effectively phase-aligned.
+    sclk <= transport sysclk after 1 ps;
+    srst <= transport sysrst after 1 ps;
+    rclk <= transport sysclk after 2 ps;
+    rrst <= transport sysrst after 2 ps;
 
     uut_struct : entity work.bit3_counter(Structural)
         port map ( clk      => sclk,
