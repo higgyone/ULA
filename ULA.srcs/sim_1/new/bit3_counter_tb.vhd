@@ -1,78 +1,43 @@
 ----------------------------------------------------------------------
--- bit3_counter_tb — testbench for bit3_counter (oracle pattern)
+-- bit3_counter_tb — single-UUT testbench with a TB-internal golden model
 --
--- Drives two instantiations of bit3_counter side-by-side off the same
--- clk + reset:
+-- WHY NOT A DUAL-INSTANCE ORACLE: instantiating two copies of
+-- bit3_counter in one testbench (e.g. Structural + Reference side by
+-- side) triggers an xsim 2025.2 defect that transposes each instance's
+-- clk/reset ports — both counters then clock once and freeze. Proven
+-- unavoidable with named, positional, renamed, buffered, and distinct-
+-- delay port connections (see CLAUDE.md "bit3_counter verification").
+-- A SINGLE instance binds correctly, so this TB instantiates exactly
+-- one UUT and compares it against a golden count computed *inside the
+-- testbench* (a process + variable, not a second entity). No second
+-- instance => the xsim bug cannot occur.
 --
---   uut_struct = entity work.bit3_counter(Structural)
---                  -- three d_ff_nor cells + next-state logic
---   uut_ref    = entity work.bit3_counter(Reference)
---                  -- behavioural unsigned + 1 arithmetic oracle
+-- WHICH ARCHITECTURE IS TESTED: edit the `uut` instantiation line below
+-- — `(Structural)`, `(T_Structure)`, or `(Reference)` — and re-run.
+-- Each must match the golden model identically.
 --
--- On every falling edge of clk (after the d_ff_nor network has
--- resolved out of 'U'), the testbench asserts:
+-- TIMING: the UUT is falling-edge triggered. The Structural arch's
+-- d_ff_nor cells carry `after TG` (1 ns) gate delays, so the UUT output
+-- settles a few ns AFTER each falling edge. The golden updates in delta
+-- time on the same falling edge. The checker therefore samples at the
+-- *rising* edge (mid-period, t = 5+10n) where the UUT is fully settled
+-- and the golden is stable — a clean, race-free comparison point.
 --
---   1. Oracle equivalence : out_s = out_r  AND  ov_s = ov_r
---   2. Invariant on UUT   : ov_s = '1'     iff  out_s = "110"
---   3. Invariant on REF   : ov_r = '1'     iff  out_r = "110"
+-- CHECKS (every rising edge, once outputs have left 'U'):
+--   1. output   = golden count          (functional equivalence)
+--   2. overflow = '1' iff output = "110" (overflow invariant)
 --
--- A divergence on (1) means the structural next-state logic does not
--- match the +1-with-wrap arithmetic spec.
---
--- Stimulus coverage:
---   * Phase 1 — power-on reset held for 45 ns (4 falling edges),
---     long enough for the d_ff_nor network to resolve to "000"
---     before any assert is checked.
---   * Phase 2 — long free run; counter cycles through all 7 legal
---     states many times. Coverage tracker (states_visited) records
---     each state the UUT lands in.
---   * Phase 3 — assert reset from each non-zero state K = 1..6 in
---     turn, verifying sync-clear semantics from arbitrary state.
---     (Reset from state 0 is implicit in Phase 1.)
+-- STIMULUS:
+--   * Phase 1 — power-on reset, 45 ns (settles the d_ff_nor network).
+--   * Phase 2 — 200 ns free run (cycles all 7 states many times).
+--   * Phase 3 — reset asserted from each non-zero state K = 1..6,
+--     checking synchronous-clear from an arbitrary state.
 --   * Phase 4 — final free run, then end-of-sim coverage report.
+--   Reset transitions are timed to land on rising clk edges.
 --
--- All `wait for X ns;` durations are chosen so reset transitions
--- land at clk-rising edges (t = 5+10n), half a period before the
--- next falling-edge sample. This avoids the simulation-only race
--- where a reset transition coincident with a falling clock edge is
--- seen by the behavioural Reference arch (process(clk) reads the
--- NEW reset value at the trigger delta) but missed by the Structural
--- arch (the d_ff_nor master has already captured the OLD d value
--- by the time `reset → d` propagates through the combinational
--- d-input mux). Real silicon has gate-propagation delays so the new
--- reset always reaches `d` first; zero-delay simulation does not.
---
--- xsim ISSUES — both now worked around (see CLAUDE.md notes):
---
---   1. Dual-instantiation transposition [WORKED AROUND]. With BOTH
---      uut_struct and uut_ref bound to the SAME sysclk/sysrst nets,
---      xsim mis-binds the instance clk/reset ports (each instance sees
---      clk<->reset swapped); a single instance binds correctly. Looks
---      like xsim input-port net collapsing across two instances of the
---      same entity. FIX APPLIED HERE: each instance is driven from its
---      own buffered clk/reset copy (sclk/srst, rclk/rrst) so there is
---      no shared net to collapse. See the buffer assignments below.
---
---   2. Structural (d_ff_nor) zero-delay oscillation [FIXED in source].
---      Run alone, the Structural arch hit the 10000-delta iteration
---      limit at t=0 because the cross-coupled NOR feedback loops in
---      d_ff_nor were zero-delay. d_ff_nor.vhd now carries `after TG`
---      (1 ns) on all six NOR gates so the loop advances and settles.
---      Synthesis ignores `after`; simulation only.
---
---   The Reference arch (pure behavioural) verifies CLEAN on its own:
---   counts 0..6, wraps, overflow only at "110".
---
--- The `wait for X ns` stimulus below is timed so every reset
--- transition lands on a rising clk edge (t = 5+10n), half a period
--- before the next falling-edge sample.
---
--- Not testable through entity ports alone:
---   * The illegal state "111" self-correction property. Forcing the
---     FF state to "111" would require a backdoor write into the
---     individual d_ff_nor instances inside the Structural arch.
---     Left as a future exercise; for now we rely on the +1-rule
---     analysis in the source-file header to argue glitch recovery.
+-- NOT testable through entity ports: the illegal-state "111" self-
+-- correction (would need a backdoor write into the d_ff_nor cells).
+-- Argued instead from the +1-rule analysis in bit3_counter.vhd.
 ----------------------------------------------------------------------
 
 library IEEE;
@@ -88,54 +53,30 @@ architecture Behavioral of bit3_counter_tb is
     signal sysclk : std_logic;
     signal sysrst : std_logic;
 
-    -- Per-instance clk/reset copies (oracle workaround for xsim issue #1).
-    -- Each UUT is driven from its OWN net rather than the shared sysclk/
-    -- sysrst, so xsim cannot collapse the two instances' input ports onto
-    -- a common net and transpose clk<->reset. The copies are plain delta-
-    -- delayed buffers of the masters; both instances stay phase-aligned, so
-    -- the oracle comparison (out_s = out_r) remains valid.
-    signal sclk, srst : std_logic;   -- -> uut_struct
-    signal rclk, rrst : std_logic;   -- -> uut_ref
+    -- UUT outputs.
+    signal out_uut : std_logic_vector(2 downto 0);
+    signal ov_uut  : std_logic;
 
-    -- UUT under test (structural d_ff_nor chain)
-    signal out_s  : std_logic_vector(2 downto 0);
-    signal ov_s   : std_logic;
+    -- Golden model (computed in this testbench, not a second entity).
+    signal exp_out : std_logic_vector(2 downto 0);
+    signal exp_ov  : std_logic;
 
-    -- Reference oracle (behavioural arithmetic)
-    signal out_r  : std_logic_vector(2 downto 0);
-    signal ov_r   : std_logic;
-
-    -- Coverage: bit k is set once the instance has been observed in state k.
-    signal states_visited   : std_logic_vector(6 downto 0) := (others => '0');  -- structural UUT
-    signal states_visited_r : std_logic_vector(6 downto 0) := (others => '0');  -- reference oracle
+    -- Coverage: bit k set once the UUT has been observed in state k.
+    signal states_visited : std_logic_vector(6 downto 0) := (others => '0');
 
     -- End-of-sim flag — gates the final coverage report.
     signal sim_done : boolean := false;
 begin
 
-    -- Per-instance clk/reset buffers (workaround for the xsim dual-
-    -- instantiation port transposition — see header / CLAUDE.md issue #1).
-    -- The buffers carry DISTINCT tiny transport delays (1 ps for struct,
-    -- 2 ps for ref) so xsim cannot prove the nets equal and collapse them
-    -- back together (a plain `sclk <= sysclk` copy gets collapsed, which
-    -- re-triggers the transposition). 1–2 ps is invisible against the
-    -- 10 ns clock; both instances stay effectively phase-aligned.
-    sclk <= transport sysclk after 1 ps;
-    srst <= transport sysrst after 1 ps;
-    rclk <= transport sysclk after 2 ps;
-    rrst <= transport sysrst after 2 ps;
-
-    uut_struct : entity work.bit3_counter(Structural)
-        port map ( clk      => sclk,
-                   reset    => srst,
-                   output   => out_s,
-                   overflow => ov_s );
-
-    uut_ref : entity work.bit3_counter(Reference)
-        port map ( clk      => rclk,
-                   reset    => rrst,
-                   output   => out_r,
-                   overflow => ov_r );
+    -- Single UUT. Edit the architecture name to verify each in turn:
+    --   (Structural)  — three d_ff_nor cells + next-state logic
+    --   (T_Structure) — trc_ff/trce_ff carry-chain (schematic-faithful)
+    --   (Reference)   — behavioural unsigned +1 (the spec)
+    uut : entity work.bit3_counter(Structural)
+        port map ( clk      => sysclk,
+                   reset    => sysrst,
+                   output   => out_uut,
+                   overflow => ov_uut );
 
     -- Free-running 10 ns clock. Falling edges at t = 10, 20, 30, ...
     process
@@ -146,29 +87,18 @@ begin
         wait for T / 2;
     end process;
 
-    -- Reset stimulus — clock-synchronous.
-    --
-    -- All `reset <= ...` assignments are scheduled at a rising edge of
-    -- clk. The new reset value becomes visible one delta later, then
-    -- propagates through the structural d-input mux long before the
-    -- next falling edge (which is T/2 away). This eliminates the
-    -- delta-cycle race between reset-rise and falling-edge sampling.
+    -- Reset stimulus. Every transition lands on a rising clk edge.
     process
     begin
-        -- Phase 1: hold reset for 45 ns (covers 4 falling edges).
-        -- Ends at t=45 ns, which is a rising edge of clk (clk='1' phase).
+        -- Phase 1: hold reset 45 ns (settles the d_ff_nor network).
         sysrst <= '1';
         wait for 45 ns;
 
         -- Phase 2: 200 ns free run.
-        -- Ends at t=245 ns, also a rising edge.
         sysrst <= '0';
         wait for 200 ns;
 
-        -- Phase 3: targeted reset-from-state-K for K = 1..6.
-        -- Each iteration uses 30 ns reset hold (3 clock periods) and
-        -- k*T release. Total iter time = 30 + k*10 ns. All transitions
-        -- land at rising edges of clk.
+        -- Phase 3: reset-from-state-K for K = 1..6.
         for k in 1 to 6 loop
             sysrst <= '1';
             wait for 30 ns;
@@ -176,8 +106,7 @@ begin
             wait for k * T;
         end loop;
 
-        -- Phase 4: one more reset/clear, then final free run for
-        -- coverage padding, then end-of-sim.
+        -- Phase 4: one more clear, then a final free run.
         sysrst <= '1';
         wait for 30 ns;
         sysrst <= '0';
@@ -187,91 +116,69 @@ begin
         wait;
     end process;
 
-    -- Per-edge self-checks. Skipped while the UUT output is still 'U'
-    -- (the d_ff_nor network needs the first falling edge under reset
-    -- to escape its 'U' initial state). The Reference arch has an
-    -- initialised signal and is "000" from t=0, so once UUT resolves
-    -- both should be "000" together and the asserts engage.
-    process(sysclk)
+    -- Golden model: modulo-7 counter with synchronous reset, falling-edge
+    -- triggered — the behavioural spec the UUT must match. Computed here
+    -- as a process + variable so there is no second entity instance.
+    golden : process(sysclk)
+        variable cnt : unsigned(2 downto 0) := "000";
     begin
         if falling_edge(sysclk) then
-            -- Wait for UUT to escape 'U' before checking anything.
-            if out_s /= "UUU" then
-                assert (out_s = out_r) and (ov_s = ov_r)
-                    report "Oracle mismatch: Structural diverges from Reference."
-                    severity error;
-
-                assert (ov_s = '1') = (out_s = "110")
-                    report "Structural invariant broken: overflow vs output."
-                    severity error;
-
-                assert (ov_r = '1') = (out_r = "110")
-                    report "Reference invariant broken: overflow vs output."
-                    severity error;
+            if sysrst = '1' then
+                cnt := "000";
+            elsif cnt = "110" then
+                cnt := "000";
+            else
+                cnt := cnt + 1;
             end if;
+            exp_out <= std_logic_vector(cnt);
+            exp_ov  <= '1' when cnt = "110" else '0';
         end if;
     end process;
 
-    -- *** TEMPORARY monitor — prints settled counts mid-period (rising
-    -- edge), where both DUTs are fully settled. Read these MON lines from
-    -- the auto-run launch transcript (no restart / get_value needed). ***
-    mon : process(sysclk)
+    -- Checker: sample mid-period (rising edge) where the UUT is settled.
+    -- Gated until both UUT and golden have left their 'U' startup state.
+    check : process(sysclk)
     begin
         if rising_edge(sysclk) then
-            if is_x(out_s) or is_x(out_r) then
-                report "MON " & time'image(now) & "  s/r = X/U" severity note;
-            else
-                report "MON " & time'image(now) &
-                       "  s=" & integer'image(to_integer(unsigned(out_s))) &
-                       "  r=" & integer'image(to_integer(unsigned(out_r))) severity note;
+            if (out_uut /= "UUU") and (exp_out /= "UUU") then
+                assert out_uut = exp_out
+                    report "FUNCTIONAL mismatch: UUT output /= golden count."
+                    severity error;
+
+                assert (ov_uut = '1') = (out_uut = "110")
+                    report "OVERFLOW invariant broken: overflow vs output."
+                    severity error;
             end if;
         end if;
     end process;
 
-    -- Coverage tracker: latch every legal state the UUT visits.
-process(sysclk)
-begin
-    if falling_edge(sysclk) then
-        -- structural UUT
-        if    out_s = "000" then states_visited(0) <= '1';
-        elsif out_s = "001" then states_visited(1) <= '1';
-        elsif out_s = "010" then states_visited(2) <= '1';
-        elsif out_s = "011" then states_visited(3) <= '1';
-        elsif out_s = "100" then states_visited(4) <= '1';
-        elsif out_s = "101" then states_visited(5) <= '1';
-        elsif out_s = "110" then states_visited(6) <= '1';
+    -- Coverage tracker: latch each legal state the UUT visits (mid-period).
+    cover : process(sysclk)
+    begin
+        if rising_edge(sysclk) then
+            if    out_uut = "000" then states_visited(0) <= '1';
+            elsif out_uut = "001" then states_visited(1) <= '1';
+            elsif out_uut = "010" then states_visited(2) <= '1';
+            elsif out_uut = "011" then states_visited(3) <= '1';
+            elsif out_uut = "100" then states_visited(4) <= '1';
+            elsif out_uut = "101" then states_visited(5) <= '1';
+            elsif out_uut = "110" then states_visited(6) <= '1';
+            end if;
         end if;
+    end process;
 
-        -- reference oracle (independent witness)
-        if    out_r = "000" then states_visited_r(0) <= '1';
-        elsif out_r = "001" then states_visited_r(1) <= '1';
-        elsif out_r = "010" then states_visited_r(2) <= '1';
-        elsif out_r = "011" then states_visited_r(3) <= '1';
-        elsif out_r = "100" then states_visited_r(4) <= '1';
-        elsif out_r = "101" then states_visited_r(5) <= '1';
-        elsif out_r = "110" then states_visited_r(6) <= '1';
+    -- End-of-sim coverage report. Warns (not errors) on any missed state.
+    report_cov : process(sim_done)
+    begin
+        if sim_done then
+            for k in 0 to 6 loop
+                assert states_visited(k) = '1'
+                    report "Coverage gap: state " & integer'image(k) &
+                           " was never visited."
+                    severity warning;
+            end loop;
+            report "bit3_counter_tb: simulation complete." severity note;
         end if;
-    end if;
-end process;
-
-    -- End-of-sim coverage report. Warns (not errors) if any legal
-    -- state was missed by the stimulus.
-process(sim_done)
-begin
-    if sim_done then
-        for k in 0 to 6 loop
-            assert states_visited(k) = '1'
-                report "Coverage gap [STRUCTURAL]: state " & integer'image(k) &
-                       " was never visited."
-                severity warning;
-
-            assert states_visited_r(k) = '1'
-                report "Coverage gap [REFERENCE]: state " & integer'image(k) &
-                       " was never visited."
-                severity warning;
-        end loop;
-        report "bit3_counter_tb: simulation complete." severity note;
-    end if;
-end process;
+    end process;
 
 end Behavioral;
