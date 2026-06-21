@@ -106,11 +106,18 @@ The following combinational logic in `video_sync.vhd` has been verified against 
 
 Things that must be done in Vivado on the Vivado PC, because they require touching `ULA.xpr` through the IDE (raw edits to the project file are risky):
 
-- **Delete stale auto-disabled imports duplicates** of testbenches. Currently in the repo and `ULA.xpr` as auto-disabled (Vivado isn't using them):
-  - `ULA.srcs/sources_1/imports/new/master_horiz_counter_tb.vhd` — duplicate of `ULA.srcs/sim_1/new/master_horiz_counter_tb.vhd`. Only difference was `T := 143 ns` vs `10 ns`; the 143 ns value (real 7 MHz period) is now captured as a comment in the active testbench.
-  - `ULA.srcs/sim_1/imports/new/horiz_timing_tb.vhd` — likely the same auto-disabled-duplicate situation; check `ULA.xpr` for the `AutoDisabled` flag and confirm it's a copy of the version in `sim_1/new/`.
-
-  In Vivado: right-click each file in the Sources panel → *Remove File from Project*, then `git rm` the file on disk and commit. Doing it any other way risks leaving `ULA.xpr` out of sync.
+- **`master_horiz_counter_tb` imports duplicate — DONE.** The stale
+  `ULA.srcs/sources_1/imports/new/master_horiz_counter_tb.vhd` (which Vivado was
+  actually compiling instead of the real `sim_1/new` copy — that's why golden-check
+  edits "didn't show up") has been removed from the project and `git rm`'d. The real
+  TB `ULA.srcs/sim_1/new/master_horiz_counter_tb.vhd` is now properly in the sim_1
+  fileset. **Lesson:** if edits to a TB never take effect, check `get_files -all
+  *name*` — there may be a second copy under `imports/` that's the one actually
+  compiled.
+- **Still TODO — `ULA.srcs/sim_1/imports/new/horiz_timing_tb.vhd`** — likely the same
+  auto-disabled-duplicate situation; check `ULA.xpr` for the `AutoDisabled` flag and
+  confirm it's a copy of the version in `sim_1/new/`. In Vivado: right-click in the
+  Sources panel → *Remove File from Project*, then `git rm` the file and commit.
 
 ## Current status (as of this commit)
 
@@ -193,7 +200,7 @@ Remaining work in order:
 - VERIFIED in xsim against the TB golden model: `Structural`, `T_Structure`, and `Reference` all count 0→6 with correct wrap/overflow (see "bit3_counter verification" section). `T_Structure` shows physically-correct ripple glitches between states that settle before the mid-period sample.
 - `master_horiz_counter` now instantiates `(T_Structure)` for schematic fidelity. **✅ VERIFIED in xsim** (eyeballed `master_horiz_counter_tb`, run 10 us): C0–C5 count 0→63, C6–C8 count 0→6 then wrap, full line 0→447, `hc_rst` high across the C6–C8="110" window. Integration correct.
   - **`hc_rst` ripple glitch — analysed, HARMLESS.** With T_Structure, `hc_rst = q7·q8` glitches high briefly at the C6–C8 `3→4` transition (`011→100`: q8 rises before q7 falls, so both are momentarily 1). This is a real, physically-faithful ripple hazard (the Structural arch's parallel overflow didn't have it). It does NOT corrupt anything because the only consumer, `Vert_Line_counter`, is **edge-sampled**: it reads `hc_rst` only at the falling edge of `Clk_HC6`, and the `after TG` delays mean the glitch appears *after* that edge and is gone (640 ns in fast TB) long before the next sample. The vert counter therefore reads the clean *pre-edge* value at every block boundary and increments exactly once per line, at the 6→0 wrap edge (where it samples the settled state-6 `hc_rst=1`). Lesson: a combinational decode of a ripple counter glitches, but a synchronous edge-sampled consumer is immune — exactly how the real ULA tolerates the ripple. (Caveat: keep `hc_rst` away from any *level-sensitive* consumer; only the vert-counter enable uses it, which is safe.)
-  - **`master_horiz_counter_tb` is now self-checking.** The checker samples the 9-bit tap concat `c8..c0` (= `c_upper*64 + c_lower`) on the falling `clk7` edge, locks onto the actual count after reset, then asserts it increments by exactly 1 (mod 448) every `clk7` — catches skips/stuck-bits/wrong-wrap without depending on the start phase. "line complete" heartbeat each 447→0 wrap.
+  - **`master_horiz_counter_tb` is self-checking — ✅ PASSES.** The checker samples the 9-bit tap concat `c8..c0` (= `c_upper*64 + c_lower`) on the falling `clk7` edge, locks onto the actual count after reset, then asserts it increments by exactly 1 (mod 448) every `clk7` — catches skips/stuck-bits/wrong-wrap without depending on the start phase. "line complete" heartbeat each 447→0 wrap. Verified: `run 200 us` gives 3 clean `line complete` notes (one per 64,064 ns PAL line), zero mismatches → the T_Structure horizontal counter is fully correct at real timing.
     - **MUST run at the real 7 MHz period (`T = 143 ns`, set in the TB).** The FF library's `after TG` gate delays make the worst-case 64-boundary settle path (lower gated-ripple → `clk_hc6` → T_Structure C6–C8 after-TG) ~15–20 ns — *longer than a 10 ns clock*, so a fast clock samples mid-ripple garbage at the boundaries and the check false-fails. At 143 ns, T/2 = 71 ns ≫ settle, clean. Don't drop below ~50 ns.
     - One line = 448 × 143 ns ≈ 64 µs, so `run 200 us` (~3 lines) to exercise C6–C8 fully. Pass = no `MHC count mismatch`, with `line complete` notes.
   - Still TODO: re-run `video_sync_tb` after the T_Structure switch to confirm hsync/blank/vsync/border waveforms are unchanged (also re-checks the `hc_rst` → vert-counter path end to end).
