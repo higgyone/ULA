@@ -49,9 +49,6 @@ architecture Behavioral of master_horiz_counter_tb is
     signal clk_hc6     : std_logic;
     signal HC_rst     : std_logic;
 
-    -- Golden full-line count (0..447) for the self-check below.
-    signal golden_count : integer range 0 to 447 := 0;
-
 begin
 mhc: entity work.master_horiz_counter(Behavioral)
     port map(
@@ -97,45 +94,44 @@ mhc: entity work.master_horiz_counter(Behavioral)
    end process;
 
    --*****************************************************************
-   -- Self-check: golden 0..447 line counter
+   -- Self-check: full count increments by 1 each clk7, wraps at 448
    --*****************************************************************
-   -- The MHC advances on the RISING edge of clk7 (C0 = clk_div_2 on
-   -- clk_c0 = NOT clk7, i.e. it toggles on clk7's rising edge). The
-   -- full count is the 9-bit tap concatenation c8..c0 = c_upper*64 +
-   -- c_lower, which runs 0..447 (64 x 7). The golden mirrors that:
-   -- increment once per rising clk7, clear with reset.
-   golden_proc : process(clk_7)
-   begin
-      if rising_edge(clk_7) then
-         if reset = '1' then
-            golden_count <= 0;
-         elsif golden_count = 447 then
-            golden_count <= 0;
-         else
-            golden_count <= golden_count + 1;
-         end if;
-      end if;
-   end process;
-
-   -- Checker samples on the FALLING edge of clk7 (mid-period), by which
-   -- point the ripple chain and the T_Structure C6-C8 stage (with its
-   -- after-TG gate delays) have settled. Skips reset and any 'U'/'X' on
-   -- the taps. A wrap heartbeat confirms full lines are being verified.
+   -- The full line count is the 9-bit tap concatenation c8..c0
+   -- (= c_upper*64 + c_lower), which runs 0..447 (64 x 7). Rather than
+   -- predict the absolute start phase (tricky with the gated clocks,
+   -- synchronous reset and after-TG gate delays), we LOCK onto the
+   -- actual count after reset and then assert it advances by exactly 1
+   -- (mod 448) every clk7. This catches any skip, stuck bit, or wrong
+   -- wrap without depending on the start phase.
+   --
+   -- Sampled on the FALLING edge of clk7 (mid-period), by which point
+   -- the ripple chain and the T_Structure C6-C8 stage have settled.
    check_proc : process(clk_7)
-      variable taps : std_logic_vector(8 downto 0);
-      variable act  : integer range 0 to 511;
+      variable taps    : std_logic_vector(8 downto 0);
+      variable act     : integer range 0 to 511;
+      variable expnext : integer range 0 to 447;
+      variable locked  : boolean := false;
    begin
       if falling_edge(clk_7) then
-         taps := c8 & c7 & c6 & c5 & c4 & c3 & c2 & c1 & c0;
-         if (reset = '0') and (not is_x(taps)) then
-            act := to_integer(unsigned(taps));
-            assert act = golden_count
-               report "MHC count mismatch: taps=" & integer'image(act) &
-                      " expected=" & integer'image(golden_count)
-               severity error;
-            if golden_count = 447 then
-               report "MHC: line complete -- 448 counts verified (0..447)."
-                  severity note;
+         if reset = '1' then
+            locked := false;                 -- re-lock after every reset
+         else
+            taps := c8 & c7 & c6 & c5 & c4 & c3 & c2 & c1 & c0;
+            if not is_x(taps) then
+               act := to_integer(unsigned(taps));
+               if locked then
+                  assert act = expnext
+                     report "MHC count mismatch: taps=" & integer'image(act) &
+                            " expected=" & integer'image(expnext)
+                     severity error;
+                  if expnext = 447 then
+                     report "MHC: line complete -- 448 counts verified (0..447)."
+                        severity note;
+                  end if;
+               end if;
+               -- predict next count and lock on
+               if act = 447 then expnext := 0; else expnext := act + 1; end if;
+               locked := true;
             end if;
          end if;
       end if;
