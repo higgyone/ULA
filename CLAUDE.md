@@ -120,76 +120,58 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - **All five original bugs resolved.**
 - **`video_sync` slimmed down**: hsync/blanking logic now lives in `horiz_timing` (which was previously dead code). `video_sync` instantiates `horiz_timing` rather than inlining the equations. Single MHC instance across the design.
 - **`nBorder` and `sVsync` converted to NOR-faithful form** with named intermediates (`VBorderLower`, `VBorderUpper`, `v3_n`..`v7_n`).
-- Open verification tasks before declaring the timing backbone done:
-  - Cross-check `bit3_counter` Structural vs Behavioural waveforms in Vivado.
+- Open verification task before declaring the timing backbone done:
   - Re-run `video_sync_tb` after the `horiz_timing` extraction; confirm `hsync_5c`/`hsync_6c`/`nHblank`/`sync_5c`/`sync_6c`/`vsync`/`nBorder` waveforms are identical to pre-refactor.
 - Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
-- **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives).
-- **`bit3_counter` converted to structural**: three `d_ff_nor` cells + per-bit next-state combinational logic (binary +1 rule + wrap suppression at `"110"` + sync reset). `master_horiz_counter` instantiation updated to `(Structural)`.
-- **`bit3_counter_tb` upgraded to oracle pattern (in progress)**: TB now instantiates both `bit3_counter(Structural)` and `bit3_counter(Reference)` in parallel off the same `clk`/`reset`, with a `process(clk)` self-check that asserts `out_s = out_r` AND `ov_s = ov_r` on every falling edge. The Reference architecture (behavioural `unsigned` arithmetic with sync reset) was reinstated as `architecture Reference of bit3_counter` (lives in the same `.vhd` file as Structural). Coverage tracker logs every legal state visited; end-of-sim report warns about any state not reached.
+- **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives). `d_ff_nor` has Case-A init values + `after TG` (1 ns) gate delays for clean simulation.
+- **`bit3_counter` ✅ VERIFIED — all three architectures** (`Structural`, `T_Structure`, `Reference`) match a golden modulo-7 model in xsim. `master_horiz_counter` instantiates `(Structural)`; `(T_Structure)` is the schematic-faithful carry-chain variant, verified and available if the design later switches to it. See the "bit3_counter verification" section below for the single-UUT + TB-golden testbench design and the xsim caveats.
 
-### bit3_counter verification — root causes found (2 open sim issues)
+### bit3_counter verification — ✅ VERIFIED (all three architectures)
 
-A very long debugging session resolved the "Reference not counting / swapped
-ports" mystery. **None of it was a logic bug in the VHDL** — the entity, both
-architectures, and the testbench port maps are all correct. The symptoms came
-from the simulator (xsim 2025.2), compounded by a sticky incremental-compile
-cache that kept running stale snapshots through most of the session. Key
-debugging lesson: after any source edit, `restart` does NOT recompile — use
+All three architectures of `bit3_counter` are verified in xsim against a
+golden modulo-7 model: they count 0→6, wrap, and assert `overflow` only at
+"110", with all 7 states covered and no functional/invariant mismatches.
+
+- **Structural** (three `d_ff_nor` cells + parallel next-state logic) — clean,
+  no glitches. This is the arch instantiated by `master_horiz_counter`.
+- **T_Structure** (schematic-faithful `trc_ff`→`trce_ff`→`trce_ff` carry chain)
+  — matches the golden at every sample point, with transient ripple glitches
+  between states during the carry settle. The glitches are physically correct
+  (gate-delayed ripple, like the real ULA) and harmless: the checker samples
+  mid-period, long after they settle.
+- **Reference** (behavioural `unsigned +1`) — matches the golden exactly with
+  no delay (confirms the golden/checker are sound).
+
+**Testbench design (`bit3_counter_tb.vhd`): single UUT + TB-internal golden.**
+The natural "oracle" pattern — two `bit3_counter` instances (e.g. Structural vs
+Reference) compared side by side — is *unusable* here: xsim 2025.2 transposes
+the `clk`/`reset` ports whenever two instances of the same entity share clock/
+reset nets, so both counters freeze. Proven unavoidable via named, positional,
+renamed, plain-buffered, and distinct-delay connections; a SINGLE instance
+binds correctly. So the TB instantiates ONE `uut` and compares it against a
+golden count computed *in a TB process* (no second entity → bug can't occur).
+Edit the `uut` architecture line to verify each arch in turn.
+
+**Two fixes that made simulation work (keep these):**
+1. `d_ff_nor.vhd` — all six NOR gates carry `after TG` (`TG = 1 ns`). Without a
+   gate delay the cross-coupled NOR latches are zero-delay and xsim spins to the
+   10000-delta iteration limit (t=0 hang). `after` is sim-only (synthesis
+   ignores it) and physically faithful. Six internal signals also have Case-A
+   init values (`a_o=0,b_o=1,c_o=0,d_o=1,e_o=0,f_o=1`) so the latch starts
+   defined instead of 'U'.
+2. The checker/coverage sample on the **rising** edge (mid-period). The FFs are
+   falling-edge triggered; the Structural arch's `after TG` delays mean its
+   output settles a few ns after the edge, so mid-period sampling is the
+   race-free comparison point.
+
+**Hard-won tooling lesson (xsim 2025.2 incremental compile):** after any source
+edit, `restart` does NOT recompile — it re-runs the *existing* snapshot. Always
 `close_sim -force; launch_simulation` and confirm `[VRFC 10-163] Analyzing ...`
-appears (a planted `report` marker is the only reliable freshness proof; the
-cache will happily reuse an old object and show no error).
-
-**Verified so far:**
-- **Reference architecture** (behavioural `unsigned` counter) — ✅ CORRECT.
-  Run as the *only* instance it counts 0→6, wraps, `overflow` asserts only at
-  "110". Confirmed via `get_value` (out_r = 1 @ t=52, 3 @ t=75, etc.).
-
-**Two xsim issues — both now addressed in source (pending a Vivado sim run):**
-
-1. **Dual-instantiation port transposition [WORKED AROUND].** With BOTH
-   `uut_struct` and `uut_ref` bound to the *same* `sysclk`/`sysrst` nets, xsim
-   mis-binds the instance `clk`/`reset` ports — each instance sees clk↔reset
-   swapped, so neither counts. A SINGLE instance binds correctly. Reproduced on a
-   marker-verified fresh build with named *and* positional port maps, and after
-   renaming the TB actuals to `sysclk`/`sysrst` (so it is not a formal/actual
-   name-collision). Looks like an xsim input-port net-collapse defect across two
-   instances of the same entity. **Fix applied (workaround b):** the TB now
-   drives each instance from its own buffered copy — `sclk/srst <= sysclk/sysrst`
-   for `uut_struct`, `rclk/rrst <= sysclk/sysrst` for `uut_ref` — so there is no
-   shared net to collapse. Both buffers are delta-delayed equally, so the two
-   instances stay phase-aligned and the oracle comparison stays valid. (The
-   per-edge assert samples on `sysclk` while the FFs clock on the 1-delta-later
-   buffered copies, so the assert reads the consistent *pre-edge* state of both
-   instances — still a valid equality check.)
-
-2. **Structural (d_ff_nor) zero-delay oscillation [FIXED in source].** Run alone,
-   the Structural arch hit the 10000-delta iteration limit at t=0. The
-   cross-coupled NOR feedback loops in `d_ff_nor` were zero-delay, so xsim could
-   not settle them; the Case-A init values got it *started* but the first clk/d
-   transitions re-triggered the loop. **Fix:** all six NOR assignments in
-   `d_ff_nor.vhd` carry `after TG` where `constant TG : time := 1 ns;`. Synthesis
-   ignores `after`; simulation only, and physically faithful (real gates have
-   propagation delay). TG is 1 ns so the ~4-gate master path (~4·TG) settles
-   inside the TB setup margin (T/2 = 5 ns).
-
-**Resume plan (NEXT: run the oracle on the Vivado PC):**
-(1) DONE — `after TG` on all six d_ff_nor NOR gates.
-(2) DONE — oracle workaround (b): per-instance clk/reset buffers in the TB.
-(3) RUN on Vivado PC — `close_sim -force; launch_simulation`, confirm `Analyzing
-    ...`. Expect: no t=0 hang, no `Oracle mismatch`, no coverage gaps, ends with
-    `bit3_counter_tb: simulation complete.` Both `out_s` and `out_r` count 0→6.
-(4) If clean — bring in `T_Structure` as a third instance (own `tclk/trst`
-    buffers) and assert it against Reference too.
-(5) Then strip the oracle from "WIP" status and mark Phase 4 verified.
-
-**Files involved:**
-- `ULA.srcs/sim_1/new/bit3_counter_tb.vhd` (oracle TB; per-instance clk/reset
-  buffers `sclk/srst`, `rclk/rrst`; both instances active; KNOWN-ISSUES header)
-- `ULA.srcs/sources_1/new/bit3_counter.vhd` (`Structural`, `T_Structure`,
-  `Reference` architectures)
-- `ULA.srcs/sources_1/new/d_ff_nor.vhd` (Case-A init values + `after TG` on all
-  six NOR gates)
+for the file you changed. Most of this debugging session was wasted on stale
+snapshots that silently reused old compiled objects. A planted `report` marker
+is the only reliable freshness proof. Also: breakpoints set in the gutter on a
+*concurrent* assignment halt every `run` at t≈0 — clear them (`remove_bps -all`)
+or `get_value` reads garbage.
 
 ## Walk-through progress (mentor-mode log)
 
@@ -205,10 +187,10 @@ Files covered so far, in order, by the post-`6e59d6e` walk-through:
 ## What Needs Building Next
 
 Remaining work in order:
-**Phase 4 - Real bit3_counter** *(T_Structure written — pending sim verification)*
-- DONE (in source): `architecture T_Structure of bit3_counter` built from `trc_ff` (C6) + two `trce_ff` (C7, C8). Enable-chaining via the redefined `carry` out (`carry6=q6 → C7.enable`; `carry7=q6·q7 → C8.enable`). `s_HCrst <= not(qbar7 or qbar8)` (= q7·q8); `s_ff_rst <= reset or s_HCrst` feeds all three FF resets; `output <= q8&q7&q6`; `overflow <= s_HCrst`. Hand-traced 000→…→110→000 (modulo-7), matches `Reference`.
-- TODO on Vivado PC: verify `T_Structure` against `Reference` in the hardened oracle TB (add as 3rd instance or rebind `uut_struct`). Confirm coverage report is clean.
-- original intent (for reference): tcr_ff for c6, trce_ff for c7 and c8; resets on the t flip flops; NOR the two trce_ff qbars to create HCrst.
+**Phase 4 - Real bit3_counter** ✅ *COMPLETE — all three architectures verified.*
+- `architecture T_Structure of bit3_counter` built from `trc_ff` (C6) + two `trce_ff` (C7, C8). Enable-chaining via the `carry` out (`carry6=q6 → C7.enable`; `carry7=q6·q7 → C8.enable`). `s_HCrst <= not(qbar7 or qbar8)` (= q7·q8); `s_ff_rst <= reset or s_HCrst` feeds all three FF resets; `output <= q8&q7&q6`; `overflow <= s_HCrst`. Modulo-7, matches `Reference`.
+- VERIFIED in xsim against the TB golden model: `Structural`, `T_Structure`, and `Reference` all count 0→6 with correct wrap/overflow (see "bit3_counter verification" section). `T_Structure` shows physically-correct ripple glitches between states that settle before the mid-period sample.
+- Optional future step: switch `master_horiz_counter` from `(Structural)` to `(T_Structure)` if full gate-accuracy of the C6–C8 stage is wanted.
 **Phase 5 — Video output**
 - `border_reg.vhd` — port 0xFE write, capture bits 2:0 as border colour
 - `pixel_fetch.vhd` — VRAM address generation using C/V counters; ZX scrambled address format
