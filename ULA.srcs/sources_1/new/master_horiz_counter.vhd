@@ -147,12 +147,17 @@ count_5: entity work.clk_div_2
      clk_out_n => c5_n
      );     
      
-b3c: entity work.bit3_counter(Structural)
-port map(        
+-- C6..C8 use the schematic-faithful T_Structure architecture (chained
+-- trc_ff/trce_ff with a rippling carry), verified modulo-7 equivalent to
+-- the Structural/Reference archs at every clock boundary. Its outputs
+-- ripple-glitch between states (gate-delayed, like the real ULA); these
+-- settle well before they are sampled downstream.
+b3c: entity work.bit3_counter(T_Structure)
+port map(
       reset => reset,
       clk => s_clkhc6,
       output => clk8_6,
       overflow => hc_rst
-   );     
+   );
      
 end Behavioral;

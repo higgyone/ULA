@@ -124,7 +124,7 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
   - Re-run `video_sync_tb` after the `horiz_timing` extraction; confirm `hsync_5c`/`hsync_6c`/`nHblank`/`sync_5c`/`sync_6c`/`vsync`/`nBorder` waveforms are identical to pre-refactor.
 - Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
 - **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives). `d_ff_nor` has Case-A init values + `after TG` (1 ns) gate delays for clean simulation.
-- **`bit3_counter` ✅ VERIFIED — all three architectures** (`Structural`, `T_Structure`, `Reference`) match a golden modulo-7 model in xsim. `master_horiz_counter` instantiates `(Structural)`; `(T_Structure)` is the schematic-faithful carry-chain variant, verified and available if the design later switches to it. See the "bit3_counter verification" section below for the single-UUT + TB-golden testbench design and the xsim caveats.
+- **`bit3_counter` ✅ VERIFIED — all three architectures** (`Structural`, `T_Structure`, `Reference`) match a golden modulo-7 model in xsim. `master_horiz_counter` instantiates `(T_Structure)` — the schematic-faithful chained-T-FF carry-chain — for gate-accuracy. See the "bit3_counter verification" section below for the single-UUT + TB-golden testbench design and the xsim caveats.
 
 ### bit3_counter verification — ✅ VERIFIED (all three architectures)
 
@@ -132,13 +132,14 @@ All three architectures of `bit3_counter` are verified in xsim against a
 golden modulo-7 model: they count 0→6, wrap, and assert `overflow` only at
 "110", with all 7 states covered and no functional/invariant mismatches.
 
-- **Structural** (three `d_ff_nor` cells + parallel next-state logic) — clean,
-  no glitches. This is the arch instantiated by `master_horiz_counter`.
 - **T_Structure** (schematic-faithful `trc_ff`→`trce_ff`→`trce_ff` carry chain)
   — matches the golden at every sample point, with transient ripple glitches
   between states during the carry settle. The glitches are physically correct
-  (gate-delayed ripple, like the real ULA) and harmless: the checker samples
-  mid-period, long after they settle.
+  (gate-delayed ripple, like the real ULA) and harmless: downstream logic
+  samples mid-period, long after they settle. **This is the arch instantiated
+  by `master_horiz_counter`** (chosen for schematic fidelity).
+- **Structural** (three `d_ff_nor` cells + parallel next-state logic) — clean,
+  no glitches; behaviourally equivalent, kept as an alternative.
 - **Reference** (behavioural `unsigned +1`) — matches the golden exactly with
   no delay (confirms the golden/checker are sound).
 
@@ -190,7 +191,7 @@ Remaining work in order:
 **Phase 4 - Real bit3_counter** ✅ *COMPLETE — all three architectures verified.*
 - `architecture T_Structure of bit3_counter` built from `trc_ff` (C6) + two `trce_ff` (C7, C8). Enable-chaining via the `carry` out (`carry6=q6 → C7.enable`; `carry7=q6·q7 → C8.enable`). `s_HCrst <= not(qbar7 or qbar8)` (= q7·q8); `s_ff_rst <= reset or s_HCrst` feeds all three FF resets; `output <= q8&q7&q6`; `overflow <= s_HCrst`. Modulo-7, matches `Reference`.
 - VERIFIED in xsim against the TB golden model: `Structural`, `T_Structure`, and `Reference` all count 0→6 with correct wrap/overflow (see "bit3_counter verification" section). `T_Structure` shows physically-correct ripple glitches between states that settle before the mid-period sample.
-- Optional future step: switch `master_horiz_counter` from `(Structural)` to `(T_Structure)` if full gate-accuracy of the C6–C8 stage is wanted.
+- `master_horiz_counter` now instantiates `(T_Structure)` for schematic fidelity. TODO on Vivado PC: re-run `master_horiz_counter_tb` and `video_sync_tb` to confirm the ripple glitches on C6–C8 don't disturb the downstream hsync/blank decode or the `hc_rst` → vertical-counter path (they shouldn't — downstream sampling is mid/late-period).
 **Phase 5 — Video output**
 - `border_reg.vhd` — port 0xFE write, capture bits 2:0 as border colour
 - `pixel_fetch.vhd` — VRAM address generation using C/V counters; ZX scrambled address format
