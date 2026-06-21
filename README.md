@@ -22,7 +22,7 @@ Still to build: border colour register, pixel/attribute fetch, colour mux, video
 ULA.srcs/
   sources_1/new/           VHDL source files
   sim_1/new/               Testbenches (Vivado xsim)
-  constrs_1/imports/       Nexys4_DDR.xdc pin constraints
+  arty_35/imports/constraints/   Arty-A7-35-Master.xdc pin constraints
 CLAUDE.md                  Architecture notes, known bugs, roadmap
 ```
 
