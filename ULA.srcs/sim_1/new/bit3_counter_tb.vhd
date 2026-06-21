@@ -72,7 +72,7 @@ begin
     --   (Structural)  — three d_ff_nor cells + next-state logic
     --   (T_Structure) — trc_ff/trce_ff carry-chain (schematic-faithful)
     --   (Reference)   — behavioural unsigned +1 (the spec)
-    uut : entity work.bit3_counter(Structural)
+    uut : entity work.bit3_counter(Reference)
         port map ( clk      => sysclk,
                    reset    => sysrst,
                    output   => out_uut,
