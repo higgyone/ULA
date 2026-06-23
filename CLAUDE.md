@@ -56,6 +56,7 @@ To run a simulation in Vivado: set the target testbench as the active simulation
 - 9-bit synchronous counter V0–V8, increments on falling edge of `Clk_HC6` when `HCrst_Enable` (= `hc_rst`) is asserted
 - Counts 0–311 (312 lines per frame); emits `Vrst` on wrap
 - `v_max = "100110111"` = 311 decimal (counts 0–311 = 312 states — the comment in the file saying "312 lines" is misleading)
+- **TODO — convert to gate-friendly (structural) form.** Currently behavioural (`output_cnt + 1`), unlike the gate-faithful ripple horizontal counter. To match Smith pg 92 and the rest of the FF library, rebuild it from the structural FF primitives (synchronous-enable counter cells) rather than a `+1` process. Not timing-critical, so this is fidelity work, not a correctness fix.
 
 ### Horizontal timing block (`horiz_timing`)
 - Owns the `master_horiz_counter` instance and derives `hsync_5c` / `hsync_6c` / `nHblank` from the C0–C8 taps
