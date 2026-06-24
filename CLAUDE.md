@@ -53,10 +53,12 @@ To run a simulation in Vivado: set the target testbench as the active simulation
 - Emits `hc_rst` (overflow/reset pulse) and `clk_hc6` for the vertical counter
 
 ### Vertical counter (`Vert_Line_counter`)
-- 9-bit synchronous counter V0–V8, increments on falling edge of `Clk_HC6` when `HCrst_Enable` (= `hc_rst`) is asserted
+- 9-bit counter V0–V8, increments on falling edge of `Clk_HC6` when `HCrst` (= `hc_rst`) is asserted
 - Counts 0–311 (312 lines per frame); emits `Vrst` on wrap
-- `v_max = "100110111"` = 311 decimal (counts 0–311 = 312 states — the comment in the file saying "312 lines" is misleading)
-- **TODO — convert to gate-friendly (structural) form.** Currently behavioural (`output_cnt + 1`), unlike the gate-faithful ripple horizontal counter. To match Smith pg 92 and the rest of the FF library, rebuild it from the structural FF primitives (synchronous-enable counter cells) rather than a `+1` process. Not timing-critical, so this is fidelity work, not a correctness fix.
+- Exposes both `V0..V8` and complemented `V0_n..V8_n` taps so downstream NOR gates can connect directly without extra inverters
+- **`T_Structure`** (primary, matches Smith pg 92): `tce_ff` for V0–V2 (no reset — schematic-faithful), `trce_ff` for V3–V8 with `v3_8_reset`. Reset decode is a NOR on `s_v2_c` (= `HCrst·V0·V1·V2`), `V4_n`, `V5_n`, `V8_n` — fires only at count=311 with `HCrst='1'`. `Vrst` is combinational (high during count=311).
+- **`Behavioral`** (reference): `output_cnt + 1` model kept for cross-checking. `Vrst` registered (high during count=0).
+- **Needs xsim verification** — run `vert_line_counter_tb` against `T_Structure` to confirm 0→311 wrap and `Vrst` timing.
 
 ### Horizontal timing block (`horiz_timing`)
 - Owns the `master_horiz_counter` instance and derives `hsync_5c` / `hsync_6c` / `nHblank` from the C0–C8 taps
@@ -134,7 +136,9 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - **All five original bugs resolved.**
 - **`video_sync` slimmed down**: hsync/blanking logic now lives in `horiz_timing` (which was previously dead code). `video_sync` instantiates `horiz_timing` rather than inlining the equations. Single MHC instance across the design.
 - **`nBorder` and `sVsync` converted to NOR-faithful form** with named intermediates (`VBorderLower`, `VBorderUpper`, `v3_n`..`v7_n`).
-- Open verification task before declaring the timing backbone done:
+- **`Vert_Line_counter(T_Structure)` implemented** — gate-faithful 9-bit counter matching Smith pg 92. Peer-reviewed; needs xsim verification (see "What Needs Building Next").
+- Open verification tasks before declaring the timing backbone done:
+  - Run `vert_line_counter_tb` against `T_Structure`; confirm 0→311 count, correct wrap, `Vrst` fires at count=311.
   - Re-run `video_sync_tb` after the `horiz_timing` extraction; confirm `hsync_5c`/`hsync_6c`/`nHblank`/`sync_5c`/`sync_6c`/`vsync`/`nBorder` waveforms are identical to pre-refactor.
 - Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
 - **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives). `d_ff_nor` has Case-A init values + `after TG` (1 ns) gate delays for clean simulation.
@@ -197,6 +201,8 @@ Files covered so far, in order, by the post-`6e59d6e` walk-through:
 - `trce_ff.vhd` — three-way d-mux with priority (reset > enable)
 - `bit3_counter.vhd` — per-bit binary +1 rule + wrap suppression + sync reset; structural conversion derived from a state table
 
+- `Vert_Line_counter.vhd` — T_Structure implemented (tce_ff/trce_ff carry chain, NOR reset decode at 311, HCrst gating via s_v2_c); V*_n ports added. Needs xsim verification.
+
 **Next on the list:** `clk_div_2` (simplest structural composition — `d_ff_nor` + a single inverted feedback wire).
 
 ## What Needs Building Next
@@ -211,6 +217,13 @@ Remaining work in order:
     - **MUST run at the real 7 MHz period (`T = 143 ns`, set in the TB).** The FF library's `after TG` gate delays make the worst-case 64-boundary settle path (lower gated-ripple → `clk_hc6` → T_Structure C6–C8 after-TG) ~15–20 ns — *longer than a 10 ns clock*, so a fast clock samples mid-ripple garbage at the boundaries and the check false-fails. At 143 ns, T/2 = 71 ns ≫ settle, clean. Don't drop below ~50 ns.
     - One line = 448 × 143 ns ≈ 64 µs, so `run 200 us` (~3 lines) to exercise C6–C8 fully. Pass = no `MHC count mismatch`, with `line complete` notes.
   - Still TODO: re-run `video_sync_tb` after the T_Structure switch to confirm hsync/blank/vsync/border waveforms are unchanged (also re-checks the `hc_rst` → vert-counter path end to end).
+**`Vert_Line_counter` T_Structure** — implemented and peer-reviewed. Needs xsim verification and `video_sync` port-map update (Vivado-PC tasks):
+- Run `vert_line_counter_tb` with `architecture T_Structure` selected; confirm count 0→311, wrap to 0, `Vrst` fires at 311. Clock at real `Clk_HC6` period (~9.1 µs); run long enough to complete at least 2 full frames (~20 ms).
+- **`video_sync.vhd` port map must be updated** before simulating the full stack:
+  - `HCrst_Enable => hcrst` → `HCrst => hcrst`
+  - Add `V0_n => open, V1_n => open, ... V8_n => open` (or wire to intermediate signals if the NOR decode is refactored to use them directly)
+  - Switch instantiation from `(Behavioral)` to `(T_Structure)`
+  - Re-run `video_sync_tb` to confirm end-to-end waveforms unchanged
 **Phase 5 — Video output**
 - `border_reg.vhd` — port 0xFE write, capture bits 2:0 as border colour
 - `pixel_fetch.vhd` — VRAM address generation using C/V counters; ZX scrambled address format
