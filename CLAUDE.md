@@ -162,6 +162,19 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 
 ## Current status (as of this commit)
 
+> **▶ PICK UP HERE (next session):** Timing backbone (Phases 1–4) is **fully
+> xsim-verified and done**. Work has moved to a **per-PR feature-branch
+> workflow** off `main` (PRs #3 and #4 merged). Current branch:
+> **`phase5-video`** (pushed, tracking `origin/phase5-video`). It holds two
+> committed-but-**deliberately-not-yet-PR'd** changes: `video_sync` decode-comment
+> expansions + `video_sync_tb` waveform instrumentation (`dbg_pixel`/`dbg_line`/
+> `dbg_vline` + `dbg_exp_*` flags). **Next task: build `border_reg.vhd`** (port
+> `0xFE` write → capture bits 2:0 as border colour) — the first Phase 5 module.
+> User wants mentor-mode: offer walk-through vs review-my-sketch before writing.
+> Vivado on this PC: `C:\AMDDesignTools\2025.2\Vivado\bin` (not on PATH); CLI sim
+> via `xvhdl`/`xelab`/`xsim` works (see "video_sync verification"). Note: `ULA.xpr`
+> gets rewritten by Vivado each session — commit as isolated "Vivado housekeeping".
+
 - Timing backbone (Phases 1–4) is complete and verified against the Chris Smith spec.
 - Target board switched from Nexys4 DDR to Arty A7-35T; master XDC is in place but pin assignments are still commented out (waits on the top-level `ULA.vhd` ports being defined).
 - VS Code + VHDL LS tooling configured on the non-Vivado PC; testbenches normalised (`Nns` → `N ns`, BOMs stripped).
