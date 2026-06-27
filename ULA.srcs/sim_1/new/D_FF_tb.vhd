@@ -35,14 +35,14 @@ entity D_FF_tb is
 --  Port ( );
 end D_FF_tb;
 
-architecture arch of D_FF_tb is
+architecture Behavioral of D_FF_tb is
     constant T  : time    := 10 ns; -- clk period
     signal clk  : std_logic;
     signal d    : std_logic :='0';
     signal q    : std_logic;
     signal q_bar : std_logic;
 begin
-    dFlipFlop: entity work.d_ff(Behavourial)
+    dFlipFlop: entity work.d_ff(Behavioral)
         port map(
             clk => clk,
             d => d,
@@ -97,4 +97,4 @@ begin
 --      wait for 50ns;
 --      d <= q_bar;
 
-end arch;
+end Behavioral;

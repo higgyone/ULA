@@ -30,8 +30,8 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
 entity clk_div_2 is
-    port ( reset     : in  std_logic;
-           clk_in    : in  std_logic;
+    port ( clk_in    : in  std_logic;
+           reset     : in  std_logic;
            clk_out   : out std_logic;
            clk_out_n : out std_logic );
 end clk_div_2;

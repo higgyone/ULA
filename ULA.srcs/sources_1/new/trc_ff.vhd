@@ -29,9 +29,9 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity trc_ff is
     Port ( clk   : in  STD_LOGIC;
            reset : in  STD_LOGIC;
-           carry : out STD_LOGIC;
            q     : out STD_LOGIC;
-           qbar  : out STD_LOGIC);
+           qbar  : out STD_LOGIC;
+           carry : out STD_LOGIC);
 end trc_ff;
 
 architecture Behavioral of trc_ff is

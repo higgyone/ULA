@@ -84,8 +84,8 @@ begin
     mhc: entity work.master_horiz_counter(Behavioral)
         port map(
             clk7    => clk,
-            tclk_a  => '0',
             reset   => reset,
+            tclk_a  => '0',
             c0 => c0, c1 => c1, c2 => c2, c3 => c3, c4 => c4,
             c5 => c5, c6 => c6, c7 => c7, c8 => c8,
             clk_hc6 => s_clk_hc6,

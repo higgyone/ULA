@@ -30,7 +30,7 @@ entity d_ff is
            q_bar : out std_logic);
 end d_ff;
 
-architecture Behavourial of d_ff is
+architecture Behavioral of d_ff is
     signal d_sig : std_logic := '0';
 begin
     process(clk)
@@ -42,4 +42,4 @@ begin
 
     q     <= d_sig;
     q_bar <= not d_sig;
-end Behavourial;
+end Behavioral;

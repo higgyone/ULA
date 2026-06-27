@@ -66,8 +66,8 @@ begin
     dut: entity work.video_sync(Behavioral)
         port map(
             clk      => clk_7,
-            tclk_a   => '0',
             reset    => reset,
+            tclk_a   => '0',
             hsync_5c => hsync_5c,
             hsync_6c => hsync_6c,
             nHblank  => nHblank,

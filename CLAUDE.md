@@ -104,42 +104,60 @@ The following combinational logic in `video_sync.vhd` has been verified against 
 - `nHSyncA_6c`, `nHSyncB_6c`, `X`, `sHsync_6c` (hsync 6c pulse 344–375)
 - `nHSyncSelect`, `sync_5c`, `sync_6c`
 - `nBorder` (border: HIGH lines 0–191, LOW lines 192–311)
-- `sVsync` (vsync pulse lines 248–251, 4 lines wide; the `not(v5)` vs `(not v4)` bracket inconsistency is cosmetic only)
+- `s_vsync` (vsync pulse lines 248–251, 4 lines wide; the `not(v5)` vs `(not v4)` bracket inconsistency is cosmetic only) — renamed from `sVsync` in the naming pass; equation unchanged
 
-## Naming & ordering consistency (TODO)
+## Naming & ordering consistency
 
-Cross-cutting cleanup: the codebase has drifted on naming/ordering and should
-be standardised in one deliberate pass. **Decide the conventions first (mentor:
-the user picks), then apply.** Known inconsistencies found so far:
+Cross-cutting cleanup. **Conventions chosen (2026-06-27):** lowercase
+`snake_case` for all identifiers; architecture `Behavioral` for the reference
+model (plus `Structural` / `T_Structure` / `Reference` where multiple archs
+exist); port order `clk, reset, enable, other inputs, then outputs` (applied to
+both declarations *and* port maps); `s_*` / `*_n` / `*_c` internal-signal
+prefixes. The active-low `n`-prefix names (`nBorder`, `nHblank`, `nHSync*`) are
+a deliberate ULA convention and are **kept** as-is.
 
-- **Entity/file naming.** Most entities are `snake_case` (`bit3_counter`,
-  `clk_div_2`, `d_ff_nor`, `horiz_timing`, `master_horiz_counter`, `video_sync`,
-  `tce_ff`/`trc_ff`/`trce_ff`). Outliers: `Vert_Line_counter` (PascalCase entity
-  *and* file) and `D_FF.vhd` (uppercase file whose entity is `d_ff`). Pick one
-  scheme (recommend lowercase `snake_case` for both file and entity).
-- **Architecture names.** Mostly `Behavioral` / `Structural` / `T_Structure` /
-  `Reference`, but `d_ff` (and its TB `D_FF_tb`) use the **misspelled
-  `Behavourial`**. Fix the typo and settle a consistent set (e.g. `Behavioral`
-  for the reference model, `T_Structure` for the gate-faithful one).
-- **Port naming/case.** `Vert_Line_counter` uses mixed/PascalCase ports
-  (`V0..V8`, `Clk_HC6`, `HCrst`, `Vrst`); other modules use lowercase
-  (`clk`, `reset`, `hsync_5c`). Standardise port case.
-- **Port ordering.** Settle a consistent order across entities (suggest:
-  `clk`, `reset`, `enable`, other inputs, then outputs) and apply it to both
-  declarations and port maps.
-- **Internal signal naming.** The `s_*` / `*_n` / `*_c` prefix scheme used in
-  `Vert_Line_counter(T_Structure)` isn't applied uniformly elsewhere.
+**✅ Done on the non-Vivado PC (plain source edits):**
+- Architecture typo `Behavourial`→`Behavioral` (`D_FF.vhd` + its consumer
+  `D_FF_tb.vhd`, whose own arch `arch`→`Behavioral` too).
+- `Vert_Line_counter` ports lowercased (`HCrst`→`hcrst`, `Clk_HC6`→`clk_hc6`,
+  `V0..V8`→`v0..v8`, `V*_n`→`v*_n`, `Vrst`→`vrst`); consumers `video_sync.vhd`
+  and `vert_line_counter_tb.vhd` updated in the same pass.
+- Port ordering applied across all entities + every port map: reordered
+  `clk_div_2` (clk_in/reset), `trc_ff` (outputs→q,qbar,carry), `trce_ff`
+  (clk,reset,enable,…), `bit3_counter` (clk,reset), `master_horiz_counter` and
+  `video_sync` (reset before tclk_a). `d_ff_nor`, `tce_ff`, `horiz_timing` were
+  already conformant. Named association throughout, so reorders are safe.
+- Internal-signal case/case-style fixes: `s_HCrst`→`s_hcrst` (`bit3_counter`),
+  `HC_rst`→`hc_rst` (MHC + horiz_timing TB locals), and the camelCase/Pascal
+  `sVsync`→`s_vsync`, `VBorderLower`→`v_border_lower`,
+  `VBorderUpper`→`v_border_upper` in `video_sync` (rename only — the equations
+  in the "Verified Correct" list are byte-for-byte unchanged).
 
-**Caveat — renames touch `ULA.xpr`.** Changing a *file* name (and any entity
-name Vivado tracks) is a **Vivado-PC task** done through the IDE, not a raw
-edit — see the Vivado-PC TODO list below. Port-name/ordering and
-architecture-name fixes are plain source edits, but every renamed port/arch
-must be updated in all consumers and testbenches in the same commit (cf. the
-`HCrst_Enable`→`HCrst` rename that left two stale consumers).
+**⏳ Still TODO — Vivado-PC tasks (touch `ULA.xpr`, must go through the IDE):**
+- Rename file **and** entity `Vert_Line_counter` → `vert_line_counter`
+  (update its two port maps in `video_sync.vhd` + `vert_line_counter_tb.vhd`).
+- Rename file `D_FF.vhd` → `d_ff.vhd` (entity is already `d_ff`).
+- Rename file + entity `D_FF_tb` → `d_ff_tb`.
+- Retire `b3_tb.vhd` — a stale duplicate of `bit3_counter_tb` that instantiates
+  a non-existent `bit3_counter(Behavioral)` architecture (already broken; its
+  port map happens to match the new `clk, reset, …` order).
+
+**Caveat — renames touch `ULA.xpr`** and every renamed port/arch must be updated
+in all consumers and testbenches in the *same* commit (cf. the
+`HCrst_Enable`→`HCrst` rename that once left two stale consumers).
 
 ## Vivado-PC TODO list
 
 Things that must be done in Vivado on the Vivado PC, because they require touching `ULA.xpr` through the IDE (raw edits to the project file are risky):
+
+- **Naming-pass file/entity renames — TODO (the only open item).** The source-edit
+  portion of the naming/ordering cleanup is done (see "Naming & ordering
+  consistency"); these renames remain because they touch `ULA.xpr`:
+  `Vert_Line_counter` → `vert_line_counter` (file + entity; update the two port
+  maps), `D_FF.vhd` → `d_ff.vhd` (file only — entity is already `d_ff`),
+  `D_FF_tb` → `d_ff_tb` (file + entity), and retire the broken `b3_tb.vhd`
+  duplicate. Do each through the IDE / Tcl (`get_files` + `add_files` +
+  `remove_files`), then `git mv` / `git rm` the working copies in the same commit.
 
 - **`master_horiz_counter_tb` imports duplicate — DONE.** The stale
   `ULA.srcs/sources_1/imports/new/master_horiz_counter_tb.vhd` (which Vivado was
@@ -168,8 +186,20 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > **`phase5-video`** (pushed, tracking `origin/phase5-video`). It holds two
 > committed-but-**deliberately-not-yet-PR'd** changes: `video_sync` decode-comment
 > expansions + `video_sync_tb` waveform instrumentation (`dbg_pixel`/`dbg_line`/
-> `dbg_vline` + `dbg_exp_*` flags). **Next task: build `border_reg.vhd`** (port
-> `0xFE` write → capture bits 2:0 as border colour) — the first Phase 5 module.
+> `dbg_vline` + `dbg_exp_*` flags). **Naming/ordering cleanup (source-edit
+> portion) also done this session** — see "Naming & ordering consistency".
+>
+> **⛔ GATE — verify the naming pass on the Vivado PC BEFORE any Phase 5 work.**
+> The renames + named-map reorders are semantics-preserving but were authored on
+> the non-Vivado PC and are unsimulated. Before building `border_reg.vhd`,
+> re-run the affected testbenches on the Vivado PC and confirm green:
+> `bit3_counter_tb`, `vert_line_counter_tb`, `master_horiz_counter_tb`,
+> `horiz_timing_tb`, `video_sync_tb`, and the FF-unit TBs (`trc_ff_tb`,
+> `trce_ff_tb`, `tce_ff_tb`, `clk_div_2_tb`, `d_ff_nor_tb`, `D_FF_tb`). The
+> file/entity renames remain queued separately in the Vivado-PC TODO list.
+>
+> **Next design task (AFTER the gate clears): build `border_reg.vhd`**
+> (port `0xFE` write → capture bits 2:0 as border colour) — the first Phase 5 module.
 > User wants mentor-mode: offer walk-through vs review-my-sketch before writing.
 > Vivado on this PC: `C:\AMDDesignTools\2025.2\Vivado\bin` (not on PATH); CLI sim
 > via `xvhdl`/`xelab`/`xsim` works (see "video_sync verification"). Note: `ULA.xpr`

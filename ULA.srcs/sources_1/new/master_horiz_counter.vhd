@@ -41,8 +41,8 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity master_horiz_counter is
 port(
       clk7         : in     std_logic;          -- master clock
+      reset        : in     std_logic;
       tclk_a       : in     std_logic := '0';   -- always assumed to be '0'
-      reset        : in     std_logic;          
       c0           : out    std_logic;
       c1           : out    std_logic;
       c2           : out    std_logic;
@@ -101,48 +101,48 @@ begin
 --******************************************************************
 count_0: entity work.clk_div_2
   port map(
-     reset => reset,
      clk_in  => clk_c0,
+     reset => reset,
      clk_out => c0,
      clk_out_n => c0_n
      );
      
 count_1: entity work.clk_div_2
   port map(
-     reset => reset,
      clk_in => clk_c1,
+     reset => reset,
      clk_out => c1,
      clk_out_n => c1_n
      );
 
 count_2: entity work.clk_div_2
   port map(
-     reset => reset,
      clk_in => clk_c2,
+     reset => reset,
      clk_out => c2,
      clk_out_n => c2_n
      );
 
 count_3: entity work.clk_div_2
   port map(
-     reset => reset,
      clk_in => clk_c3,
+     reset => reset,
      clk_out => c3,
      clk_out_n => c3_n
      );
      
 count_4: entity work.clk_div_2
   port map(
-     reset => reset,
      clk_in => clk_c4,
+     reset => reset,
      clk_out => c4,
      clk_out_n => c4_n
      );
 
 count_5: entity work.clk_div_2
   port map(
-     reset => reset,
      clk_in => clk_c5,
+     reset => reset,
      clk_out => c5,
      clk_out_n => c5_n
      );     
@@ -154,8 +154,8 @@ count_5: entity work.clk_div_2
 -- settle well before they are sampled downstream.
 b3c: entity work.bit3_counter(T_Structure)
 port map(
-      reset => reset,
       clk => s_clkhc6,
+      reset => reset,
       output => clk8_6,
       overflow => hc_rst
    );
