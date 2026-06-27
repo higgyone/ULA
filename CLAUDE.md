@@ -100,9 +100,9 @@ To run a simulation in Vivado: set the target testbench as the active simulation
 The following combinational logic in `video_sync.vhd` has been verified against the Chris Smith book spec and must not be altered:
 
 - `blank1`, `blank2`, `nHblank` (horizontal blanking 320–415)
-- `nHSyncA_5c`, `nHSyncB_5c`, `sHsync_5c` (hsync 5c pulse 336–367)
-- `nHSyncA_6c`, `nHSyncB_6c`, `X`, `sHsync_6c` (hsync 6c pulse 344–375)
-- `nHSyncSelect`, `n_sync_5c`, `n_sync_6c` (composite sync = NOR(vsync, hsync); renamed from `sync_5c`/`sync_6c` for the active-low `n_` prefix — equation unchanged)
+- `nHSyncA_5c`, `nHSyncB_5c`, `nHSyncPulses_5c` (hsync 5c pulse 336–367)
+- `nHSyncA_6c`, `nHSyncB_6c`, `X`, `nHSyncPulses_6c` (hsync 6c pulse 344–375)
+- `nHSyncSelect` (window select); `n_sync_5c`, `n_sync_6c` (composite = NOR(vsync, hsync))
 - `s_vsync` (vsync pulse lines 248–251, 4 lines wide; the `not(v5)` vs `(not v4)` bracket inconsistency is cosmetic only) — renamed from `sVsync` in the naming pass; equation unchanged
 
 **⚠ `nBorder` equation CHANGED — re-verify (no longer "do not change"):** it was
@@ -115,6 +115,17 @@ real behavioural change, so it must be sim-verified. `video_sync_tb` now does a
 regression check for the horizontal term (the old vertical-only decode held it
 `'1'` there on display lines). Still needs to be RUN on the Vivado PC to confirm
 green.
+
+**⚠ `hsync_5c`/`hsync_6c` polarity FIXED — re-verify:** the book (pg 90) gives
+`hsync = NOR(nc6, c7, nc8, nhsyncpulses)`, i.e. **active-HIGH** (1 during the
+pulse), same polarity as `vsync`. The code had a bare `OR` (`hsync <=
+nHSyncSelect or nHSyncPulses`), making hsync **active-LOW** — the complement —
+which fed the wrong polarity into `n_sync = NOR(vsync, hsync)` and broke the
+composite (vsync suppressed instead of asserted). Fixed to
+`hsync <= not(nHSyncSelect or nHSyncPulses)` for both 5c/6c. Knock-on:
+`video_sync_tb` phase-lock now waits for `hsync_5c = '0'` (inactive level is now
+LOW). vsync and the n_sync equation were already book-correct; only hsync moved.
+The `nhsyncpulses` logic = `XNOR(c3·c4, c5)` (6c) was verified to match the book.
 
 ## Naming & ordering consistency
 
@@ -215,6 +226,10 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > per-line sample at ~pixel 304 (c8=1) asserts `nBorder='0'`, the regression
 > check for the horizontal term. Re-run it on the Vivado PC to confirm. See
 > "Verified Correct" for details.
+>
+> **Also: `hsync_5c`/`hsync_6c` polarity fixed** (OR→NOR, now active-HIGH per
+> book pg 90) so the composite `n_sync` is correct; `video_sync_tb` lock now
+> uses `hsync_5c='0'`. Watch the `hsync` and `n_sync` traces when re-running.
 >
 > **Next design task (AFTER the gate clears): build `border_reg.vhd`**
 > (port `0xFE` write → capture bits 2:0 as border colour) — the first Phase 5 module.

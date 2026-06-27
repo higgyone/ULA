@@ -2,8 +2,8 @@
 -- horiz_timing — horizontal counter + sync/blank decoders
 --
 -- Owns the master horizontal counter (modulo-448) and derives:
---   hsync_5c — active-low hsync for issue 5 ULAs (pixels 336..367)
---   hsync_6c — active-low hsync for issue 6 ULAs (pixels 344..375)
+--   hsync_5c — active-HIGH hsync for issue 5 ULAs (pixels 336..367)
+--   hsync_6c — active-HIGH hsync for issue 6 ULAs (pixels 344..375)
 --   nHblank  — active-low horizontal blanking      (pixels 320..415)
 --
 -- Also exposes MHC outputs needed by the vertical counter:
@@ -128,6 +128,12 @@ begin
     --------------------------------------------------------------
     nHSyncSelect <= (not s_c8) or c7 or (not c6);
 
-    hsync_5c <= nHSyncSelect or nHSyncPulses_5c;
-    hsync_6c <= nHSyncSelect or nHSyncPulses_6c;
+    -- Book pg 90: hsync = NOR(nc6, c7, nc8, nhsyncpulses) = not(nHSyncSelect or
+    -- nHSyncPulses). hsync is therefore active-HIGH (1 during the sync pulse),
+    -- the SAME polarity as vsync -- so the composite n_sync = NOR(vsync, hsync)
+    -- in video_sync comes out as a correct active-LOW csync (LOW during any
+    -- sync). Previously this was a bare OR (active-LOW hsync), which fed the
+    -- wrong polarity into the composite NOR and inverted/suppressed it.
+    hsync_5c <= not(nHSyncSelect or nHSyncPulses_5c);
+    hsync_6c <= not(nHSyncSelect or nHSyncPulses_6c);
 end Behavioral;

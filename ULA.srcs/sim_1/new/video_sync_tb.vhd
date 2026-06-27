@@ -19,8 +19,8 @@
 -- (both axes) and vsync paths.
 --
 -- Line tracking: one-time phase-lock at line 0's start. hsync_5c is
--- active-LOW, so it sits inactive-HIGH at pixel 0 right after reset --
--- that high level is the lock reference. Then count exactly 448 pixel
+-- active-HIGH, so it sits inactive-LOW at pixel 0 right after reset --
+-- that low level is the lock reference. Then count exactly 448 pixel
 -- clocks per line. vsync and the vertical nBorder term are functions of
 -- V0..V8, sampled mid-line clear of the line-boundary carry ripple; the
 -- horizontal nBorder term is then checked by stepping into the c8=1
@@ -119,11 +119,11 @@ begin
         end procedure;
     begin
         wait until reset = '0';
-        -- one-time phase lock to line 0's start: hsync_5c is active-LOW,
-        -- so '1' is its inactive level, already true at pixel 0 right
+        -- one-time phase lock to line 0's start: hsync_5c is active-HIGH,
+        -- so '0' is its inactive level, already true at pixel 0 right
         -- after reset. Step a few pixels in so the per-line sample sits
         -- clear of the line-boundary carry ripple.
-        wait until rising_edge(clk_7) and hsync_5c = '1';
+        wait until rising_edge(clk_7) and hsync_5c = '0';
         wait_cycles(4);
         line := 0;
 
@@ -184,7 +184,7 @@ begin
 
     -- Waveform instrumentation: a free-running pixel/line tracker so the
     -- current position can be read straight off the wave window. Locks to
-    -- line 0's start the same way the checker does (hsync_5c inactive-HIGH
+    -- line 0's start the same way the checker does (hsync_5c inactive-LOW
     -- at pixel 0), then counts 448 pixels per line, incrementing the line
     -- at each wrap. Purely for visibility — it drives no asserts and never
     -- affects PASS/FAIL. dbg_pixel ~= the real pixel (+/- a clock of lock
@@ -196,7 +196,7 @@ begin
         variable ln : integer := 0;
     begin
         wait until reset = '0';
-        wait until rising_edge(clk_7) and hsync_5c = '1';  -- ~pixel 0 of line 0
+        wait until rising_edge(clk_7) and hsync_5c = '0';  -- ~pixel 0 of line 0 (inactive-LOW)
         loop
             dbg_pixel <= px;
             dbg_line  <= ln;
