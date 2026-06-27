@@ -67,15 +67,15 @@ tce: entity work.tce_ff(Behavioral)
     process
     begin
         enable <= '0';
-        wait for 50ns;
+        wait for 50 ns;
         enable <= '1'; 
-        wait for 100ns;
+        wait for 100 ns;
         enable <= '0';
-        wait for 50ns;
+        wait for 50 ns;
         enable <= '1';
-        wait for 10ns;
+        wait for 10 ns;
         enable <= '0';
-        wait for 50ns;
+        wait for 50 ns;
         enable <= '1';
         wait;
     end process;

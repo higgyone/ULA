@@ -1,47 +1,55 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date: 29.06.2020 10:57:19
--- Design Name: 
--- Module Name: clk_div_2 - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 
--- Divide by 2 clock with clk and n_clk outputs
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
-----------------------------------------------------------------------------------
-
+----------------------------------------------------------------------
+-- clk_div_2 — divide-by-2 toggle flip-flop (structural)
+--
+-- Divides clk_in by 2 by wiring a d_ff_nor as a T-flip-flop:
+-- d = qbar, so q toggles on every falling edge of clk_in.
+--
+-- Used as the C0..C5 cells in master_horiz_counter (the lower 6 bits
+-- of the 9-bit horizontal counter), each chained by NOR-gated clocks
+-- rather than by clk-out daisy-chaining.
+--
+-- Reset is SYNCHRONOUS: when reset='1', the d input is forced to '0'
+-- so q clears on the next falling edge of clk_in. (The previous
+-- behavioural model used an asynchronous reset; in practice the
+-- master_horiz_counter holds reset for many clock cycles at power-on,
+-- so the difference is not observable in this design.)
+--
+-- Characteristic table:
+--
+--   reset  clk_in    |  q(next)
+--   -----  --------  |  -------
+--     1    ↓       |  0
+--     0    ↓       |  not q   (toggle)
+--     X    no edge   |  q       (hold)
+--
+--   clk_out   = q     (divided clock)
+--   clk_out_n = qbar  (inverse)
+----------------------------------------------------------------------
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
 entity clk_div_2 is
-    port (
-            reset : in std_logic;
-            clk_in : in std_logic;
-            clk_out : out std_logic;
-            clk_out_n : out std_logic
-          );
+    port ( reset     : in  std_logic;
+           clk_in    : in  std_logic;
+           clk_out   : out std_logic;
+           clk_out_n : out std_logic );
 end clk_div_2;
 
 architecture Behavioral of clk_div_2 is
-signal clk_state : std_logic;
-    begin
-        process (clk_in,reset)
-        begin
-             if reset = '1' then
-                clk_state <= '0';
-             elsif falling_edge(clk_in) then
-                clk_state <= not clk_state;
-             end if;
-        end process;
-    clk_out <= clk_state;
-    clk_out_n <= not clk_state;
+    signal d_in     : std_logic;
+    signal q_int    : std_logic;
+    signal qbar_int : std_logic;
+begin
+    -- T-FF via D-FF: d = qbar (toggle) unless reset clears it.
+    d_in <= '0' when reset = '1' else qbar_int;
+
+    ff : entity work.d_ff_nor(Behavioral)
+        port map ( clk  => clk_in,
+                   d    => d_in,
+                   q    => q_int,
+                   qbar => qbar_int );
+
+    clk_out   <= q_int;
+    clk_out_n <= qbar_int;
 end Behavioral;

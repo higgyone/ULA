@@ -1,0 +1,11 @@
+# Configuration for the VHDL LS language server (rust_hdl / vhdl-ls).
+# Docs: https://github.com/VHDL-LS/rust_hdl
+
+[libraries]
+defaultlib.files = [
+    "ULA.srcs/sources_1/new/*.vhd",
+    "ULA.srcs/sim_1/new/*.vhd",
+]
+
+[lint]
+# (no overrides yet — VHDL LS defaults are sensible)

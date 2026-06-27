@@ -55,13 +55,13 @@ d_ffnor: entity work.d_ff_nor(Behavioral)
    process   
    begin 
         d <= '0';
-        wait for 50ns;
+        wait for 50 ns;
         d <= '1';
-        wait for 50ns;
+        wait for 50 ns;
         d <= '0';
-        wait for 50ns;
+        wait for 50 ns;
         d <= '1';
-        wait for 50ns;
+        wait for 50 ns;
 
         --wait for T * 100;
         wait;

@@ -57,15 +57,15 @@ trc: entity work.trc_ff(Behavioral)
    process   
    begin 
         reset <= '1';
-        wait for 50ns;
+        wait for 50 ns;
         reset <= '0';
-        wait for 50ns;
+        wait for 50 ns;
         reset <= '1';
-        wait for 50ns;
+        wait for 50 ns;
         reset <= '0';
-        wait for 40ns;
+        wait for 40 ns;
         reset <= '1';
-        wait for 50ns;
+        wait for 50 ns;
         reset <= '0';
         wait for T * 100;
       
