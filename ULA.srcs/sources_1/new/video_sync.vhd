@@ -41,13 +41,14 @@ architecture Behavioral of video_sync is
     signal hc6     : std_logic;
     signal hcrst   : std_logic;
 
-    -- vertical counter taps
-    signal v0, v1, v2, v3, v4, v5, v6, v7, v8 : std_logic;
+    -- vertical counter taps consumed by the decode (true form)
+    signal v2, v8 : std_logic;
 
     -- vertical border intermediates
     signal VBorderLower, VBorderUpper : std_logic;
 
-    -- inverted V bits used by the vsync NOR
+    -- complemented V taps (qbar) from the counter, used by the
+    -- nBorder and vsync NORs
     signal v3_n, v4_n, v5_n, v6_n, v7_n : std_logic;
 
     -- composite-sync intermediates
@@ -74,12 +75,17 @@ begin
     ----------------------------------------------------------------
     -- Vertical line counter (clocked by clk_hc6, advanced by hc_rst)
     ----------------------------------------------------------------
-    vlc: entity work.Vert_Line_counter(Behavioral)
+    vlc: entity work.Vert_Line_counter(T_Structure)
         port map(
             HCrst        => hcrst,
             Clk_HC6      => hc6,
-            v0 => v0, v1 => v1, v2 => v2, v3 => v3, v4 => v4,
-            v5 => v5, v6 => v6, v7 => v7, v8 => v8,
+            -- only the taps the decode actually consumes are wired;
+            -- the rest default to open (the counter still counts them).
+            v2 => v2, v8 => v8,
+            -- complemented taps straight from the counter's qbar outputs
+            -- (no extra inverters in video_sync)
+            V3_n => v3_n, V4_n => v4_n, V5_n => v5_n,
+            V6_n => v6_n, V7_n => v7_n,
             Vrst         => open
         );
 
@@ -87,7 +93,7 @@ begin
     -- Vertical border (Chris Smith pg 92)
     -- nBorder LOW during border lines (192..311), HIGH during 0..191.
     ----------------------------------------------------------------
-    VBorderLower <= not((not v6) or (not v7));   -- v6 AND v7 -> lines 192..255
+    VBorderLower <= not(v6_n or v7_n);           -- v6 AND v7 -> lines 192..255
     VBorderUpper <= v8;                          --           -> lines 256..311
     nBorder      <= not(VBorderLower or VBorderUpper);
 
@@ -96,13 +102,9 @@ begin
     -- sVsync = NOR((not v7..v3), v2)
     -- The v2 = 0 term limits the pulse to 4 lines; without it the
     -- pulse would extend to lines 252..255 as well.
+    -- v3_n..v7_n are the counter's qbar taps (wired in the port map),
+    -- so no local inverters are needed here.
     ----------------------------------------------------------------
-    v3_n <= not v3;
-    v4_n <= not v4;
-    v5_n <= not v5;
-    v6_n <= not v6;
-    v7_n <= not v7;
-
     sVsync <= not(v7_n or v6_n or v5_n or v4_n or v3_n or v2);
 
     ----------------------------------------------------------------
