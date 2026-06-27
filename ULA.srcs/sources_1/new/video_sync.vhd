@@ -91,7 +91,23 @@ begin
 
     ----------------------------------------------------------------
     -- Vertical border (Chris Smith pg 92)
-    -- nBorder LOW during border lines (192..311), HIGH during 0..191.
+    --
+    -- PAL frame = 312 scan lines, the V counter runs 0..311:
+    --   lines   0..191  display area    -> nBorder HIGH (192 visible lines)
+    --   lines 192..311  border/retrace  -> nBorder LOW  (120 lines)
+    --
+    -- No single AND of V bits selects the whole 192..311 range, so the
+    -- border is decoded in two pieces and OR'd together:
+    --
+    --   V range    term           condition          why
+    --   --------   ------------   ----------------   -----------------------
+    --   192..255   VBorderLower   v6 AND v7          both bit7(128)+bit6(64)
+    --   256..311   VBorderUpper   v8                 bit8(256) set
+    --
+    -- nBorder = NOR(VBorderLower, VBorderUpper): it goes LOW whenever
+    -- either piece is high, i.e. across all of 192..311, and stays HIGH
+    -- on the 0..191 display lines. (Written as NORs of qbar taps to match
+    -- the ULA's NOR-gate silicon: v6 AND v7 = NOR(v6_n, v7_n).)
     ----------------------------------------------------------------
     VBorderLower <= not(v6_n or v7_n);           -- v6 AND v7 -> lines 192..255
     VBorderUpper <= v8;                          --           -> lines 256..311
@@ -99,16 +115,36 @@ begin
 
     ----------------------------------------------------------------
     -- Vertical sync pulse — 4 lines wide, lines 248..251
-    -- sVsync = NOR((not v7..v3), v2)
-    -- The v2 = 0 term limits the pulse to 4 lines; without it the
-    -- pulse would extend to lines 252..255 as well.
-    -- v3_n..v7_n are the counter's qbar taps (wired in the port map),
-    -- so no local inverters are needed here.
+    --
+    -- sVsync = NOR(v7_n, v6_n, v5_n, v4_n, v3_n, v2)
+    -- A NOR is high only when EVERY input is 0, which here means:
+    --   v7=v6=v5=v4=v3 = 1  -> 128+64+32+16+8 = 248
+    --   v2            = 0  -> bit2 (value 4) must be clear
+    --   v1, v0          free
+    -- so the pulse is high for 248 + {0,1,2,3} = lines 248..251:
+    --
+    --   line  v7 v6 v5 v4 v3 v2 v1 v0
+    --   248    1  1  1  1  1  0  0  0
+    --   249    1  1  1  1  1  0  0  1
+    --   250    1  1  1  1  1  0  1  0
+    --   251    1  1  1  1  1  0  1  1
+    --
+    -- The v2 = 0 term is what limits it to 4 lines: drop it and the
+    -- condition becomes "bits 7..3 set, bits 2/1/0 anything" = lines
+    -- 248..255 (8 lines). v3_n..v7_n are the counter's qbar taps (wired
+    -- in the port map), so no local inverters are needed here.
     ----------------------------------------------------------------
     sVsync <= not(v7_n or v6_n or v5_n or v4_n or v3_n or v2);
 
     ----------------------------------------------------------------
     -- Composite sync (active LOW combines hsync + vsync)
+    --
+    -- A TV expects a single sync signal, so the horizontal sync (h_5c or
+    -- h_6c, from horiz_timing) and the vertical sync (sVsync) are merged
+    -- with a NOR into one composite waveform. vsync is also broken out on
+    -- its own for consumers that want it separately. The 5c/6c pair carry
+    -- the two hsync timings (issue-5 vs issue-6 ULA); they differ ONLY in
+    -- which hsync is folded in here.
     ----------------------------------------------------------------
     sync_5c <= h_5c nor sVsync;
     sync_6c <= h_6c nor sVsync;

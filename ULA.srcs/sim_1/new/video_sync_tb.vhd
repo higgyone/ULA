@@ -14,10 +14,12 @@
 -- list, so this TB focuses on the vertical path that the T_Structure
 -- switch exercises.
 --
--- Line tracking: one-time phase-lock to the first hsync_5c pulse of
--- line 0, then count exactly 448 pixel clocks per line. nBorder/vsync
--- are purely vertical (functions of V0..V8), so they are sampled
--- mid-line, clear of the line-boundary carry ripple.
+-- Line tracking: one-time phase-lock at line 0's start. hsync_5c is
+-- active-LOW, so it sits inactive-HIGH at pixel 0 right after reset --
+-- that high level is the lock reference. Then count exactly 448 pixel
+-- clocks per line. nBorder/vsync are purely vertical (functions of
+-- V0..V8), so they are sampled mid-line, clear of the line-boundary
+-- carry ripple.
 --
 -- Runtime: ~315 lines x 64 us ~= 20 ms of gate-level sim (~30 s wall).
 -- PASS = runs to the "video_sync_tb PASS" note with no assertion errors.
@@ -45,6 +47,20 @@ architecture Behavioral of video_sync_tb is
     signal sync_5c  : std_logic;
     signal sync_6c  : std_logic;
     signal sim_done : boolean := false;
+
+    -- Waveform instrumentation (driven by the track process below).
+    -- Add these to the wave window to read position and expected pulses:
+    --   dbg_pixel : where we are within the line   (0..447)
+    --   dbg_vline : which scan line   (0..311) -> tells you when vsync/
+    --               border are due
+    --   dbg_line  : absolute line since lock (lets you see frame number)
+    --   dbg_exp_* : expected nBorder/vsync for the current line, so you
+    --               can line them up against the real outputs
+    signal dbg_pixel       : integer range 0 to PIX_LINE - 1 := 0;
+    signal dbg_line        : integer := 0;
+    signal dbg_vline       : integer range 0 to V_LINES - 1  := 0;
+    signal dbg_exp_nborder : std_logic := '0';
+    signal dbg_exp_vsync   : std_logic := '0';
 begin
 
     dut: entity work.video_sync(Behavioral)
@@ -97,9 +113,10 @@ begin
         end procedure;
     begin
         wait until reset = '0';
-        -- one-time phase lock to line 0's hsync pulse, then step a few
-        -- pixels further so the per-line sample sits clear of the hsync
-        -- ripple edge.
+        -- one-time phase lock to line 0's start: hsync_5c is active-LOW,
+        -- so '1' is its inactive level, already true at pixel 0 right
+        -- after reset. Step a few pixels in so the per-line sample sits
+        -- clear of the line-boundary carry ripple.
         wait until rising_edge(clk_7) and hsync_5c = '1';
         wait_cycles(4);
         line := 0;
@@ -144,5 +161,40 @@ begin
             end if;
         end loop;
     end process;
+
+    -- Waveform instrumentation: a free-running pixel/line tracker so the
+    -- current position can be read straight off the wave window. Locks to
+    -- line 0's start the same way the checker does (hsync_5c inactive-HIGH
+    -- at pixel 0), then counts 448 pixels per line, incrementing the line
+    -- at each wrap. Purely for visibility — it drives no asserts and never
+    -- affects PASS/FAIL. dbg_pixel ~= the real pixel (+/- a clock of lock
+    -- slop), so hsync (pixels 336..367) and blank (320..415) line up with
+    -- it; dbg_vline says which line, so vsync (248..251) / border edge
+    -- (192) are easy to anticipate.
+    track: process
+        variable px : integer := 0;
+        variable ln : integer := 0;
+    begin
+        wait until reset = '0';
+        wait until rising_edge(clk_7) and hsync_5c = '1';  -- ~pixel 0 of line 0
+        loop
+            dbg_pixel <= px;
+            dbg_line  <= ln;
+            dbg_vline <= ln mod V_LINES;
+            wait until rising_edge(clk_7);
+            if px = PIX_LINE - 1 then
+                px := 0;
+                ln := ln + 1;
+            else
+                px := px + 1;
+            end if;
+        end loop;
+    end process;
+
+    -- expected vertical-decode regions, derived from the tracked line
+    -- (same rule the checker uses) so they can sit next to nBorder/vsync
+    -- in the wave window
+    dbg_exp_nborder <= '1' when dbg_vline <= 191 else '0';
+    dbg_exp_vsync   <= '1' when (dbg_vline >= 248 and dbg_vline <= 251) else '0';
 
 end Behavioral;
