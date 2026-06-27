@@ -102,9 +102,19 @@ The following combinational logic in `video_sync.vhd` has been verified against 
 - `blank1`, `blank2`, `nHblank` (horizontal blanking 320–415)
 - `nHSyncA_5c`, `nHSyncB_5c`, `sHsync_5c` (hsync 5c pulse 336–367)
 - `nHSyncA_6c`, `nHSyncB_6c`, `X`, `sHsync_6c` (hsync 6c pulse 344–375)
-- `nHSyncSelect`, `sync_5c`, `sync_6c`
-- `nBorder` (border: HIGH lines 0–191, LOW lines 192–311)
+- `nHSyncSelect`, `n_sync_5c`, `n_sync_6c` (composite sync = NOR(vsync, hsync); renamed from `sync_5c`/`sync_6c` for the active-low `n_` prefix — equation unchanged)
 - `s_vsync` (vsync pulse lines 248–251, 4 lines wide; the `not(v5)` vs `(not v4)` bracket inconsistency is cosmetic only) — renamed from `sVsync` in the naming pass; equation unchanged
+
+**⚠ `nBorder` equation CHANGED — re-verify (no longer "do not change"):** it was
+vertical-only `NOR(v8, v6·v7)` and now matches the book pg 92 full equation
+`nBorder = NOR(c8, v8, v6·v7)` — the `c8` term adds the **horizontal** border
+gate (display = central 256 columns, c8=0). `c8` is now an output of
+`horiz_timing` (backed by internal `s_c8`) routed into `video_sync`. This is a
+real behavioural change, so it must be sim-verified. `video_sync_tb` now does a
+**second per-line sample at ~pixel 304 (c8=1) asserting `nBorder='0'`** — the
+regression check for the horizontal term (the old vertical-only decode held it
+`'1'` there on display lines). Still needs to be RUN on the Vivado PC to confirm
+green.
 
 ## Naming & ordering consistency
 
@@ -197,6 +207,14 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > `horiz_timing_tb`, `video_sync_tb`, and the FF-unit TBs (`trc_ff_tb`,
 > `trce_ff_tb`, `tce_ff_tb`, `clk_div_2_tb`, `d_ff_nor_tb`, `D_FF_tb`). The
 > file/entity renames remain queued separately in the Vivado-PC TODO list.
+>
+> **Also bundled in this batch (design fix, NOT just renames): `nBorder` now
+> includes the horizontal `c8` term** (`horiz_timing` gained a `c8` output;
+> `video_sync` nBorder = `NOR(c8, v8, v6·v7)`) and composite sync renamed
+> `sync_5c/6c`→`n_sync_5c/6c`. **`video_sync_tb` now tests both axes** — a second
+> per-line sample at ~pixel 304 (c8=1) asserts `nBorder='0'`, the regression
+> check for the horizontal term. Re-run it on the Vivado PC to confirm. See
+> "Verified Correct" for details.
 >
 > **Next design task (AFTER the gate clears): build `border_reg.vhd`**
 > (port `0xFE` write → capture bits 2:0 as border colour) — the first Phase 5 module.

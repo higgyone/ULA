@@ -3,9 +3,9 @@
 --
 -- Instantiates horiz_timing (which owns the master horizontal counter)
 -- and Vert_Line_counter, then derives:
---   * vertical border       (nBorder)        — Chris Smith pg 92
+--   * border (H + V)        (nBorder)        — Chris Smith pg 92
 --   * vertical sync pulse   (vsync)          — Chris Smith pg 92
---   * composite sync        (sync_5c/sync_6c)
+--   * composite sync        (n_sync_5c/n_sync_6c)
 --
 -- The horizontal sync and blanking signals (hsync_5c/hsync_6c/nHblank)
 -- come directly from horiz_timing and are passed through.
@@ -28,8 +28,8 @@ entity video_sync is
         nHblank  : out std_logic;
         vsync    : out std_logic;
         nBorder  : out std_logic;
-        sync_5c  : out std_logic;
-        sync_6c  : out std_logic
+        n_sync_5c : out std_logic;   -- composite active-low sync = NOR(vsync, hsync), issue-5 hsync timing
+        n_sync_6c : out std_logic    -- composite active-low sync = NOR(vsync, hsync), issue-6 hsync timing
     );
 end video_sync;
 
@@ -40,6 +40,11 @@ architecture Behavioral of video_sync is
     signal h_blank : std_logic;
     signal hc6     : std_logic;
     signal hcrst   : std_logic;
+
+    -- horizontal counter MSB from horiz_timing: HIGH for pixels 256..447,
+    -- i.e. the horizontal border/blanking region. Gates the border decode
+    -- so the display window is the central 256 columns, not the whole line.
+    signal c8      : std_logic;
 
     -- vertical counter taps consumed by the decode (true form)
     signal v2, v8 : std_logic;
@@ -64,6 +69,7 @@ begin
             hsync_5c => h_5c,
             hsync_6c => h_6c,
             nHblank  => h_blank,
+            c8       => c8,          -- H-counter MSB, for the border decode below
             clk_hc6  => hc6,
             hc_rst   => hcrst
         );
@@ -90,28 +96,31 @@ begin
         );
 
     ----------------------------------------------------------------
-    -- Vertical border (Chris Smith pg 92)
+    -- Border decode (Chris Smith pg 92)
     --
-    -- PAL frame = 312 scan lines, the V counter runs 0..311:
-    --   lines   0..191  display area    -> nBorder HIGH (192 visible lines)
-    --   lines 192..311  border/retrace  -> nBorder LOW  (120 lines)
+    --   nBorder = NOR(c8, v8, v6·v7)        (book equation)
     --
-    -- No single AND of V bits selects the whole 192..311 range, so the
-    -- border is decoded in two pieces and OR'd together:
+    -- The border is the frame AROUND the central 256x192 display, so it
+    -- must be gated BOTH horizontally and vertically. nBorder is HIGH
+    -- (display, border off) only when all three terms are 0:
     --
-    --   V range    term           condition          why
-    --   --------   ------------   ----------------   -----------------------
-    --   192..255   v_border_lower   v6 AND v7          both bit7(128)+bit6(64)
-    --   256..311   v_border_upper   v8                 bit8(256) set
+    --   c8        H-counter MSB. 0 for pixels 0..255 (display columns),
+    --             1 for pixels 256..447 (right border + H-blank + left
+    --             border). This is the HORIZONTAL gate.
+    --   v8        bit8(256): V lines 256..311 -> vertical border.
+    --   v6·v7     bits 7(128)+6(64): V lines 192..255 -> vertical border.
     --
-    -- nBorder = NOR(v_border_lower, v_border_upper): it goes LOW whenever
-    -- either piece is high, i.e. across all of 192..311, and stays HIGH
-    -- on the 0..191 display lines. (Written as NORs of qbar taps to match
-    -- the ULA's NOR-gate silicon: v6 AND v7 = NOR(v6_n, v7_n).)
+    -- The two vertical pieces are OR'd because no single AND of V bits
+    -- selects the whole 192..311 range. Written as NORs of qbar taps to
+    -- match the ULA's NOR-gate silicon: v6 AND v7 = NOR(v6_n, v7_n).
+    --
+    -- Net effect: nBorder is HIGH only inside the central display window
+    -- (c8=0 AND V line 0..191); it goes LOW across the whole horizontal
+    -- border on every line, and across all of V lines 192..311.
     ----------------------------------------------------------------
-    v_border_lower <= not(v6_n or v7_n);           -- v6 AND v7 -> lines 192..255
-    v_border_upper <= v8;                          --           -> lines 256..311
-    nBorder      <= not(v_border_lower or v_border_upper);
+    v_border_lower <= not(v6_n or v7_n);           -- v6 AND v7 -> V lines 192..255
+    v_border_upper <= v8;                          --           -> V lines 256..311
+    nBorder      <= not(c8 or v_border_lower or v_border_upper);  -- + c8 = horizontal border gate
 
     ----------------------------------------------------------------
     -- Vertical sync pulse — 4 lines wide, lines 248..251
@@ -137,16 +146,17 @@ begin
     s_vsync <= not(v7_n or v6_n or v5_n or v4_n or v3_n or v2);
 
     ----------------------------------------------------------------
-    -- Composite sync (active LOW combines hsync + vsync)
+    -- Composite sync — n_sync = NOR(vsync, hsync), active LOW
     --
     -- A TV expects a single sync signal, so the horizontal sync (h_5c or
     -- h_6c, from horiz_timing) and the vertical sync (s_vsync) are merged
-    -- with a NOR into one composite waveform. vsync is also broken out on
-    -- its own for consumers that want it separately. The 5c/6c pair carry
-    -- the two hsync timings (issue-5 vs issue-6 ULA); they differ ONLY in
-    -- which hsync is folded in here.
+    -- with a NOR into one composite waveform. The `n_` prefix marks it
+    -- active LOW. vsync is also broken out on its own for consumers that
+    -- want it separately. The 5c/6c pair carry the two hsync timings
+    -- (issue-5 vs issue-6 ULA); they differ ONLY in which hsync is folded
+    -- in here.
     ----------------------------------------------------------------
-    sync_5c <= h_5c nor s_vsync;
-    sync_6c <= h_6c nor s_vsync;
-    vsync   <= s_vsync;
+    n_sync_5c <= h_5c nor s_vsync;   -- NOR(vsync, hsync_5c)
+    n_sync_6c <= h_6c nor s_vsync;   -- NOR(vsync, hsync_6c)
+    vsync     <= s_vsync;
 end Behavioral;
