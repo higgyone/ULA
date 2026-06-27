@@ -105,6 +105,37 @@ The following combinational logic in `video_sync.vhd` has been verified against 
 - `nBorder` (border: HIGH lines 0–191, LOW lines 192–311)
 - `sVsync` (vsync pulse lines 248–251, 4 lines wide; the `not(v5)` vs `(not v4)` bracket inconsistency is cosmetic only)
 
+## Naming & ordering consistency (TODO)
+
+Cross-cutting cleanup: the codebase has drifted on naming/ordering and should
+be standardised in one deliberate pass. **Decide the conventions first (mentor:
+the user picks), then apply.** Known inconsistencies found so far:
+
+- **Entity/file naming.** Most entities are `snake_case` (`bit3_counter`,
+  `clk_div_2`, `d_ff_nor`, `horiz_timing`, `master_horiz_counter`, `video_sync`,
+  `tce_ff`/`trc_ff`/`trce_ff`). Outliers: `Vert_Line_counter` (PascalCase entity
+  *and* file) and `D_FF.vhd` (uppercase file whose entity is `d_ff`). Pick one
+  scheme (recommend lowercase `snake_case` for both file and entity).
+- **Architecture names.** Mostly `Behavioral` / `Structural` / `T_Structure` /
+  `Reference`, but `d_ff` (and its TB `D_FF_tb`) use the **misspelled
+  `Behavourial`**. Fix the typo and settle a consistent set (e.g. `Behavioral`
+  for the reference model, `T_Structure` for the gate-faithful one).
+- **Port naming/case.** `Vert_Line_counter` uses mixed/PascalCase ports
+  (`V0..V8`, `Clk_HC6`, `HCrst`, `Vrst`); other modules use lowercase
+  (`clk`, `reset`, `hsync_5c`). Standardise port case.
+- **Port ordering.** Settle a consistent order across entities (suggest:
+  `clk`, `reset`, `enable`, other inputs, then outputs) and apply it to both
+  declarations and port maps.
+- **Internal signal naming.** The `s_*` / `*_n` / `*_c` prefix scheme used in
+  `Vert_Line_counter(T_Structure)` isn't applied uniformly elsewhere.
+
+**Caveat — renames touch `ULA.xpr`.** Changing a *file* name (and any entity
+name Vivado tracks) is a **Vivado-PC task** done through the IDE, not a raw
+edit — see the Vivado-PC TODO list below. Port-name/ordering and
+architecture-name fixes are plain source edits, but every renamed port/arch
+must be updated in all consumers and testbenches in the same commit (cf. the
+`HCrst_Enable`→`HCrst` rename that left two stale consumers).
+
 ## Vivado-PC TODO list
 
 Things that must be done in Vivado on the Vivado PC, because they require touching `ULA.xpr` through the IDE (raw edits to the project file are risky):
