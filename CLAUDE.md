@@ -58,7 +58,7 @@ To run a simulation in Vivado: set the target testbench as the active simulation
 - Exposes both `V0..V8` and complemented `V0_n..V8_n` taps so downstream NOR gates can connect directly without extra inverters
 - **`T_Structure`** (primary, matches Smith pg 92): `tce_ff` for V0–V2 (no reset — schematic-faithful), `trce_ff` for V3–V8 with `v3_8_reset`. Reset decode is a NOR on `s_v2_c` (= `HCrst·V0·V1·V2`), `V4_n`, `V5_n`, `V8_n` — fires only at count=311 with `HCrst='1'`. `Vrst` is combinational (high during count=311).
 - **`Behavioral`** (reference): `output_cnt + 1` model kept for cross-checking. `Vrst` registered (high during count=0).
-- **Needs xsim verification** — run `vert_line_counter_tb` against `T_Structure` to confirm 0→311 wrap and `Vrst` timing.
+- **✅ VERIFIED in xsim** (`vert_line_counter_tb` against `T_Structure`): counts 0→311, holds while `HCrst='0'`, wraps 311→0, `Vrst` high at 311. Matches the TB golden model. See the "Vert_Line_counter verification" section below.
 
 ### Horizontal timing block (`horiz_timing`)
 - Owns the `master_horiz_counter` instance and derives `hsync_5c` / `hsync_6c` / `nHblank` from the C0–C8 taps
@@ -136,10 +136,10 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - **All five original bugs resolved.**
 - **`video_sync` slimmed down**: hsync/blanking logic now lives in `horiz_timing` (which was previously dead code). `video_sync` instantiates `horiz_timing` rather than inlining the equations. Single MHC instance across the design.
 - **`nBorder` and `sVsync` converted to NOR-faithful form** with named intermediates (`VBorderLower`, `VBorderUpper`, `v3_n`..`v7_n`).
-- **`Vert_Line_counter(T_Structure)` implemented** — gate-faithful 9-bit counter matching Smith pg 92. Peer-reviewed; needs xsim verification (see "What Needs Building Next").
+- **`Vert_Line_counter(T_Structure)` ✅ VERIFIED in xsim** — gate-faithful 9-bit counter matching Smith pg 92. `vert_line_counter_tb` against `T_Structure` passes (0→311 count, hold on `HCrst='0'`, 311→0 wrap, `Vrst` at 311). See "Vert_Line_counter verification" below.
 - Open verification tasks before declaring the timing backbone done:
-  - Run `vert_line_counter_tb` against `T_Structure`; confirm 0→311 count, correct wrap, `Vrst` fires at count=311.
-  - Re-run `video_sync_tb` after the `horiz_timing` extraction; confirm `hsync_5c`/`hsync_6c`/`nHblank`/`sync_5c`/`sync_6c`/`vsync`/`nBorder` waveforms are identical to pre-refactor.
+  - ~~Run `vert_line_counter_tb` against `T_Structure`~~ ✅ done.
+  - Re-run `video_sync_tb` after the `horiz_timing` extraction **and** the `Vert_Line_counter` `(Behavioral)`→`(T_Structure)` switch; confirm `hsync_5c`/`hsync_6c`/`nHblank`/`sync_5c`/`sync_6c`/`vsync`/`nBorder` waveforms are identical to pre-refactor.
 - Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
 - **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives). `d_ff_nor` has Case-A init values + `after TG` (1 ns) gate delays for clean simulation.
 - **`bit3_counter` ✅ VERIFIED — all three architectures** (`Structural`, `T_Structure`, `Reference`) match a golden modulo-7 model in xsim. `master_horiz_counter` instantiates `(T_Structure)` — the schematic-faithful chained-T-FF carry-chain — for gate-accuracy. See the "bit3_counter verification" section below for the single-UUT + TB-golden testbench design and the xsim caveats.
@@ -192,6 +192,53 @@ is the only reliable freshness proof. Also: breakpoints set in the gutter on a
 *concurrent* assignment halt every `run` at t≈0 — clear them (`remove_bps -all`)
 or `get_value` reads garbage.
 
+### Vert_Line_counter verification — ✅ VERIFIED (T_Structure)
+
+`vert_line_counter_tb` passes against `architecture T_Structure` in xsim:
+the gate-faithful 9-bit counter counts 0→311, holds while `HCrst='0'`
+(first 3 cycles), wraps 311→0, and drives `Vrst` high for exactly the
+count=311 line. Same single-UUT + TB-internal-golden pattern as
+`bit3_counter_tb`.
+
+**Three TB fixes were needed to verify T_Structure (the TB was wired for
+`Behavioral`):**
+1. **Port rename.** The entity port was renamed `HCrst_Enable`→`HCrst` in
+   cf653ee, but *two* consumers were left stale: `vert_line_counter_tb.vhd`
+   and `video_sync.vhd`. Symptom = `[VRFC 10-719] formal port <hcrst_enable>
+   is not declared` + `[VRFC 10-3353] formal port 'hcrst' has no actual`.
+   Both fixed.
+2. **`Vrst` golden semantics differ by architecture.** `Behavioral` drives
+   `Vrst` *registered, high at count=0* (line after wrap); `T_Structure`
+   drives it *combinational, high at count=311*. The golden checker's
+   `exp_vrst` was moved out of the count-update branch and recomputed from
+   the settled count: `exp_vrst := '1' when expected = V_MAX and hc_rst='1'`.
+3. **Header/inline comments** updated (Vrst-at-311, gate-level `after TG`
+   ripple instead of "purely behavioural").
+
+**Power-on state is 0, not unknown.** Concern that `T_Structure` (no reset on
+V0–V2) might power up at a garbage count was unfounded: `d_ff_nor`'s Case-A
+init gives `q=0` on every FF, so all of V0–V8 start at 0 — the golden's
+`expected := 0` start holds.
+
+**Sim runs at `T = 100 ns` (`T/2 = 50 ns`).** The `after TG` carry-chain
+ripple settles in ~9·TG (~9 ns) after each falling edge; the checker samples
+on the next rising edge (50 ns later), well clear. Synthetic `Clk_HC6` +
+`HCrst` drive reaches the first wrap in ~32 µs (vs ~20 ms through a real MHC).
+
+**CLI xsim flow (no GUI needed).** Vivado 2025.2 batch launchers live in
+`C:\AMDDesignTools\2025.2\Vivado\bin\` (not on PATH). Compile + run from a
+scratch dir:
+```
+xvhdl.bat d_ff_nor.vhd tce_ff.vhd trce_ff.vhd trc_ff.vhd \
+          Vert_Line_counter.vhd vert_line_counter_tb.vhd   # -> library work
+xelab.bat work.vert_line_counter_tb -s vlc_sim             # elaborate
+xsim.bat  vlc_sim -tclbatch run.tcl                         # run.tcl = "run all\nexit"
+```
+PASS = the `Vert_Line_counter TB PASS` note with no `mismatch` lines. To switch
+the arch under test, edit the `entity work.Vert_Line_counter(<arch>)` line in
+the TB and re-run (xsim incremental compile reuses stale snapshots — always
+re-`xvhdl`/`xelab`, confirm `Analyzing ...` for the edited file).
+
 ## Walk-through progress (mentor-mode log)
 
 Files covered so far, in order, by the post-`6e59d6e` walk-through:
@@ -201,7 +248,7 @@ Files covered so far, in order, by the post-`6e59d6e` walk-through:
 - `trce_ff.vhd` — three-way d-mux with priority (reset > enable)
 - `bit3_counter.vhd` — per-bit binary +1 rule + wrap suppression + sync reset; structural conversion derived from a state table
 
-- `Vert_Line_counter.vhd` — T_Structure implemented (tce_ff/trce_ff carry chain, NOR reset decode at 311, HCrst gating via s_v2_c); V*_n ports added. Needs xsim verification.
+- `Vert_Line_counter.vhd` — T_Structure implemented (tce_ff/trce_ff carry chain, NOR reset decode at 311, HCrst gating via s_v2_c); V*_n ports added. ✅ xsim-verified.
 
 **Next on the list:** `clk_div_2` (simplest structural composition — `d_ff_nor` + a single inverted feedback wire).
 
@@ -217,13 +264,13 @@ Remaining work in order:
     - **MUST run at the real 7 MHz period (`T = 143 ns`, set in the TB).** The FF library's `after TG` gate delays make the worst-case 64-boundary settle path (lower gated-ripple → `clk_hc6` → T_Structure C6–C8 after-TG) ~15–20 ns — *longer than a 10 ns clock*, so a fast clock samples mid-ripple garbage at the boundaries and the check false-fails. At 143 ns, T/2 = 71 ns ≫ settle, clean. Don't drop below ~50 ns.
     - One line = 448 × 143 ns ≈ 64 µs, so `run 200 us` (~3 lines) to exercise C6–C8 fully. Pass = no `MHC count mismatch`, with `line complete` notes.
   - Still TODO: re-run `video_sync_tb` after the T_Structure switch to confirm hsync/blank/vsync/border waveforms are unchanged (also re-checks the `hc_rst` → vert-counter path end to end).
-**`Vert_Line_counter` T_Structure** — implemented and peer-reviewed. Needs xsim verification and `video_sync` port-map update (Vivado-PC tasks):
-- Run `vert_line_counter_tb` with `architecture T_Structure` selected; confirm count 0→311, wrap to 0, `Vrst` fires at 311. Clock at real `Clk_HC6` period (~9.1 µs); run long enough to complete at least 2 full frames (~20 ms).
-- **`video_sync.vhd` port map must be updated** before simulating the full stack:
-  - `HCrst_Enable => hcrst` → `HCrst => hcrst`
-  - Add `V0_n => open, V1_n => open, ... V8_n => open` (or wire to intermediate signals if the NOR decode is refactored to use them directly)
-  - Switch instantiation from `(Behavioral)` to `(T_Structure)`
-  - Re-run `video_sync_tb` to confirm end-to-end waveforms unchanged
+**`Vert_Line_counter` T_Structure** — ✅ xsim-verified standalone (`vert_line_counter_tb`). Remaining: wire it into `video_sync` and re-verify the full stack:
+- ~~Run `vert_line_counter_tb` against `T_Structure`~~ ✅ done (counts 0→311, holds on `HCrst='0'`, wraps, `Vrst` at 311; ~32 µs synthetic-drive run).
+- **`video_sync.vhd` port map remaining work** before simulating the full stack:
+  - ~~`HCrst_Enable => hcrst` → `HCrst => hcrst`~~ ✅ done (the entity port rename in cf653ee left both `video_sync` and `vert_line_counter_tb` stale — both now fixed).
+  - Switch instantiation from `(Behavioral)` to `(T_Structure)` — **still TODO**.
+  - Decide on `V*_n` taps: leave them unmapped (legal — outputs default to `open`), or wire `V3_n..V7_n` out and delete `video_sync`'s redundant local `not v3..v7` inverters (lines 100-104). The counter exposes the `qbar` taps precisely so downstream NORs avoid extra inverters.
+  - Re-run `video_sync_tb` to confirm end-to-end waveforms unchanged.
 **Phase 5 — Video output**
 - `border_reg.vhd` — port 0xFE write, capture bits 2:0 as border colour
 - `pixel_fetch.vhd` — VRAM address generation using C/V counters; ZX scrambled address format
