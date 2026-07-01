@@ -26,11 +26,13 @@ This project is developed across more than one PC. The Vivado project file (`ULA
 Implications:
 - Synthesis, simulation, and bitstream generation happen on the PC that has Vivado installed — not necessarily the PC running Claude.
 - On a fresh checkout, opening `ULA.xpr` in Vivado will reconstruct the cache/runs/sim directories from `ULA.srcs/`.
+- **The non-Vivado (Claude) PC has _no Vivado at all_** — no `xvhdl`/`xelab`/`xsim`, no GUI. Local simulation there is done with **GHDL** (see below). Synthesis and bitstream generation are impossible on that PC; anything needing Vivado is queued for the Vivado PC (see the "Vivado-PC TODO list").
 
 ## Toolchain
 
 - **IDE/Synthesis**: Xilinx Vivado (no CLI build scripts — synthesis, simulation, and bitstream generation are done through the Vivado GUI or Tcl console)
-- **Simulation**: Vivado's built-in simulator (xsim) via the testbenches in `ULA.srcs/sim_1/new/`
+- **Simulation (Vivado PC)**: Vivado's built-in simulator (xsim) via the testbenches in `ULA.srcs/sim_1/new/`
+- **Simulation (non-Vivado / Claude PC)**: **GHDL 6.0.0 (mcode backend)** for fast CLI regression when Vivado isn't available. Installed via `winget install ghdl.ghdl.ucrt64.mcode`. See "GHDL CLI simulation" below. Testbenches are portable between GHDL and xsim as long as `--std=08` is used and the gate-level FFs keep their init values + `after TG` delays.
 - **Constraints**: `ULA.srcs/arty_35/imports/constraints/Arty-A7-35-Master.xdc` — Digilent's master XDC for the Arty A7-35T (Rev. D/E). All pins are commented out by default; uncomment and rename ports as the top-level design grows.
 - **Editor (non-Vivado PC)**: VS Code with `puorc.awesome-vhdl` (syntax) + `hbohlin.vhdl-ls` (language server). The repo ships a [`vhdl_ls.toml`](vhdl_ls.toml) at the root that puts every `.vhd` in `ULA.srcs/sources_1/new/` and `ULA.srcs/sim_1/new/` into a library called `defaultlib` (VHDL LS reserves `work` as the "current library" alias, so the actual library name must be different).
 
@@ -39,6 +41,27 @@ Implications:
 - **No BOMs.** PowerShell 5.1's `Set-Content -Encoding utf8` adds a UTF-8 BOM that some HDL tools choke on. Use `.NET`'s `UTF8Encoding($false)` when rewriting files from PS, or use VS Code (UTF-8 without BOM by default).
 
 To run a simulation in Vivado: set the target testbench as the active simulation source, then run *Simulation → Run Simulation → Run Behavioral Simulation*.
+
+### GHDL CLI simulation (non-Vivado PC)
+
+GHDL 6.0.0 (mcode) is installed and on the persistent **user** PATH (winget added it at install). Note: a shell opened *before* the install won't see it — use a fresh terminal. If needed, the binary is at:
+`C:\Users\higgy\AppData\Local\Microsoft\WinGet\Packages\ghdl.ghdl.ucrt64.mcode_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\ghdl.exe`
+
+Two-step analyze → run flow (from `ULA.srcs`, keep everything in a scratch workdir so no artefacts land in the repo):
+
+```powershell
+$work = "$env:TEMP\ghdl_ula_work"; New-Item -ItemType Directory -Force -Path $work | Out-Null
+ghdl -a --std=08 --workdir=$work sources_1/new/<dut>.vhd sim_1/new/<dut>_tb.vhd
+ghdl -r --std=08 --workdir=$work <dut>_tb --stop-time=200ns
+```
+
+- Analyse **dependencies first** (a DUT's own sub-entities before the DUT, DUT before its TB) — GHDL has no auto-elaboration ordering like Vivado's project manager.
+- `--std=08` must match on both `-a` and `-r`. All TBs assume VHDL-2008.
+- Self-checking TBs (`assert ... severity failure`) halt the run on the first mismatch and print the message; a clean run prints its `report ... note` lines and `ALL TESTS PASSED`.
+- The GHDL `-Whide` warning on a procedure parameter shadowing a signal is cosmetic — rename the formal (e.g. `q` → `qv`) to silence it.
+- GHDL is a *second* simulator, not a replacement for xsim. It's great for catching logic/regression bugs quickly, but final sign-off for anything schematic-critical should still be re-run in xsim on the Vivado PC (xsim has its own quirks — see the bit3_counter verification notes).
+
+**✅ `single_bit_shift_register` verified in GHDL** — `single_bit_shift_reg_tb` passes all 7 cases (parallel load, serial shift both directions, hold, and load-overrides-shift), with `q_bar` complementary throughout. The gate-level cell uses the same `d_ff_nor` pattern (Case-A-style init values + `after TG` 1 ns delays) so it simulates cleanly with no t=0 delta-cycle hang.
 
 ## Architecture
 
@@ -251,6 +274,9 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - **Timing backbone (Phases 1–4) is now fully xsim-verified.** Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
 - **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives). `d_ff_nor` has Case-A init values + `after TG` (1 ns) gate delays for clean simulation.
 - **`bit3_counter` ✅ VERIFIED — all three architectures** (`Structural`, `T_Structure`, `Reference`) match a golden modulo-7 model in xsim. `master_horiz_counter` instantiates `(T_Structure)` — the schematic-faithful chained-T-FF carry-chain — for gate-accuracy. See the "bit3_counter verification" section below for the single-UUT + TB-golden testbench design and the xsim caveats.
+- **`single_bit_shift_register` — GHDL-verified, xsim pending.** One gate-accurate cell of the pixel shift register: a negative-edge NOR flip-flop with a 2:1 load/shift input mux (active-low `data_n`/`data_1_n`, `set='1'` loads parallel, `set='0'` shifts in the neighbour). Uses the `d_ff_nor` pattern (init values + `after TG`). `single_bit_shift_reg_tb` passes all 7 cases in GHDL (load, shift both ways, hold, load-overrides-shift, complementary `q_bar`).
+  - **⛔ GATE — re-run `single_bit_shift_reg_tb` in xsim on the Vivado PC** to confirm it matches (GHDL is a second simulator, not sign-off).
+  - **➡ NEXT (after that gate clears): build the 8-bit shift-**_**left**_** register** by chaining eight `single_bit_shift_register` cells — each cell's `q` feeds the next cell's `data_1_n` shift input (mind the active-low inversion), common `clk`/`set`, eight parallel `data_n` load bits in, serial-out from the MSB end. Then a self-checking TB: parallel-load a byte, clock 8 times, confirm it shifts left one bit per edge. This becomes the ULA video pixel shift register.
 
 ### bit3_counter verification — ✅ VERIFIED (all three architectures)
 
