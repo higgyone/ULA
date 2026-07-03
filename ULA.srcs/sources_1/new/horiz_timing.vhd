@@ -2,8 +2,8 @@
 -- horiz_timing — horizontal counter + sync/blank decoders
 --
 -- Owns the master horizontal counter (modulo-448) and derives:
---   hsync_5c — active-low hsync for issue 5 ULAs (pixels 336..367)
---   hsync_6c — active-low hsync for issue 6 ULAs (pixels 344..375)
+--   hsync_5c — active-HIGH hsync for issue 5 ULAs (pixels 336..367)
+--   hsync_6c — active-HIGH hsync for issue 6 ULAs (pixels 344..375)
 --   nHblank  — active-low horizontal blanking      (pixels 320..415)
 --
 -- Also exposes MHC outputs needed by the vertical counter:
@@ -66,13 +66,15 @@ entity horiz_timing is
         hsync_5c : out std_logic;
         hsync_6c : out std_logic;
         nHblank  : out std_logic;
+        c8       : out std_logic;   -- H-counter MSB (HIGH for pixels 256..447); exposed so video_sync can gate the horizontal border
         clk_hc6  : out std_logic;
         hc_rst   : out std_logic
     );
 end horiz_timing;
 
 architecture Behavioral of horiz_timing is
-    signal c0, c1, c2, c3, c4, c5, c6, c7, c8 : std_logic;
+    signal c0, c1, c2, c3, c4, c5, c6, c7 : std_logic;
+    signal s_c8      : std_logic;   -- H-counter MSB; backs the c8 output port (cf. s_clk_hc6 / s_hc_rst)
     signal s_clk_hc6 : std_logic;
     signal s_hc_rst  : std_logic;
 
@@ -84,24 +86,25 @@ begin
     mhc: entity work.master_horiz_counter(Behavioral)
         port map(
             clk7    => clk,
-            tclk_a  => '0',
             reset   => reset,
+            tclk_a  => '0',
             c0 => c0, c1 => c1, c2 => c2, c3 => c3, c4 => c4,
-            c5 => c5, c6 => c6, c7 => c7, c8 => c8,
+            c5 => c5, c6 => c6, c7 => c7, c8 => s_c8,
             clk_hc6 => s_clk_hc6,
             hc_rst  => s_hc_rst
         );
 
     clk_hc6 <= s_clk_hc6;
     hc_rst  <= s_hc_rst;
+    c8      <= s_c8;    -- expose the H-counter MSB for the border decode in video_sync
 
     --------------------------------------------------------------
     -- Horizontal blanking — LOW during pixels 320..415
     --------------------------------------------------------------
     -- Start of blanking: C8=1, C7=0, C6=1 -> pixel 320
-    blank1  <= not((not c8) or c7 or (not c6));
+    blank1  <= not((not s_c8) or c7 or (not c6));
     -- End of blanking:   C8=1, C7=1, C5=0 -> through pixel 415
-    blank2  <= not((not c8) or (not c7) or c5);
+    blank2  <= not((not s_c8) or (not c7) or c5);
     nHblank <= not(blank1 or blank2);
 
     --------------------------------------------------------------
@@ -123,8 +126,14 @@ begin
     --------------------------------------------------------------
     -- Sync select — HIGH (= no pulse) outside the blanking window
     --------------------------------------------------------------
-    nHSyncSelect <= (not c8) or c7 or (not c6);
+    nHSyncSelect <= (not s_c8) or c7 or (not c6);
 
-    hsync_5c <= nHSyncSelect or nHSyncPulses_5c;
-    hsync_6c <= nHSyncSelect or nHSyncPulses_6c;
+    -- Book pg 90: hsync = NOR(nc6, c7, nc8, nhsyncpulses) = not(nHSyncSelect or
+    -- nHSyncPulses). hsync is therefore active-HIGH (1 during the sync pulse),
+    -- the SAME polarity as vsync -- so the composite n_sync = NOR(vsync, hsync)
+    -- in video_sync comes out as a correct active-LOW csync (LOW during any
+    -- sync). Previously this was a bare OR (active-LOW hsync), which fed the
+    -- wrong polarity into the composite NOR and inverted/suppressed it.
+    hsync_5c <= not(nHSyncSelect or nHSyncPulses_5c);
+    hsync_6c <= not(nHSyncSelect or nHSyncPulses_6c);
 end Behavioral;

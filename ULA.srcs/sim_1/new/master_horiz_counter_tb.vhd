@@ -51,7 +51,7 @@ architecture Behavioral of master_horiz_counter_tb is
     signal c7     : std_logic;
     signal c8     : std_logic;
     signal clk_hc6     : std_logic;
-    signal HC_rst     : std_logic;
+    signal hc_rst     : std_logic;
 
 begin
 mhc: entity work.master_horiz_counter(Behavioral)
@@ -69,7 +69,7 @@ mhc: entity work.master_horiz_counter(Behavioral)
       c7 => c7,   
       c8 => c8,   
       clk_hc6 => clk_hc6,   
-      hc_rst => HC_rst
+      hc_rst => hc_rst
    );
    
 

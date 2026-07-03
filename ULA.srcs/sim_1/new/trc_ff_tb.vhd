@@ -38,9 +38,9 @@ trc: entity work.trc_ff(Behavioral)
     Port map( 
         clk => clk,
         reset => reset,
-        carry => carry,
         q => q,
-        qbar => qbar
+        qbar => qbar,
+        carry => carry
         );
    --*****************************************************************
    -- clock

@@ -45,11 +45,11 @@ architecture Behavioral of tce_ff_tb is
 begin
 tce: entity work.tce_ff(Behavioral)
     Port map( 
-        enable  => enable,
         clk => clk,
-        carry => carry,
+        enable  => enable,
         q => q,
-        qbar => qbar
+        qbar => qbar,
+        carry => carry
         );
         
            --*****************************************************************

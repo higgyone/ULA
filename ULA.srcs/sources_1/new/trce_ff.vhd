@@ -33,12 +33,12 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
 entity trce_ff is
-    Port ( enable : in  STD_LOGIC;
-           clk    : in  STD_LOGIC;
+    Port ( clk    : in  STD_LOGIC;
            reset  : in  STD_LOGIC;
-           carry  : out STD_LOGIC;
+           enable : in  STD_LOGIC;
            q      : out STD_LOGIC;
-           qbar   : out STD_LOGIC);
+           qbar   : out STD_LOGIC;
+           carry  : out STD_LOGIC);
 end trce_ff;
 
 architecture Behavioral of trce_ff is

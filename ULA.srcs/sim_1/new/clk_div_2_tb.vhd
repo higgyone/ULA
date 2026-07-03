@@ -36,8 +36,8 @@ architecture Behavioral of clk_div_2_tb is
 begin
     clk_div2: entity work.clk_div_2(Behavioral)
     port map(
-            reset => reset,
             clk_in => clk_in,
+            reset => reset,
             clk_out => clk_out,
             clk_out_n => clk_out_n
           );

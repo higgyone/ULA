@@ -37,12 +37,12 @@ architecture Behavioral of trce_ff_tb is
 begin
 trce: entity work.trce_ff(Behavioral)
     Port map( 
-        enable  => enable,
         clk => clk,
         reset => reset,
-        carry => carry,
+        enable  => enable,
         q => q,
-        qbar => qbar
+        qbar => qbar,
+        carry => carry
         );
    --*****************************************************************
    -- clock

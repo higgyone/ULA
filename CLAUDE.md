@@ -26,11 +26,13 @@ This project is developed across more than one PC. The Vivado project file (`ULA
 Implications:
 - Synthesis, simulation, and bitstream generation happen on the PC that has Vivado installed — not necessarily the PC running Claude.
 - On a fresh checkout, opening `ULA.xpr` in Vivado will reconstruct the cache/runs/sim directories from `ULA.srcs/`.
+- **The non-Vivado (Claude) PC has _no Vivado at all_** — no `xvhdl`/`xelab`/`xsim`, no GUI. Local simulation there is done with **GHDL** (see below). Synthesis and bitstream generation are impossible on that PC; anything needing Vivado is queued for the Vivado PC (see the "Vivado-PC TODO list").
 
 ## Toolchain
 
 - **IDE/Synthesis**: Xilinx Vivado (no CLI build scripts — synthesis, simulation, and bitstream generation are done through the Vivado GUI or Tcl console)
-- **Simulation**: Vivado's built-in simulator (xsim) via the testbenches in `ULA.srcs/sim_1/new/`
+- **Simulation (Vivado PC)**: Vivado's built-in simulator (xsim) via the testbenches in `ULA.srcs/sim_1/new/`
+- **Simulation (non-Vivado / Claude PC)**: **GHDL 6.0.0 (mcode backend)** for fast CLI regression when Vivado isn't available. Installed via `winget install ghdl.ghdl.ucrt64.mcode`. See "GHDL CLI simulation" below. Testbenches are portable between GHDL and xsim as long as `--std=08` is used and the gate-level FFs keep their init values + `after TG` delays.
 - **Constraints**: `ULA.srcs/arty_35/imports/constraints/Arty-A7-35-Master.xdc` — Digilent's master XDC for the Arty A7-35T (Rev. D/E). All pins are commented out by default; uncomment and rename ports as the top-level design grows.
 - **Editor (non-Vivado PC)**: VS Code with `puorc.awesome-vhdl` (syntax) + `hbohlin.vhdl-ls` (language server). The repo ships a [`vhdl_ls.toml`](vhdl_ls.toml) at the root that puts every `.vhd` in `ULA.srcs/sources_1/new/` and `ULA.srcs/sim_1/new/` into a library called `defaultlib` (VHDL LS reserves `work` as the "current library" alias, so the actual library name must be different).
 
@@ -39,6 +41,27 @@ Implications:
 - **No BOMs.** PowerShell 5.1's `Set-Content -Encoding utf8` adds a UTF-8 BOM that some HDL tools choke on. Use `.NET`'s `UTF8Encoding($false)` when rewriting files from PS, or use VS Code (UTF-8 without BOM by default).
 
 To run a simulation in Vivado: set the target testbench as the active simulation source, then run *Simulation → Run Simulation → Run Behavioral Simulation*.
+
+### GHDL CLI simulation (non-Vivado PC)
+
+GHDL 6.0.0 (mcode) is installed and on the persistent **user** PATH (winget added it at install). Note: a shell opened *before* the install won't see it — use a fresh terminal. If needed, the binary is at:
+`C:\Users\higgy\AppData\Local\Microsoft\WinGet\Packages\ghdl.ghdl.ucrt64.mcode_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\ghdl.exe`
+
+Two-step analyze → run flow (from `ULA.srcs`, keep everything in a scratch workdir so no artefacts land in the repo):
+
+```powershell
+$work = "$env:TEMP\ghdl_ula_work"; New-Item -ItemType Directory -Force -Path $work | Out-Null
+ghdl -a --std=08 --workdir=$work sources_1/new/<dut>.vhd sim_1/new/<dut>_tb.vhd
+ghdl -r --std=08 --workdir=$work <dut>_tb --stop-time=200ns
+```
+
+- Analyse **dependencies first** (a DUT's own sub-entities before the DUT, DUT before its TB) — GHDL has no auto-elaboration ordering like Vivado's project manager.
+- `--std=08` must match on both `-a` and `-r`. All TBs assume VHDL-2008.
+- Self-checking TBs (`assert ... severity failure`) halt the run on the first mismatch and print the message; a clean run prints its `report ... note` lines and `ALL TESTS PASSED`.
+- The GHDL `-Whide` warning on a procedure parameter shadowing a signal is cosmetic — rename the formal (e.g. `q` → `qv`) to silence it.
+- GHDL is a *second* simulator, not a replacement for xsim. It's great for catching logic/regression bugs quickly, but final sign-off for anything schematic-critical should still be re-run in xsim on the Vivado PC (xsim has its own quirks — see the bit3_counter verification notes).
+
+**✅ `single_bit_shift_register` verified in GHDL** — `single_bit_shift_reg_tb` passes all 7 cases (parallel load, serial shift both directions, hold, and load-overrides-shift), with `q_bar` complementary throughout. The gate-level cell uses the same `d_ff_nor` pattern (Case-A-style init values + `after TG` 1 ns delays) so it simulates cleanly with no t=0 delta-cycle hang.
 
 ## Architecture
 
@@ -100,46 +123,85 @@ To run a simulation in Vivado: set the target testbench as the active simulation
 The following combinational logic in `video_sync.vhd` has been verified against the Chris Smith book spec and must not be altered:
 
 - `blank1`, `blank2`, `nHblank` (horizontal blanking 320–415)
-- `nHSyncA_5c`, `nHSyncB_5c`, `sHsync_5c` (hsync 5c pulse 336–367)
-- `nHSyncA_6c`, `nHSyncB_6c`, `X`, `sHsync_6c` (hsync 6c pulse 344–375)
-- `nHSyncSelect`, `sync_5c`, `sync_6c`
-- `nBorder` (border: HIGH lines 0–191, LOW lines 192–311)
-- `sVsync` (vsync pulse lines 248–251, 4 lines wide; the `not(v5)` vs `(not v4)` bracket inconsistency is cosmetic only)
+- `nHSyncA_5c`, `nHSyncB_5c`, `nHSyncPulses_5c` (hsync 5c pulse 336–367)
+- `nHSyncA_6c`, `nHSyncB_6c`, `X`, `nHSyncPulses_6c` (hsync 6c pulse 344–375)
+- `nHSyncSelect` (window select); `n_sync_5c`, `n_sync_6c` (composite = NOR(vsync, hsync))
+- `s_vsync` (vsync pulse lines 248–251, 4 lines wide; the `not(v5)` vs `(not v4)` bracket inconsistency is cosmetic only) — renamed from `sVsync` in the naming pass; equation unchanged
 
-## Naming & ordering consistency (TODO)
+**⚠ `nBorder` equation CHANGED — re-verify (no longer "do not change"):** it was
+vertical-only `NOR(v8, v6·v7)` and now matches the book pg 92 full equation
+`nBorder = NOR(c8, v8, v6·v7)` — the `c8` term adds the **horizontal** border
+gate (display = central 256 columns, c8=0). `c8` is now an output of
+`horiz_timing` (backed by internal `s_c8`) routed into `video_sync`. This is a
+real behavioural change, so it must be sim-verified. `video_sync_tb` now does a
+**second per-line sample at ~pixel 304 (c8=1) asserting `nBorder='0'`** — the
+regression check for the horizontal term (the old vertical-only decode held it
+`'1'` there on display lines). Still needs to be RUN on the Vivado PC to confirm
+green.
 
-Cross-cutting cleanup: the codebase has drifted on naming/ordering and should
-be standardised in one deliberate pass. **Decide the conventions first (mentor:
-the user picks), then apply.** Known inconsistencies found so far:
+**⚠ `hsync_5c`/`hsync_6c` polarity FIXED — re-verify:** the book (pg 90) gives
+`hsync = NOR(nc6, c7, nc8, nhsyncpulses)`, i.e. **active-HIGH** (1 during the
+pulse), same polarity as `vsync`. The code had a bare `OR` (`hsync <=
+nHSyncSelect or nHSyncPulses`), making hsync **active-LOW** — the complement —
+which fed the wrong polarity into `n_sync = NOR(vsync, hsync)` and broke the
+composite (vsync suppressed instead of asserted). Fixed to
+`hsync <= not(nHSyncSelect or nHSyncPulses)` for both 5c/6c. Knock-on:
+`video_sync_tb` phase-lock now waits for `hsync_5c = '0'` (inactive level is now
+LOW). vsync and the n_sync equation were already book-correct; only hsync moved.
+The `nhsyncpulses` logic = `XNOR(c3·c4, c5)` (6c) was verified to match the book.
 
-- **Entity/file naming.** Most entities are `snake_case` (`bit3_counter`,
-  `clk_div_2`, `d_ff_nor`, `horiz_timing`, `master_horiz_counter`, `video_sync`,
-  `tce_ff`/`trc_ff`/`trce_ff`). Outliers: `Vert_Line_counter` (PascalCase entity
-  *and* file) and `D_FF.vhd` (uppercase file whose entity is `d_ff`). Pick one
-  scheme (recommend lowercase `snake_case` for both file and entity).
-- **Architecture names.** Mostly `Behavioral` / `Structural` / `T_Structure` /
-  `Reference`, but `d_ff` (and its TB `D_FF_tb`) use the **misspelled
-  `Behavourial`**. Fix the typo and settle a consistent set (e.g. `Behavioral`
-  for the reference model, `T_Structure` for the gate-faithful one).
-- **Port naming/case.** `Vert_Line_counter` uses mixed/PascalCase ports
-  (`V0..V8`, `Clk_HC6`, `HCrst`, `Vrst`); other modules use lowercase
-  (`clk`, `reset`, `hsync_5c`). Standardise port case.
-- **Port ordering.** Settle a consistent order across entities (suggest:
-  `clk`, `reset`, `enable`, other inputs, then outputs) and apply it to both
-  declarations and port maps.
-- **Internal signal naming.** The `s_*` / `*_n` / `*_c` prefix scheme used in
-  `Vert_Line_counter(T_Structure)` isn't applied uniformly elsewhere.
+## Naming & ordering consistency
 
-**Caveat — renames touch `ULA.xpr`.** Changing a *file* name (and any entity
-name Vivado tracks) is a **Vivado-PC task** done through the IDE, not a raw
-edit — see the Vivado-PC TODO list below. Port-name/ordering and
-architecture-name fixes are plain source edits, but every renamed port/arch
-must be updated in all consumers and testbenches in the same commit (cf. the
-`HCrst_Enable`→`HCrst` rename that left two stale consumers).
+Cross-cutting cleanup. **Conventions chosen (2026-06-27):** lowercase
+`snake_case` for all identifiers; architecture `Behavioral` for the reference
+model (plus `Structural` / `T_Structure` / `Reference` where multiple archs
+exist); port order `clk, reset, enable, other inputs, then outputs` (applied to
+both declarations *and* port maps); `s_*` / `*_n` / `*_c` internal-signal
+prefixes. The active-low `n`-prefix names (`nBorder`, `nHblank`, `nHSync*`) are
+a deliberate ULA convention and are **kept** as-is.
+
+**✅ Done on the non-Vivado PC (plain source edits):**
+- Architecture typo `Behavourial`→`Behavioral` (`D_FF.vhd` + its consumer
+  `D_FF_tb.vhd`, whose own arch `arch`→`Behavioral` too).
+- `Vert_Line_counter` ports lowercased (`HCrst`→`hcrst`, `Clk_HC6`→`clk_hc6`,
+  `V0..V8`→`v0..v8`, `V*_n`→`v*_n`, `Vrst`→`vrst`); consumers `video_sync.vhd`
+  and `vert_line_counter_tb.vhd` updated in the same pass.
+- Port ordering applied across all entities + every port map: reordered
+  `clk_div_2` (clk_in/reset), `trc_ff` (outputs→q,qbar,carry), `trce_ff`
+  (clk,reset,enable,…), `bit3_counter` (clk,reset), `master_horiz_counter` and
+  `video_sync` (reset before tclk_a). `d_ff_nor`, `tce_ff`, `horiz_timing` were
+  already conformant. Named association throughout, so reorders are safe.
+- Internal-signal case/case-style fixes: `s_HCrst`→`s_hcrst` (`bit3_counter`),
+  `HC_rst`→`hc_rst` (MHC + horiz_timing TB locals), and the camelCase/Pascal
+  `sVsync`→`s_vsync`, `VBorderLower`→`v_border_lower`,
+  `VBorderUpper`→`v_border_upper` in `video_sync` (rename only — the equations
+  in the "Verified Correct" list are byte-for-byte unchanged).
+
+**⏳ Still TODO — Vivado-PC tasks (touch `ULA.xpr`, must go through the IDE):**
+- Rename file **and** entity `Vert_Line_counter` → `vert_line_counter`
+  (update its two port maps in `video_sync.vhd` + `vert_line_counter_tb.vhd`).
+- Rename file `D_FF.vhd` → `d_ff.vhd` (entity is already `d_ff`).
+- Rename file + entity `D_FF_tb` → `d_ff_tb`.
+- Retire `b3_tb.vhd` — a stale duplicate of `bit3_counter_tb` that instantiates
+  a non-existent `bit3_counter(Behavioral)` architecture (already broken; its
+  port map happens to match the new `clk, reset, …` order).
+
+**Caveat — renames touch `ULA.xpr`** and every renamed port/arch must be updated
+in all consumers and testbenches in the *same* commit (cf. the
+`HCrst_Enable`→`HCrst` rename that once left two stale consumers).
 
 ## Vivado-PC TODO list
 
 Things that must be done in Vivado on the Vivado PC, because they require touching `ULA.xpr` through the IDE (raw edits to the project file are risky):
+
+- **Naming-pass file/entity renames — TODO (the only open item).** The source-edit
+  portion of the naming/ordering cleanup is done (see "Naming & ordering
+  consistency"); these renames remain because they touch `ULA.xpr`:
+  `Vert_Line_counter` → `vert_line_counter` (file + entity; update the two port
+  maps), `D_FF.vhd` → `d_ff.vhd` (file only — entity is already `d_ff`),
+  `D_FF_tb` → `d_ff_tb` (file + entity), and retire the broken `b3_tb.vhd`
+  duplicate. Do each through the IDE / Tcl (`get_files` + `add_files` +
+  `remove_files`), then `git mv` / `git rm` the working copies in the same commit.
 
 - **`master_horiz_counter_tb` imports duplicate — DONE.** The stale
   `ULA.srcs/sources_1/imports/new/master_horiz_counter_tb.vhd` (which Vivado was
@@ -162,6 +224,50 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 
 ## Current status (as of this commit)
 
+> **▶ PICK UP HERE (next session):** Timing backbone (Phases 1–4) is **fully
+> xsim-verified and done**. Work has moved to a **per-PR feature-branch
+> workflow** off `main` (PRs #3 and #4 merged). Current branch:
+> **`phase5-video`** (pushed, tracking `origin/phase5-video`). It holds two
+> committed-but-**deliberately-not-yet-PR'd** changes: `video_sync` decode-comment
+> expansions + `video_sync_tb` waveform instrumentation (`dbg_pixel`/`dbg_line`/
+> `dbg_vline` + `dbg_exp_*` flags). **Naming/ordering cleanup (source-edit
+> portion) also done this session** — see "Naming & ordering consistency".
+>
+> **✅ GATE CLEARED (2026-07-03, Vivado PC).** The full backbone regression was
+> re-run in xsim 2025.2 via the CLI launchers and all are green: `bit3_counter_tb`,
+> `single_bit_shift_reg_tb`, `vert_line_counter_tb`, `master_horiz_counter_tb`,
+> `horiz_timing_tb` (eyeball, no asserts — ran clean), `video_sync_tb`, and the
+> FF-unit TBs (`trc_ff_tb`, `trce_ff_tb`, `tce_ff_tb`, `clk_div_2_tb`,
+> `d_ff_nor_tb`, `D_FF_tb`). The naming/ordering pass + the design changes below
+> are confirmed semantics-preserving. **Phase 5 is unblocked.** The file/entity
+> renames remain queued separately in the Vivado-PC TODO list.
+>
+> **Whole project now compiles under `-2008` uniformly.** `bit3_counter_tb`'s
+> process label `cover` was a VHDL-2008 reserved word (PSL) — renamed to
+> `cover_track`, so `xvhdl -2008` no longer needs that file singled out to 93.
+> All 12 sources + 12 TBs analyze clean under one `xvhdl -2008` pass.
+>
+> **Also bundled in this batch (design fix, NOT just renames): `nBorder` now
+> includes the horizontal `c8` term** (`horiz_timing` gained a `c8` output;
+> `video_sync` nBorder = `NOR(c8, v8, v6·v7)`) and composite sync renamed
+> `sync_5c/6c`→`n_sync_5c/6c`. **`video_sync_tb` now tests both axes** — a second
+> per-line sample at ~pixel 304 (c8=1) asserts `nBorder='0'`, the regression
+> check for the horizontal term. ✅ Verified — `video_sync_tb` PASS message
+> confirms `nBorder: V-edge @192, H-border via c8 @>=256`. See
+> "Verified Correct" for details.
+>
+> **Also: `hsync_5c`/`hsync_6c` polarity fixed** (OR→NOR, now active-HIGH per
+> book pg 90) so the composite `n_sync` is correct; `video_sync_tb` lock now
+> uses `hsync_5c='0'`. ✅ Verified — the TB phase-locks on `hsync_5c='0'` and the
+> composite decode passes end-to-end.
+>
+> **Next design task (gate cleared): build `border_reg.vhd`**
+> (port `0xFE` write → capture bits 2:0 as border colour) — the first Phase 5 module.
+> User wants mentor-mode: offer walk-through vs review-my-sketch before writing.
+> Vivado on this PC: `C:\AMDDesignTools\2025.2\Vivado\bin` (not on PATH); CLI sim
+> via `xvhdl`/`xelab`/`xsim` works (see "video_sync verification"). Note: `ULA.xpr`
+> gets rewritten by Vivado each session — commit as isolated "Vivado housekeeping".
+
 - Timing backbone (Phases 1–4) is complete and verified against the Chris Smith spec.
 - Target board switched from Nexys4 DDR to Arty A7-35T; master XDC is in place but pin assignments are still commented out (waits on the top-level `ULA.vhd` ports being defined).
 - VS Code + VHDL LS tooling configured on the non-Vivado PC; testbenches normalised (`Nns` → `N ns`, BOMs stripped).
@@ -175,6 +281,9 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - **Timing backbone (Phases 1–4) is now fully xsim-verified.** Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
 - **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives). `d_ff_nor` has Case-A init values + `after TG` (1 ns) gate delays for clean simulation.
 - **`bit3_counter` ✅ VERIFIED — all three architectures** (`Structural`, `T_Structure`, `Reference`) match a golden modulo-7 model in xsim. `master_horiz_counter` instantiates `(T_Structure)` — the schematic-faithful chained-T-FF carry-chain — for gate-accuracy. See the "bit3_counter verification" section below for the single-UUT + TB-golden testbench design and the xsim caveats.
+- **`single_bit_shift_register` — ✅ GHDL- and xsim-verified.** One gate-accurate cell of the pixel shift register: a negative-edge NOR flip-flop with a 2:1 load/shift input mux (active-low `data_n`/`data_1_n`, `set='1'` loads parallel, `set='0'` shifts in the neighbour). Uses the `d_ff_nor` pattern (init values + `after TG`). `single_bit_shift_reg_tb` passes all 7 cases in GHDL (load, shift both ways, hold, load-overrides-shift, complementary `q_bar`).
+  - **✅ GATE CLEARED — `single_bit_shift_reg_tb` re-run in xsim (2026-07-03) and PASSES all 7 cases** (matches the GHDL result; xsim sign-off done).
+  - **➡ NEXT (after that gate clears): build the 8-bit shift-**_**left**_** register** by chaining eight `single_bit_shift_register` cells — each cell's `q` feeds the next cell's `data_1_n` shift input (mind the active-low inversion), common `clk`/`set`, eight parallel `data_n` load bits in, serial-out from the MSB end. Then a self-checking TB: parallel-load a byte, clock 8 times, confirm it shifts left one bit per edge. This becomes the ULA video pixel shift register.
 
 ### bit3_counter verification — ✅ VERIFIED (all three architectures)
 
@@ -202,6 +311,12 @@ renamed, plain-buffered, and distinct-delay connections; a SINGLE instance
 binds correctly. So the TB instantiates ONE `uut` and compares it against a
 golden count computed *in a TB process* (no second entity → bug can't occur).
 Edit the `uut` architecture line to verify each arch in turn.
+
+**VHDL-2008 note:** the coverage process was originally labelled `cover`, which
+is a reserved word in VHDL-2008 (PSL) — `xvhdl -2008` rejects it with
+`[VRFC 10-4982] syntax error near 'cover'`. Renamed to `cover_track` (2026-07-03)
+so the whole project analyzes under a single `xvhdl -2008` pass. (It only slipped
+through before because Vivado defaulted this file to VHDL-93.)
 
 **Two fixes that made simulation work (keep these):**
 1. `d_ff_nor.vhd` — all six NOR gates carry `after TG` (`TG = 1 ns`). Without a
