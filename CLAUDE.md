@@ -160,6 +160,14 @@ both declarations *and* port maps); `s_*` / `*_n` / `*_c` internal-signal
 prefixes. The active-low `n`-prefix names (`nBorder`, `nHblank`, `nHSync*`) are
 a deliberate ULA convention and are **kept** as-is.
 
+**Book-schematic port names are an intentional exception to `snake_case`.**
+Where a port maps directly to a named net on Chris Smith's schematic, the book's
+spelling wins for traceability — e.g. `shift8`'s `Sin` (serial-in) and `SLoad`
+(load/shift select) keep the book's mixed-case names rather than becoming
+`s_in`/`s_load`. (Bonus: it also avoids the `s_` internal-signal prefix landing
+on a port.) `Sin` is active-low. A future naming pass should **not** "correct"
+these — leave book-named ports alone.
+
 **⏳ TODO — reconcile active-low ("not") signal naming.** Inverted/active-low
 signals are currently spelled three different ways across the design: `n`-prefix
 (`nBorder`, `nHblank`), `_n`-suffix (`data_n`, `data_1_n`), and `_bar`-suffix
