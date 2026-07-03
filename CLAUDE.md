@@ -160,6 +160,22 @@ both declarations *and* port maps); `s_*` / `*_n` / `*_c` internal-signal
 prefixes. The active-low `n`-prefix names (`nBorder`, `nHblank`, `nHSync*`) are
 a deliberate ULA convention and are **kept** as-is.
 
+**Book-schematic port names are an intentional exception to `snake_case`.**
+Where a port maps directly to a named net on Chris Smith's schematic, the book's
+spelling wins for traceability — e.g. `shift8`'s `Sin` (serial-in) and `SLoad`
+(load/shift select) keep the book's mixed-case names rather than becoming
+`s_in`/`s_load`. (Bonus: it also avoids the `s_` internal-signal prefix landing
+on a port.) `Sin` is active-low. A future naming pass should **not** "correct"
+these — leave book-named ports alone.
+
+**⏳ TODO — reconcile active-low ("not") signal naming.** Inverted/active-low
+signals are currently spelled three different ways across the design: `n`-prefix
+(`nBorder`, `nHblank`), `_n`-suffix (`data_n`, `data_1_n`), and `_bar`-suffix
+(`q_bar`). Decide a single rule (or document exactly when each applies) and apply
+it consistently as new Phase 5 modules land — don't let the shift-register /
+pixel-latch block add a fourth variant. Low priority, but settle it before the
+naming spreads further.
+
 **✅ Done on the non-Vivado PC (plain source edits):**
 - Architecture typo `Behavourial`→`Behavioral` (`D_FF.vhd` + its consumer
   `D_FF_tb.vhd`, whose own arch `arch`→`Behavioral` too).
@@ -449,10 +465,36 @@ Remaining work in order:
   - ~~`V*_n` taps~~ ✅ wired `V3_n..V7_n` straight out of the counter; `video_sync`'s redundant local `not v3..v7` inverters removed, and `VBorderLower` now reads `not(v6_n or v7_n)`. Only the consumed taps (`v2`, `v8` true; `v3_n..v7_n` complemented) are mapped — the rest default to `open`.
   - ~~Re-run `video_sync_tb`~~ ✅ done — self-checking, passes end-to-end.
 **Phase 5 — Video output**
-- `border_reg.vhd` — port 0xFE write, capture bits 2:0 as border colour
-- `pixel_fetch.vhd` — VRAM address generation using C/V counters; ZX scrambled address format
-- `colour_mux.vhd` — INK/PAPER/BRIGHT/FLASH decode; flash toggle from V counter (25 Hz)
-- `video_out.vhd` — mux between pixel colour, border colour, and blank using `nHblank`/`nBorder`
+
+Build order follows the book's video-output **data path** (Chris Smith), not the
+old "border_reg first" list. The pipeline, in the order the book presents it:
+
+1. **Pixel data latch + shift register block** — the pixel byte is captured in a
+   data latch, loaded into an **8-bit shift register**, and serialised MSB-first
+   at the pixel clock (1 ink/paper-select bit per pixel). *The 8-bit register is
+   built by chaining eight `single_bit_shift_register` cells (already built +
+   verified); the pixel data latch feeds its parallel-load inputs.*
+2. **Double-buffered attribute byte fetch block** — two attribute latches so the
+   next attribute is prefetched while the current one is still displayed.
+3. **Flash mode** — flash toggle derived from the V counter; swaps ink/paper.
+4. **Attribute output latch + border-select multiplexer** — final colour select
+   between the current attribute (ink/paper/bright, chosen by the serialised
+   pixel bit) and the border colour.
+5. `border_reg.vhd` — port `0xFE` write, capture bits 2:0 as border colour.
+   Comes **after** the blocks above; it just supplies one input to the
+   border-select mux in step 4.
+
+Supporting logic (slot in as the data path needs it): pixel/attribute **address
+generation** (`pixel_fetch` — C/V counters → ZX scrambled VRAM address) and the
+final **blanking mux** (`nHblank`/`nBorder` gating the colour output).
+
+**➡ IMMEDIATE next task (current work): the 8-bit shift register.** Chain eight
+`single_bit_shift_register` cells — each cell's `q` feeds the next cell's
+`data_1_n` shift input (mind the active-low inversion), common `clk`/`set`, eight
+parallel `data_n` load bits in, serial-out from the MSB end. Then a self-checking
+TB: parallel-load a byte, clock 8×, confirm it shifts left one bit per edge.
+After that, the **pixel data latch** that drives its parallel-load inputs.
+Mentor mode: offer walk-through vs review-my-sketch before writing VHDL.
 
 **Phase 6 — CPU interface**
 - `keyboard.vhd` — port 0xFE read; A8–A15 select one of 8 half-rows
