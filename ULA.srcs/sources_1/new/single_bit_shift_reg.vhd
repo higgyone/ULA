@@ -66,11 +66,28 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
+-- Operating modes (in plain words):
+--   The cell remembers one bit and, on each falling edge of clk, replaces it
+--   with a new bit taken from one of two sources. `set` picks the source:
+--
+--     set = '1'  LOAD mode  -- take the next bit from data_n (parallel load,
+--                              jamming a fresh bit in from outside).
+--     set = '0'  SHIFT mode -- take the next bit from data_1_n (the bit handed
+--                              over from the neighbouring cell in the chain).
+--
+--   Both data inputs are ACTIVE-LOW: the wire carries the inverse of the bit,
+--   so drive '0' to mean a 1 and '1' to mean a 0 (data = not data_n,
+--   data-1 = not data_1_n). LOAD wins over SHIFT if set = '1'.
+--
+--   clk is only the timing: nothing changes until clk falls 1->0. While clk is
+--   high the cell samples the chosen input; on the falling edge it stores that
+--   bit and then holds it steady on q (and its inverse on q_bar) until the next
+--   falling edge.
 entity single_bit_shift_register is
     Port ( clk        : in STD_LOGIC;
-           data_n     : in STD_LOGIC; -- inverse of bit data
-           data_1_n   : in STD_LOGIC; -- inverse of data-1
-           set        : in STD_LOGIC;
+           data_n     : in STD_LOGIC; -- active-low parallel-load bit (LOAD, set='1')
+           data_1_n   : in STD_LOGIC; -- active-low shift-in bit from neighbour (SHIFT, set='0')
+           set        : in STD_LOGIC; -- '1' = LOAD from data_n, '0' = SHIFT from data_1_n
            q          : out STD_LOGIC;
            q_bar      : out STD_LOGIC);
 end single_bit_shift_register;
