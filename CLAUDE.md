@@ -233,28 +233,35 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > `dbg_vline` + `dbg_exp_*` flags). **Naming/ordering cleanup (source-edit
 > portion) also done this session** — see "Naming & ordering consistency".
 >
-> **⛔ GATE — verify the naming pass on the Vivado PC BEFORE any Phase 5 work.**
-> The renames + named-map reorders are semantics-preserving but were authored on
-> the non-Vivado PC and are unsimulated. Before building `border_reg.vhd`,
-> re-run the affected testbenches on the Vivado PC and confirm green:
-> `bit3_counter_tb`, `vert_line_counter_tb`, `master_horiz_counter_tb`,
-> `horiz_timing_tb`, `video_sync_tb`, and the FF-unit TBs (`trc_ff_tb`,
-> `trce_ff_tb`, `tce_ff_tb`, `clk_div_2_tb`, `d_ff_nor_tb`, `D_FF_tb`). The
-> file/entity renames remain queued separately in the Vivado-PC TODO list.
+> **✅ GATE CLEARED (2026-07-03, Vivado PC).** The full backbone regression was
+> re-run in xsim 2025.2 via the CLI launchers and all are green: `bit3_counter_tb`,
+> `single_bit_shift_reg_tb`, `vert_line_counter_tb`, `master_horiz_counter_tb`,
+> `horiz_timing_tb` (eyeball, no asserts — ran clean), `video_sync_tb`, and the
+> FF-unit TBs (`trc_ff_tb`, `trce_ff_tb`, `tce_ff_tb`, `clk_div_2_tb`,
+> `d_ff_nor_tb`, `D_FF_tb`). The naming/ordering pass + the design changes below
+> are confirmed semantics-preserving. **Phase 5 is unblocked.** The file/entity
+> renames remain queued separately in the Vivado-PC TODO list.
+>
+> **Whole project now compiles under `-2008` uniformly.** `bit3_counter_tb`'s
+> process label `cover` was a VHDL-2008 reserved word (PSL) — renamed to
+> `cover_track`, so `xvhdl -2008` no longer needs that file singled out to 93.
+> All 12 sources + 12 TBs analyze clean under one `xvhdl -2008` pass.
 >
 > **Also bundled in this batch (design fix, NOT just renames): `nBorder` now
 > includes the horizontal `c8` term** (`horiz_timing` gained a `c8` output;
 > `video_sync` nBorder = `NOR(c8, v8, v6·v7)`) and composite sync renamed
 > `sync_5c/6c`→`n_sync_5c/6c`. **`video_sync_tb` now tests both axes** — a second
 > per-line sample at ~pixel 304 (c8=1) asserts `nBorder='0'`, the regression
-> check for the horizontal term. Re-run it on the Vivado PC to confirm. See
+> check for the horizontal term. ✅ Verified — `video_sync_tb` PASS message
+> confirms `nBorder: V-edge @192, H-border via c8 @>=256`. See
 > "Verified Correct" for details.
 >
 > **Also: `hsync_5c`/`hsync_6c` polarity fixed** (OR→NOR, now active-HIGH per
 > book pg 90) so the composite `n_sync` is correct; `video_sync_tb` lock now
-> uses `hsync_5c='0'`. Watch the `hsync` and `n_sync` traces when re-running.
+> uses `hsync_5c='0'`. ✅ Verified — the TB phase-locks on `hsync_5c='0'` and the
+> composite decode passes end-to-end.
 >
-> **Next design task (AFTER the gate clears): build `border_reg.vhd`**
+> **Next design task (gate cleared): build `border_reg.vhd`**
 > (port `0xFE` write → capture bits 2:0 as border colour) — the first Phase 5 module.
 > User wants mentor-mode: offer walk-through vs review-my-sketch before writing.
 > Vivado on this PC: `C:\AMDDesignTools\2025.2\Vivado\bin` (not on PATH); CLI sim
@@ -274,8 +281,8 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - **Timing backbone (Phases 1–4) is now fully xsim-verified.** Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
 - **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives). `d_ff_nor` has Case-A init values + `after TG` (1 ns) gate delays for clean simulation.
 - **`bit3_counter` ✅ VERIFIED — all three architectures** (`Structural`, `T_Structure`, `Reference`) match a golden modulo-7 model in xsim. `master_horiz_counter` instantiates `(T_Structure)` — the schematic-faithful chained-T-FF carry-chain — for gate-accuracy. See the "bit3_counter verification" section below for the single-UUT + TB-golden testbench design and the xsim caveats.
-- **`single_bit_shift_register` — GHDL-verified, xsim pending.** One gate-accurate cell of the pixel shift register: a negative-edge NOR flip-flop with a 2:1 load/shift input mux (active-low `data_n`/`data_1_n`, `set='1'` loads parallel, `set='0'` shifts in the neighbour). Uses the `d_ff_nor` pattern (init values + `after TG`). `single_bit_shift_reg_tb` passes all 7 cases in GHDL (load, shift both ways, hold, load-overrides-shift, complementary `q_bar`).
-  - **⛔ GATE — re-run `single_bit_shift_reg_tb` in xsim on the Vivado PC** to confirm it matches (GHDL is a second simulator, not sign-off).
+- **`single_bit_shift_register` — ✅ GHDL- and xsim-verified.** One gate-accurate cell of the pixel shift register: a negative-edge NOR flip-flop with a 2:1 load/shift input mux (active-low `data_n`/`data_1_n`, `set='1'` loads parallel, `set='0'` shifts in the neighbour). Uses the `d_ff_nor` pattern (init values + `after TG`). `single_bit_shift_reg_tb` passes all 7 cases in GHDL (load, shift both ways, hold, load-overrides-shift, complementary `q_bar`).
+  - **✅ GATE CLEARED — `single_bit_shift_reg_tb` re-run in xsim (2026-07-03) and PASSES all 7 cases** (matches the GHDL result; xsim sign-off done).
   - **➡ NEXT (after that gate clears): build the 8-bit shift-**_**left**_** register** by chaining eight `single_bit_shift_register` cells — each cell's `q` feeds the next cell's `data_1_n` shift input (mind the active-low inversion), common `clk`/`set`, eight parallel `data_n` load bits in, serial-out from the MSB end. Then a self-checking TB: parallel-load a byte, clock 8 times, confirm it shifts left one bit per edge. This becomes the ULA video pixel shift register.
 
 ### bit3_counter verification — ✅ VERIFIED (all three architectures)
@@ -304,6 +311,12 @@ renamed, plain-buffered, and distinct-delay connections; a SINGLE instance
 binds correctly. So the TB instantiates ONE `uut` and compares it against a
 golden count computed *in a TB process* (no second entity → bug can't occur).
 Edit the `uut` architecture line to verify each arch in turn.
+
+**VHDL-2008 note:** the coverage process was originally labelled `cover`, which
+is a reserved word in VHDL-2008 (PSL) — `xvhdl -2008` rejects it with
+`[VRFC 10-4982] syntax error near 'cover'`. Renamed to `cover_track` (2026-07-03)
+so the whole project analyzes under a single `xvhdl -2008` pass. (It only slipped
+through before because Vivado defaulted this file to VHDL-93.)
 
 **Two fixes that made simulation work (keep these):**
 1. `d_ff_nor.vhd` — all six NOR gates carry `after TG` (`TG = 1 ns`). Without a
