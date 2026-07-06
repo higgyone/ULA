@@ -254,8 +254,14 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > book pg 90) so the composite `n_sync` is correct; `video_sync_tb` lock now
 > uses `hsync_5c='0'`. Watch the `hsync` and `n_sync` traces when re-running.
 >
-> **Next design task (AFTER the gate clears): build `border_reg.vhd`**
-> (port `0xFE` write → capture bits 2:0 as border colour) — the first Phase 5 module.
+> **Phase 5 pixel-data path underway (mentor-mode).** Two gate-level cells are
+> built + GHDL-verified on this PC (xsim sign-off + `ULA.xpr` add still pending):
+> `single_bit_shift_register` and `data_latch_1_bit` (video data latch bit —
+> active-low `e = not datalatch`; `q_bar → shift-reg data_n`). **Next design task:
+> the 8-bit `data_latch` wrapper** (eight `data_latch_1_bit`, common `e`,
+> `q_bar(7:0)` → shift-register `data_n(7:0)`), then the 8-bit shift-left register.
+> `border_reg.vhd` (port `0xFE` write → border colour bits 2:0) and the rest of
+> Phase 5 (`pixel_fetch`, `colour_mux`, `video_out`) still to come.
 > User wants mentor-mode: offer walk-through vs review-my-sketch before writing.
 > Vivado on this PC: `C:\AMDDesignTools\2025.2\Vivado\bin` (not on PATH); CLI sim
 > via `xvhdl`/`xelab`/`xsim` works (see "video_sync verification"). Note: `ULA.xpr`
@@ -277,6 +283,29 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - **`single_bit_shift_register` — GHDL-verified, xsim pending.** One gate-accurate cell of the pixel shift register: a negative-edge NOR flip-flop with a 2:1 load/shift input mux (active-low `data_n`/`data_1_n`, `set='1'` loads parallel, `set='0'` shifts in the neighbour). Uses the `d_ff_nor` pattern (init values + `after TG`). `single_bit_shift_reg_tb` passes all 7 cases in GHDL (load, shift both ways, hold, load-overrides-shift, complementary `q_bar`).
   - **⛔ GATE — re-run `single_bit_shift_reg_tb` in xsim on the Vivado PC** to confirm it matches (GHDL is a second simulator, not sign-off).
   - **➡ NEXT (after that gate clears): build the 8-bit shift-**_**left**_** register** by chaining eight `single_bit_shift_register` cells — each cell's `q` feeds the next cell's `data_1_n` shift input (mind the active-low inversion), common `clk`/`set`, eight parallel `data_n` load bits in, serial-out from the MSB end. Then a self-checking TB: parallel-load a byte, clock 8 times, confirm it shifts left one bit per edge. This becomes the ULA video pixel shift register.
+- **`data_latch_1_bit` — GHDL-verified, xsim pending.** One bit of the 8-bit ULA
+  video data latch that captures the display-RAM byte before it fans out to the
+  pixel path (bitmap) and the attribute path. A **transparent D latch** (single
+  gated SR-NOR pair — *not* master-slave, so half the network of `d_ff_nor`),
+  built on the same `after TG` + init-value hygiene as the rest of the FF library.
+  Four NORs: `b_o=NOR(e,d)`, `a_o=NOR(e,b_o)`, cross-coupled `c_o=NOR(a_o,d_o)` /
+  `d_o=NOR(b_o,c_o)`; `q=d_o`, `q_bar=c_o`. Enable `e` is **active-low**
+  (`e='0'` transparent, `e='1'` hold) and is driven by **`e = not datalatch`** —
+  the upstream active-high `datalatch` strobe is transparent-high / hold-low as
+  expected; the active-low sense is that inverter absorbed into the interface, not
+  a polarity slip. `q_bar` is the active-low tap that feeds the pixel shift
+  register's `data_n` load input — the two active-low conventions cancel, so the
+  shift register loads the TRUE pixel bit. `data_latch_1_bit_tb` passes all 8 cases
+  in GHDL (transparent follow 0/1, latch-and-hold both polarities with `d` changing
+  underneath, `q_bar` complementary throughout). User-implemented, Claude-reviewed
+  + commented + TB.
+  - **⛔ GATE — re-run `data_latch_1_bit_tb` in xsim on the Vivado PC** and add
+    both `data_latch_1_bit.vhd` + `data_latch_1_bit_tb.vhd` to `ULA.xpr` (currently
+    source-only on the non-Vivado PC).
+  - **➡ NEXT: build the 8-bit `data_latch`** — eight `data_latch_1_bit` cells,
+    common `e` strobe, `d(7:0)` in, `q(7:0)` / `q_bar(7:0)` out; the eight `q_bar`
+    bits fan into the pixel shift register's eight `data_n` load inputs. Then a
+    self-checking TB. Same tiling pattern as the 8-bit shift register.
 
 ### bit3_counter verification — ✅ VERIFIED (all three architectures)
 
@@ -436,6 +465,8 @@ Remaining work in order:
   - ~~`V*_n` taps~~ ✅ wired `V3_n..V7_n` straight out of the counter; `video_sync`'s redundant local `not v3..v7` inverters removed, and `VBorderLower` now reads `not(v6_n or v7_n)`. Only the consumed taps (`v2`, `v8` true; `v3_n..v7_n` complemented) are mapped — the rest default to `open`.
   - ~~Re-run `video_sync_tb`~~ ✅ done — self-checking, passes end-to-end.
 **Phase 5 — Video output**
+- `single_bit_shift_register` — one pixel-shift cell ✅ GHDL (xsim pending); 8-bit shift-left register (chain of 8) — TODO
+- `data_latch_1_bit` — one video-data-latch bit ✅ GHDL (xsim pending); `data_latch.vhd` 8-bit wrapper (chain of 8, `q_bar(7:0)` → shift-reg `data_n(7:0)`) — TODO
 - `border_reg.vhd` — port 0xFE write, capture bits 2:0 as border colour
 - `pixel_fetch.vhd` — VRAM address generation using C/V counters; ZX scrambled address format
 - `colour_mux.vhd` — INK/PAPER/BRIGHT/FLASH decode; flash toggle from V counter (25 Hz)
