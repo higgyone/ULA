@@ -160,6 +160,22 @@ both declarations *and* port maps); `s_*` / `*_n` / `*_c` internal-signal
 prefixes. The active-low `n`-prefix names (`nBorder`, `nHblank`, `nHSync*`) are
 a deliberate ULA convention and are **kept** as-is.
 
+**Book-schematic port names are an intentional exception to `snake_case`.**
+Where a port maps directly to a named net on Chris Smith's schematic, the book's
+spelling wins for traceability — e.g. `shift8`'s `Sin` (serial-in) and `SLoad`
+(load/shift select) keep the book's mixed-case names rather than becoming
+`s_in`/`s_load`. (Bonus: it also avoids the `s_` internal-signal prefix landing
+on a port.) `Sin` is active-low. A future naming pass should **not** "correct"
+these — leave book-named ports alone.
+
+**⏳ TODO — reconcile active-low ("not") signal naming.** Inverted/active-low
+signals are currently spelled three different ways across the design: `n`-prefix
+(`nBorder`, `nHblank`), `_n`-suffix (`data_n`, `data_1_n`), and `_bar`-suffix
+(`q_bar`). Decide a single rule (or document exactly when each applies) and apply
+it consistently as new Phase 5 modules land — don't let the shift-register /
+pixel-latch block add a fourth variant. Low priority, but settle it before the
+naming spreads further.
+
 **✅ Done on the non-Vivado PC (plain source edits):**
 - Architecture typo `Behavourial`→`Behavioral` (`D_FF.vhd` + its consumer
   `D_FF_tb.vhd`, whose own arch `arch`→`Behavioral` too).
@@ -233,35 +249,44 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > `dbg_vline` + `dbg_exp_*` flags). **Naming/ordering cleanup (source-edit
 > portion) also done this session** — see "Naming & ordering consistency".
 >
-> **⛔ GATE — verify the naming pass on the Vivado PC BEFORE any Phase 5 work.**
-> The renames + named-map reorders are semantics-preserving but were authored on
-> the non-Vivado PC and are unsimulated. Before building `border_reg.vhd`,
-> re-run the affected testbenches on the Vivado PC and confirm green:
-> `bit3_counter_tb`, `vert_line_counter_tb`, `master_horiz_counter_tb`,
-> `horiz_timing_tb`, `video_sync_tb`, and the FF-unit TBs (`trc_ff_tb`,
-> `trce_ff_tb`, `tce_ff_tb`, `clk_div_2_tb`, `d_ff_nor_tb`, `D_FF_tb`). The
-> file/entity renames remain queued separately in the Vivado-PC TODO list.
+> **✅ GATE CLEARED (2026-07-03, Vivado PC).** The full backbone regression was
+> re-run in xsim 2025.2 via the CLI launchers and all are green: `bit3_counter_tb`,
+> `single_bit_shift_reg_tb`, `vert_line_counter_tb`, `master_horiz_counter_tb`,
+> `horiz_timing_tb` (eyeball, no asserts — ran clean), `video_sync_tb`, and the
+> FF-unit TBs (`trc_ff_tb`, `trce_ff_tb`, `tce_ff_tb`, `clk_div_2_tb`,
+> `d_ff_nor_tb`, `D_FF_tb`). The naming/ordering pass + the design changes below
+> are confirmed semantics-preserving. **Phase 5 is unblocked.** The file/entity
+> renames remain queued separately in the Vivado-PC TODO list.
+>
+> **Whole project now compiles under `-2008` uniformly.** `bit3_counter_tb`'s
+> process label `cover` was a VHDL-2008 reserved word (PSL) — renamed to
+> `cover_track`, so `xvhdl -2008` no longer needs that file singled out to 93.
+> All 12 sources + 12 TBs analyze clean under one `xvhdl -2008` pass.
 >
 > **Also bundled in this batch (design fix, NOT just renames): `nBorder` now
 > includes the horizontal `c8` term** (`horiz_timing` gained a `c8` output;
 > `video_sync` nBorder = `NOR(c8, v8, v6·v7)`) and composite sync renamed
 > `sync_5c/6c`→`n_sync_5c/6c`. **`video_sync_tb` now tests both axes** — a second
 > per-line sample at ~pixel 304 (c8=1) asserts `nBorder='0'`, the regression
-> check for the horizontal term. Re-run it on the Vivado PC to confirm. See
+> check for the horizontal term. ✅ Verified — `video_sync_tb` PASS message
+> confirms `nBorder: V-edge @192, H-border via c8 @>=256`. See
 > "Verified Correct" for details.
 >
 > **Also: `hsync_5c`/`hsync_6c` polarity fixed** (OR→NOR, now active-HIGH per
 > book pg 90) so the composite `n_sync` is correct; `video_sync_tb` lock now
-> uses `hsync_5c='0'`. Watch the `hsync` and `n_sync` traces when re-running.
+> uses `hsync_5c='0'`. ✅ Verified — the TB phase-locks on `hsync_5c='0'` and the
+> composite decode passes end-to-end.
 >
-> **Phase 5 pixel-data path underway (mentor-mode).** Two gate-level cells are
-> built + GHDL-verified on this PC (xsim sign-off + `ULA.xpr` add still pending):
-> `single_bit_shift_register` and `data_latch_1_bit` (video data latch bit —
+> **Phase 5 pixel-data path underway (mentor-mode).** Gate-level cells built +
+> verified: `single_bit_shift_register`, the 8-bit `shift8` (parallel-load
+> shift-left pixel register, chain of 8 — GHDL + self-checking TB, merged from
+> `phase5-pixel-shiftreg`), and `data_latch_1_bit` (video data latch bit —
 > active-low `e = not datalatch`; `q_bar → shift-reg data_n`). **Next design task:
-> the 8-bit `data_latch` wrapper** (eight `data_latch_1_bit`, common `e`,
-> `q_bar(7:0)` → shift-register `data_n(7:0)`), then the 8-bit shift-left register.
-> `border_reg.vhd` (port `0xFE` write → border colour bits 2:0) and the rest of
-> Phase 5 (`pixel_fetch`, `colour_mux`, `video_out`) still to come.
+> finish the 8-bit `data_latch` wrapper** (`data_latch_8_bit.vhd`, WIP in tree —
+> eight `data_latch_1_bit`, common `e`, `q_bar(7:0)` → shift-register
+> `data_n(7:0)`) + self-checking TB. Then `border_reg.vhd` (port `0xFE` write →
+> border colour bits 2:0) and the rest of Phase 5 (`pixel_fetch`, `colour_mux`,
+> `video_out`).
 > User wants mentor-mode: offer walk-through vs review-my-sketch before writing.
 > Vivado on this PC: `C:\AMDDesignTools\2025.2\Vivado\bin` (not on PATH); CLI sim
 > via `xvhdl`/`xelab`/`xsim` works (see "video_sync verification"). Note: `ULA.xpr`
@@ -280,8 +305,8 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 - **Timing backbone (Phases 1–4) is now fully xsim-verified.** Next design work is Phase 5 (border register, pixel/attribute fetch, colour mux, video output).
 - **FF library now fully structural on `d_ff_nor`**: `clk_div_2`, `trc_ff`, `tce_ff`, `trce_ff` all wrap `d_ff_nor` with a d-input mux. `trce_ff.enable` no longer has a default (`:= '1'` removed — gate-accurate design has no implicit drives). `d_ff_nor` has Case-A init values + `after TG` (1 ns) gate delays for clean simulation.
 - **`bit3_counter` ✅ VERIFIED — all three architectures** (`Structural`, `T_Structure`, `Reference`) match a golden modulo-7 model in xsim. `master_horiz_counter` instantiates `(T_Structure)` — the schematic-faithful chained-T-FF carry-chain — for gate-accuracy. See the "bit3_counter verification" section below for the single-UUT + TB-golden testbench design and the xsim caveats.
-- **`single_bit_shift_register` — GHDL-verified, xsim pending.** One gate-accurate cell of the pixel shift register: a negative-edge NOR flip-flop with a 2:1 load/shift input mux (active-low `data_n`/`data_1_n`, `set='1'` loads parallel, `set='0'` shifts in the neighbour). Uses the `d_ff_nor` pattern (init values + `after TG`). `single_bit_shift_reg_tb` passes all 7 cases in GHDL (load, shift both ways, hold, load-overrides-shift, complementary `q_bar`).
-  - **⛔ GATE — re-run `single_bit_shift_reg_tb` in xsim on the Vivado PC** to confirm it matches (GHDL is a second simulator, not sign-off).
+- **`single_bit_shift_register` — ✅ GHDL- and xsim-verified.** One gate-accurate cell of the pixel shift register: a negative-edge NOR flip-flop with a 2:1 load/shift input mux (active-low `data_n`/`data_1_n`, `set='1'` loads parallel, `set='0'` shifts in the neighbour). Uses the `d_ff_nor` pattern (init values + `after TG`). `single_bit_shift_reg_tb` passes all 7 cases in GHDL (load, shift both ways, hold, load-overrides-shift, complementary `q_bar`).
+  - **✅ GATE CLEARED — `single_bit_shift_reg_tb` re-run in xsim (2026-07-03) and PASSES all 7 cases** (matches the GHDL result; xsim sign-off done).
   - **➡ NEXT (after that gate clears): build the 8-bit shift-**_**left**_** register** by chaining eight `single_bit_shift_register` cells — each cell's `q` feeds the next cell's `data_1_n` shift input (mind the active-low inversion), common `clk`/`set`, eight parallel `data_n` load bits in, serial-out from the MSB end. Then a self-checking TB: parallel-load a byte, clock 8 times, confirm it shifts left one bit per edge. This becomes the ULA video pixel shift register.
 - **`data_latch_1_bit` — GHDL-verified, xsim pending.** One bit of the 8-bit ULA
   video data latch that captures the display-RAM byte before it fans out to the
@@ -333,6 +358,12 @@ renamed, plain-buffered, and distinct-delay connections; a SINGLE instance
 binds correctly. So the TB instantiates ONE `uut` and compares it against a
 golden count computed *in a TB process* (no second entity → bug can't occur).
 Edit the `uut` architecture line to verify each arch in turn.
+
+**VHDL-2008 note:** the coverage process was originally labelled `cover`, which
+is a reserved word in VHDL-2008 (PSL) — `xvhdl -2008` rejects it with
+`[VRFC 10-4982] syntax error near 'cover'`. Renamed to `cover_track` (2026-07-03)
+so the whole project analyzes under a single `xvhdl -2008` pass. (It only slipped
+through before because Vivado defaulted this file to VHDL-93.)
 
 **Two fixes that made simulation work (keep these):**
 1. `d_ff_nor.vhd` — all six NOR gates carry `after TG` (`TG = 1 ns`). Without a
@@ -465,12 +496,38 @@ Remaining work in order:
   - ~~`V*_n` taps~~ ✅ wired `V3_n..V7_n` straight out of the counter; `video_sync`'s redundant local `not v3..v7` inverters removed, and `VBorderLower` now reads `not(v6_n or v7_n)`. Only the consumed taps (`v2`, `v8` true; `v3_n..v7_n` complemented) are mapped — the rest default to `open`.
   - ~~Re-run `video_sync_tb`~~ ✅ done — self-checking, passes end-to-end.
 **Phase 5 — Video output**
-- `single_bit_shift_register` — one pixel-shift cell ✅ GHDL (xsim pending); 8-bit shift-left register (chain of 8) — TODO
-- `data_latch_1_bit` — one video-data-latch bit ✅ GHDL (xsim pending); `data_latch.vhd` 8-bit wrapper (chain of 8, `q_bar(7:0)` → shift-reg `data_n(7:0)`) — TODO
-- `border_reg.vhd` — port 0xFE write, capture bits 2:0 as border colour
-- `pixel_fetch.vhd` — VRAM address generation using C/V counters; ZX scrambled address format
-- `colour_mux.vhd` — INK/PAPER/BRIGHT/FLASH decode; flash toggle from V counter (25 Hz)
-- `video_out.vhd` — mux between pixel colour, border colour, and blank using `nHblank`/`nBorder`
+
+Build order follows the book's video-output **data path** (Chris Smith), not the
+old "border_reg first" list. The pipeline, in the order the book presents it:
+
+1. **Pixel data latch + shift register block** — the pixel byte is captured in a
+   data latch, loaded into an **8-bit shift register**, and serialised MSB-first
+   at the pixel clock (1 ink/paper-select bit per pixel). *The 8-bit register
+   (`shift8`, chain of eight `single_bit_shift_register` cells) is built +
+   verified; the pixel data latch (8× `data_latch_1_bit`) feeds its parallel-load
+   inputs.*
+2. **Double-buffered attribute byte fetch block** — two attribute latches so the
+   next attribute is prefetched while the current one is still displayed.
+3. **Flash mode** — flash toggle derived from the V counter; swaps ink/paper.
+4. **Attribute output latch + border-select multiplexer** — final colour select
+   between the current attribute (ink/paper/bright, chosen by the serialised
+   pixel bit) and the border colour.
+5. `border_reg.vhd` — port `0xFE` write, capture bits 2:0 as border colour.
+   Comes **after** the blocks above; it just supplies one input to the
+   border-select mux in step 4.
+
+Supporting logic (slot in as the data path needs it): pixel/attribute **address
+generation** (`pixel_fetch` — C/V counters → ZX scrambled VRAM address) and the
+final **blanking mux** (`nHblank`/`nBorder` gating the colour output).
+
+**➡ IMMEDIATE next task (current work): finish the 8-bit `data_latch` wrapper.**
+The 8-bit shift register (`shift8`) is done + merged. Now build the pixel data
+latch that drives its parallel-load inputs: `data_latch_8_bit.vhd` (WIP in tree)
+tiles eight `data_latch_1_bit` cells — common `e` strobe, `d(7:0)` in,
+`q_bar(7:0)` out → `shift8` `data_n(7:0)` load inputs. Then a self-checking TB
+(same tiling pattern as `shift8`). After that: attribute fetch, flash mode,
+attribute output latch + border-select mux, then `border_reg.vhd`.
+Mentor mode: offer walk-through vs review-my-sketch before writing VHDL.
 
 **Phase 6 — CPU interface**
 - `keyboard.vhd` — port 0xFE read; A8–A15 select one of 8 half-rows

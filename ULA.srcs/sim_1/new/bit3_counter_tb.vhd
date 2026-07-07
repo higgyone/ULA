@@ -157,7 +157,7 @@ begin
     end process;
 
     -- Coverage tracker: latch each legal state the UUT visits (mid-period).
-    cover : process(sysclk)
+    cover_track : process(sysclk)
     begin
         if rising_edge(sysclk) then
             if    out_uut = "000" then states_visited(0) <= '1';
