@@ -277,16 +277,21 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > uses `hsync_5c='0'`. ✅ Verified — the TB phase-locks on `hsync_5c='0'` and the
 > composite decode passes end-to-end.
 >
-> **Phase 5 pixel-data path underway (mentor-mode).** Gate-level cells built +
-> verified: `single_bit_shift_register`, the 8-bit `shift8` (parallel-load
-> shift-left pixel register, chain of 8 — GHDL + self-checking TB, merged from
-> `phase5-pixel-shiftreg`), and `data_latch_1_bit` (video data latch bit —
-> active-low `e = not datalatch`; `q_bar → shift-reg data_n`). **Next design task:
-> finish the 8-bit `data_latch` wrapper** (`data_latch_8_bit.vhd`, WIP in tree —
-> eight `data_latch_1_bit`, common `e`, `q_bar(7:0)` → shift-register
-> `data_n(7:0)`) + self-checking TB. Then `border_reg.vhd` (port `0xFE` write →
-> border colour bits 2:0) and the rest of Phase 5 (`pixel_fetch`, `colour_mux`,
-> `video_out`).
+> **Phase 5 pixel-data path underway (mentor-mode).** Pixel-path FRONT BLOCK
+> complete + GHDL-verified (all with self-checking TBs; xsim sign-off pending):
+> `single_bit_shift_register`; the 8-bit `shift8` (parallel-load shift-left pixel
+> register, chain of 8; merged from `phase5-pixel-shiftreg`); `data_latch_1_bit`
+> (video data latch bit — active-low `e = not datalatch`; `q_bar → shift-reg
+> `data_n`); `data_latch_8_bit` (8× `data_latch_1_bit`, common active-low
+> `enable`); and **`pixel_serialiser`** — the structural wrapper tying them
+> together: `data → data_latch_8_bit → (data_out_n, active-low) → shift8.data_n →
+> serial_data`, MSB-first; `Sin` tied to `SLoad` per the book schematic; latch
+> true output + shift `q_bar` left `open` for now. **Next design task: the
+> ATTRIBUTE fetch path** — double-buffered attribute byte latches (prefetch next
+> attr while current displays), then flash mode (V-counter toggle), then the
+> attribute output latch + border-select mux, then `border_reg.vhd` (port `0xFE`
+> write → border colour bits 2:0), and the rest of Phase 5 (`pixel_fetch`,
+> `colour_mux`, `video_out`).
 > User wants mentor-mode: offer walk-through vs review-my-sketch before writing.
 > Vivado on this PC: `C:\AMDDesignTools\2025.2\Vivado\bin` (not on PATH); CLI sim
 > via `xvhdl`/`xelab`/`xsim` works (see "video_sync verification"). Note: `ULA.xpr`
