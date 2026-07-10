@@ -278,7 +278,11 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > composite decode passes end-to-end.
 >
 > **Phase 5 pixel-data path underway (mentor-mode).** Pixel-path FRONT BLOCK
-> complete + GHDL-verified (all with self-checking TBs; xsim sign-off pending):
+> complete + GHDL-verified (all with self-checking TBs). **`pixel_serialiser_tb`
+> ✅ xsim-verified on the Vivado PC** — that run exercises the whole integrated
+> front path (data_latch_8_bit + shift8), so the block is signed off; the
+> component TBs (`data_latch_8_bit_tb`, standalone `shift8_tb`) can still be run
+> in xsim individually if desired but the integration passes. Modules:
 > `single_bit_shift_register`; the 8-bit `shift8` (parallel-load shift-left pixel
 > register, chain of 8; merged from `phase5-pixel-shiftreg`); `data_latch_1_bit`
 > (video data latch bit — active-low `e = not datalatch`; `q_bar → shift-reg
