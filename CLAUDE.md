@@ -290,12 +290,20 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > `enable`); and **`pixel_serialiser`** — the structural wrapper tying them
 > together: `data → data_latch_8_bit → (data_out_n, active-low) → shift8.data_n →
 > serial_data`, MSB-first; `Sin` tied to `SLoad` per the book schematic; latch
-> true output + shift `q_bar` left `open` for now. **Next design task: the
-> ATTRIBUTE fetch path** — double-buffered attribute byte latches (prefetch next
-> attr while current displays), then flash mode (V-counter toggle), then the
-> attribute output latch + border-select mux, then `border_reg.vhd` (port `0xFE`
-> write → border colour bits 2:0), and the rest of Phase 5 (`pixel_fetch`,
-> `colour_mux`, `video_out`).
+> true output + shift `q_bar` left `open` for now.
+>
+> **Attribute path started.** `attr_data_latch_paper_border_mux` ✅ built +
+> GHDL-verified (self-checking TB, 20 checks): an 8-bit attribute `data_latch_8_bit`
+> feeding a per-colour-bit 2:1 NOR-NOR mux that outputs PAPER (attr bits 5:3) in
+> the display area or BORDER (`border_colour`, port 0xFE) in the border, selected
+> by `vid_en` (shared `vid_en_n` inverter). Also taps INK (attr 2:0, ungated),
+> BRIGHT (`al6_hl` = attr6 AND vid_en) and FLASH (`al7_fl` = attr7 AND vid_en).
+> Attribute byte layout: b7 FLASH | b6 BRIGHT | b5:3 PAPER | b2:0 INK, colours GRB
+> (b0 Blue, b1 Red, b2 Green). **Next design task:** double-buffered attribute
+> fetch (prefetch next attr while current displays) + flash toggle from the V
+> counter (25 Hz), then wire the serialised pixel bit into the final INK vs
+> paper_border mux; then `border_reg.vhd` (port `0xFE` write → border colour bits
+> 2:0), and the rest of Phase 5 (`pixel_fetch`, `colour_mux`, `video_out`).
 > User wants mentor-mode: offer walk-through vs review-my-sketch before writing.
 > Vivado on this PC: `C:\AMDDesignTools\2025.2\Vivado\bin` (not on PATH); CLI sim
 > via `xvhdl`/`xelab`/`xsim` works (see "video_sync verification"). Note: `ULA.xpr`
