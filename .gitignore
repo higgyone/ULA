@@ -59,6 +59,14 @@ Thumbs.db
 .idea/
 *.code-workspace
 
+# GHDL simulation artefacts (second simulator used on the non-Vivado PC)
+*.cf
+work-obj*.cf
+*.ghw
+e~*.o
+e~*
+*.o
+
 # Vivado gate-level / cell-graph exports (regenerable)
 gate sim/
 
