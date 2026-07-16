@@ -1,8 +1,16 @@
 # Pre-commit hooks for the ULA project.
 #
 # One-time setup (per PC, since .git/hooks is not tracked in git):
-#     python -m pip install pre-commit
-#     pre-commit install            # run from the repo root
+#   Install the `pre-commit` driver in its own isolated venv, then put the
+#   launcher on PATH (pipx is broken on the dev box -- a Windows launcher
+#   encoding bug -- so this is the manual pipx-equivalent):
+#     python -m venv ~/.venvs/pre-commit
+#     ~/.venvs/pre-commit/Scripts/python -m pip install pre-commit
+#     cp ~/.venvs/pre-commit/Scripts/pre-commit.exe ~/.local/bin/   # on PATH
+#     cd <repo> && pre-commit install
+#   (Or simply `pip install pre-commit` into your base env if you don't
+#   care about isolation.) The VSG hook itself is pinned + isolated by
+#   pre-commit regardless, at rev 3.35.0 below.
 #
 # After that, every `git commit` runs VSG on the staged *.vhd files.
 # The config lives in vsg_config.yaml (tracked), so both PCs stay in sync.
@@ -21,7 +29,7 @@
 
 repos:
   - repo: https://github.com/jeremiah-c-leary/vhdl-style-guide
-    rev: v3.35.0
+    rev: 3.35.0
     hooks:
       - id: vsg
         args: [-c, vsg_config.yaml, --fix]   # auto-style staged VHDL on commit
