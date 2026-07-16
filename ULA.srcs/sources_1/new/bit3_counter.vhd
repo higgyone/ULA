@@ -44,24 +44,29 @@
 --   overflow:  0     0     0     0     0     0     1     0
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
-use ieee.numeric_std.all;
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
 
 entity bit3_counter is
-    Port ( clk      : in  STD_LOGIC;
-           reset    : in  STD_LOGIC;
-           output   : out std_logic_vector (2 downto 0);
-           overflow : out std_logic );
-end bit3_counter;
+    port (
+        clk      : in    std_logic;
+        reset    : in    std_logic;
+        output   : out   std_logic_vector(2 downto 0);
+        overflow : out   std_logic
+    );
+end entity bit3_counter;
 
-architecture Structural of bit3_counter is
-    signal q       : std_logic_vector(2 downto 0);  -- current state
-    signal d       : std_logic_vector(2 downto 0);  -- next state into FFs
-    signal wrap    : std_logic;                     -- 1 when at "110"
+architecture structural of bit3_counter is
+
+    signal q    : std_logic_vector(2 downto 0); -- current state
+    signal d    : std_logic_vector(2 downto 0); -- next state into FFs
+    signal wrap : std_logic;                    -- 1 when at "110"
+
 begin
+
     -- detect we're at the wrap state
-    wrap <= q(2) and q(1) and (not q(0));   -- "110"
+    wrap <= q(2) and q(1) and (not q(0)); -- "110"
 
     -- next-state combinational logic per bit (binary +1, forced to 0 at wrap, forced to 0 at reset)
     d(0) <= (not reset) and (not wrap) and (not q(0));
@@ -69,62 +74,84 @@ begin
     d(2) <= (not reset) and (not wrap) and (q(2) xor (q(1) and q(0)));
 
     -- three d_ff_nor instances — one per bit
-    ff0 : entity work.d_ff_nor port map (clk => clk, d => d(0), q => q(0), qbar => open);
-    ff1 : entity work.d_ff_nor port map (clk => clk, d => d(1), q => q(1), qbar => open);
-    ff2 : entity work.d_ff_nor port map (clk => clk, d => d(2), q => q(2), qbar => open);
+    ff0 : entity work.d_ff_nor
+        port map (
+            clk  => clk,
+            d    => d(0),
+            q    => q(0),
+            qbar => open
+        );
+
+    ff1 : entity work.d_ff_nor
+        port map (
+            clk  => clk,
+            d    => d(1),
+            q    => q(1),
+            qbar => open
+        );
+
+    ff2 : entity work.d_ff_nor
+        port map (
+            clk  => clk,
+            d    => d(2),
+            q    => q(2),
+            qbar => open
+        );
 
     output   <= q;
     overflow <= wrap;
-end Structural;
 
+end architecture structural;
 
-architecture T_Structure of bit3_counter is
-   signal carry_count_6       : std_logic;
-   signal count_6_q_out       : std_logic; 
-   signal carry_count_7       : std_logic;
-   signal count_7_q_out       : std_logic;
-   signal count_7_qbar_out    : std_logic;
-   signal count_8_q_out       : std_logic;
-   signal count_8_qbar_out    : std_logic;
-   signal s_ff_rst            : std_logic;
-   signal s_hcrst             : std_logic; 
+architecture t_structure of bit3_counter is
+
+    signal carry_count_6    : std_logic;
+    signal count_6_q_out    : std_logic;
+    signal carry_count_7    : std_logic;
+    signal count_7_q_out    : std_logic;
+    signal count_7_qbar_out : std_logic;
+    signal count_8_q_out    : std_logic;
+    signal count_8_qbar_out : std_logic;
+    signal s_ff_rst         : std_logic;
+    signal s_hcrst          : std_logic;
+
 begin
 
-count_6: entity work.trc_ff
- port map(
-           clk   => clk,
-           reset => s_ff_rst,
-           q     => count_6_q_out,
-           qbar  => open,
-           carry => carry_count_6
-    );
-     
-count_7: entity work.trce_ff
- port map(
-           clk   => clk,
-           reset => s_ff_rst,
-           enable => carry_count_6,
-           q     => count_7_q_out,
-           qbar  => count_7_qbar_out,
-           carry => carry_count_7
-    );
+    count_6 : entity work.trc_ff
+        port map (
+            clk   => clk,
+            reset => s_ff_rst,
+            q     => count_6_q_out,
+            qbar  => open,
+            carry => carry_count_6
+        );
 
-count_8: entity work.trce_ff
- port map(
-           clk   => clk,
-           reset => s_ff_rst,
-           enable => carry_count_7,
-           q     => count_8_q_out,
-           qbar  => count_8_qbar_out,
-           carry => open
-    );
+    count_7 : entity work.trce_ff
+        port map (
+            clk    => clk,
+            reset  => s_ff_rst,
+            enable => carry_count_6,
+            q      => count_7_q_out,
+            qbar   => count_7_qbar_out,
+            carry  => carry_count_7
+        );
 
-    s_hcrst <= not (count_7_qbar_out or count_8_qbar_out);
+    count_8 : entity work.trce_ff
+        port map (
+            clk    => clk,
+            reset  => s_ff_rst,
+            enable => carry_count_7,
+            q      => count_8_q_out,
+            qbar   => count_8_qbar_out,
+            carry  => open
+        );
+
+    s_hcrst  <= not (count_7_qbar_out or count_8_qbar_out);
     s_ff_rst <= reset or s_hcrst;
     output   <= count_8_q_out & count_7_q_out & count_6_q_out;
     overflow <= s_hcrst;
-     
-end T_Structure;
+
+end architecture t_structure;
 
 ----------------------------------------------------------------------
 -- Reference architecture — behavioural arithmetic oracle.
@@ -134,23 +161,31 @@ end T_Structure;
 -- Not synthesised in the real design — used only by bit3_counter_tb
 -- as the side-by-side reference for the Structural architecture.
 ----------------------------------------------------------------------
-architecture Reference of bit3_counter is
+
+architecture reference of bit3_counter is
+
     signal outputint : unsigned(2 downto 0) := "000";
+
 begin
-    process (clk)
+
+    process (clk) is
     begin
+
         if falling_edge(clk) then
-            if reset = '1' then
+            if (reset = '1') then
                 outputint <= "000";
             else
                 outputint <= outputint + 1;
-                if outputint = "110" then
+                if (outputint = "110") then
                     outputint <= "000";
                 end if;
             end if;
         end if;
+
     end process;
 
     output   <= std_logic_vector(outputint);
-    overflow <= '1' when outputint = "110" else '0';
-end Reference;
+    overflow <= '1' when outputint = "110" else
+                '0';
+
+end architecture reference;

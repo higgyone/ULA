@@ -29,35 +29,43 @@
 --     X    X       no edge   |  q         qbar        (hold)
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity trce_ff is
-    Port ( clk    : in  STD_LOGIC;
-           reset  : in  STD_LOGIC;
-           enable : in  STD_LOGIC;
-           q      : out STD_LOGIC;
-           qbar   : out STD_LOGIC;
-           carry  : out STD_LOGIC);
-end trce_ff;
+    port (
+        clk    : in    std_logic;
+        reset  : in    std_logic;
+        enable : in    std_logic;
+        q      : out   std_logic;
+        qbar   : out   std_logic;
+        carry  : out   std_logic
+    );
+end entity trce_ff;
 
-architecture Behavioral of trce_ff is
+architecture behavioral of trce_ff is
+
     signal d_in     : std_logic;
     signal q_int    : std_logic;
     signal qbar_int : std_logic;
+
 begin
+
     -- Priority: reset > enable.
-    d_in <= '0'      when reset  = '1'
-       else qbar_int when enable = '1'
-       else q_int;
+    d_in <= '0' when reset = '1' else
+            qbar_int when enable = '1' else
+            q_int;
 
     ff : entity work.d_ff_nor(Behavioral)
-        port map ( clk  => clk,
-                   d    => d_in,
-                   q    => q_int,
-                   qbar => qbar_int );
+        port map (
+            clk  => clk,
+            d    => d_in,
+            q    => q_int,
+            qbar => qbar_int
+        );
 
     q     <= q_int;
     qbar  <= qbar_int;
-    carry <= not ((not enable) or qbar_int);   -- = enable and q : stage carry-out
-end Behavioral;
+    carry <= not ((not enable) or qbar_int); -- = enable and q : stage carry-out
+
+end architecture behavioral;

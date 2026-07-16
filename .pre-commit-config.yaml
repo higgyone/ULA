@@ -1,0 +1,27 @@
+# Pre-commit hooks for the ULA project.
+#
+# One-time setup (per PC, since .git/hooks is not tracked in git):
+#     python -m pip install pre-commit
+#     pre-commit install            # run from the repo root
+#
+# After that, every `git commit` runs VSG on the staged *.vhd files.
+# The config lives in vsg_config.yaml (tracked), so both PCs stay in sync.
+#
+# Manual full-repo run any time:
+#     pre-commit run --all-files
+#
+# Modes:
+#   auto-fix (current)   — the hook rewrites staged files to VSG style. If it
+#                          changes anything the commit aborts with "files were
+#                          modified by this hook"; `git add` the fixes and
+#                          commit again. Nothing unstaged is touched.
+#   check-only           — remove "--fix" from args below; the commit then
+#                          FAILS on violations instead of fixing them, and you
+#                          run `vsg --fix` (or fix by hand) yourself.
+
+repos:
+  - repo: https://github.com/jeremiah-c-leary/vhdl-style-guide
+    rev: v3.35.0
+    hooks:
+      - id: vsg
+        args: [-c, vsg_config.yaml, --fix]   # auto-style staged VHDL on commit

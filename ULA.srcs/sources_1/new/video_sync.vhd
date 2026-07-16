@@ -14,26 +14,27 @@
 -- gate style), with named intermediate signals matching the schematic.
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
 
 entity video_sync is
-    Port (
-        clk      : in  std_logic;
-        reset    : in  std_logic;
-        tclk_a   : in  std_logic;    -- retained for backwards compatibility; unused (horiz_timing ties internally to '0')
-        hsync_5c : out std_logic;
-        hsync_6c : out std_logic;
-        nHblank  : out std_logic;
-        vsync    : out std_logic;
-        nBorder  : out std_logic;
-        n_sync_5c : out std_logic;   -- composite active-low sync = NOR(vsync, hsync), issue-5 hsync timing
-        n_sync_6c : out std_logic    -- composite active-low sync = NOR(vsync, hsync), issue-6 hsync timing
+    port (
+        clk       : in    std_logic;
+        reset     : in    std_logic;
+        tclk_a    : in    std_logic; -- retained for back-compat; unused (horiz_timing ties it to '0')
+        hsync_5c  : out   std_logic;
+        hsync_6c  : out   std_logic;
+        nhblank   : out   std_logic;
+        vsync     : out   std_logic;
+        nborder   : out   std_logic;
+        n_sync_5c : out   std_logic; -- composite active-low sync = NOR(vsync, hsync), issue-5 hsync timing
+        n_sync_6c : out   std_logic  -- composite active-low sync = NOR(vsync, hsync), issue-6 hsync timing
     );
-end video_sync;
+end entity video_sync;
 
-architecture Behavioral of video_sync is
+architecture behavioral of video_sync is
+
     -- horizontal-timing outputs we consume locally
     signal h_5c    : std_logic;
     signal h_6c    : std_logic;
@@ -44,55 +45,65 @@ architecture Behavioral of video_sync is
     -- horizontal counter MSB from horiz_timing: HIGH for pixels 256..447,
     -- i.e. the horizontal border/blanking region. Gates the border decode
     -- so the display window is the central 256 columns, not the whole line.
-    signal c8      : std_logic;
+    signal c8 : std_logic;
 
     -- vertical counter taps consumed by the decode (true form)
-    signal v2, v8 : std_logic;
+    signal v2,             v8 : std_logic;
 
     -- vertical border intermediates
     signal v_border_lower, v_border_upper : std_logic;
 
     -- complemented V taps (qbar) from the counter, used by the
     -- nBorder and vsync NORs
-    signal v3_n, v4_n, v5_n, v6_n, v7_n : std_logic;
+    signal v3_n : std_logic;
+    signal v4_n : std_logic;
+    signal v5_n : std_logic;
+    signal v6_n : std_logic;
+    signal v7_n : std_logic;
 
     -- composite-sync intermediates
     signal s_vsync : std_logic;
+
 begin
+
     ----------------------------------------------------------------
     -- Horizontal timing block (owns master_horiz_counter)
     ----------------------------------------------------------------
-    ht: entity work.horiz_timing(Behavioral)
-        port map(
+    ht : entity work.horiz_timing(Behavioral)
+        port map (
             clk      => clk,
             reset    => reset,
             hsync_5c => h_5c,
             hsync_6c => h_6c,
-            nHblank  => h_blank,
-            c8       => c8,          -- H-counter MSB, for the border decode below
+            nhblank  => h_blank,
+            c8       => c8,
             clk_hc6  => hc6,
             hc_rst   => hcrst
         );
 
     hsync_5c <= h_5c;
     hsync_6c <= h_6c;
-    nHblank  <= h_blank;
+    nhblank  <= h_blank;
 
     ----------------------------------------------------------------
     -- Vertical line counter (clocked by clk_hc6, advanced by hc_rst)
     ----------------------------------------------------------------
-    vlc: entity work.Vert_Line_counter(T_Structure)
-        port map(
-            hcrst        => hcrst,
-            clk_hc6      => hc6,
+    vlc : entity work.vert_line_counter(T_Structure)
+        port map (
+            hcrst   => hcrst,
+            clk_hc6 => hc6,
             -- only the taps the decode actually consumes are wired;
             -- the rest default to open (the counter still counts them).
-            v2 => v2, v8 => v8,
+            v2 => v2,
+            v8 => v8,
             -- complemented taps straight from the counter's qbar outputs
             -- (no extra inverters in video_sync)
-            v3_n => v3_n, v4_n => v4_n, v5_n => v5_n,
-            v6_n => v6_n, v7_n => v7_n,
-            vrst         => open
+            v3_n => v3_n,
+            v4_n => v4_n,
+            v5_n => v5_n,
+            v6_n => v6_n,
+            v7_n => v7_n,
+            vrst => open
         );
 
     ----------------------------------------------------------------
@@ -118,9 +129,9 @@ begin
     -- (c8=0 AND V line 0..191); it goes LOW across the whole horizontal
     -- border on every line, and across all of V lines 192..311.
     ----------------------------------------------------------------
-    v_border_lower <= not(v6_n or v7_n);           -- v6 AND v7 -> V lines 192..255
-    v_border_upper <= v8;                          --           -> V lines 256..311
-    nBorder      <= not(c8 or v_border_lower or v_border_upper);  -- + c8 = horizontal border gate
+    v_border_lower <= not(v6_n or v7_n);                           -- v6 AND v7 -> V lines 192..255
+    v_border_upper <= v8;                                          --           -> V lines 256..311
+    nborder        <= not(c8 or v_border_lower or v_border_upper); -- + c8 = horizontal border gate
 
     ----------------------------------------------------------------
     -- Vertical sync pulse — 4 lines wide, lines 248..251
@@ -156,7 +167,8 @@ begin
     -- (issue-5 vs issue-6 ULA); they differ ONLY in which hsync is folded
     -- in here.
     ----------------------------------------------------------------
-    n_sync_5c <= h_5c nor s_vsync;   -- NOR(vsync, hsync_5c)
-    n_sync_6c <= h_6c nor s_vsync;   -- NOR(vsync, hsync_6c)
+    n_sync_5c <= h_5c nor s_vsync; -- NOR(vsync, hsync_5c)
+    n_sync_6c <= h_6c nor s_vsync; -- NOR(vsync, hsync_6c)
     vsync     <= s_vsync;
-end Behavioral;
+
+end architecture behavioral;

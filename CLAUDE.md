@@ -35,6 +35,8 @@ Implications:
 - **Simulation (non-Vivado / Claude PC)**: **GHDL 6.0.0 (mcode backend)** for fast CLI regression when Vivado isn't available. Installed via `winget install ghdl.ghdl.ucrt64.mcode`. See "GHDL CLI simulation" below. Testbenches are portable between GHDL and xsim as long as `--std=08` is used and the gate-level FFs keep their init values + `after TG` delays.
 - **Constraints**: `ULA.srcs/arty_35/imports/constraints/Arty-A7-35-Master.xdc` — Digilent's master XDC for the Arty A7-35T (Rev. D/E). All pins are commented out by default; uncomment and rename ports as the top-level design grows.
 - **Editor (non-Vivado PC)**: VS Code with `puorc.awesome-vhdl` (syntax) + `hbohlin.vhdl-ls` (language server). The repo ships a [`vhdl_ls.toml`](vhdl_ls.toml) at the root that puts every `.vhd` in `ULA.srcs/sources_1/new/` and `ULA.srcs/sim_1/new/` into a library called `defaultlib` (VHDL LS reserves `work` as the "current library" alias, so the actual library name must be different).
+- **Linter / formatter**: **VSG (VHDL Style Guide)** — `pip install vsg`, invoked as `vsg.exe` (note: `python -m vsg` has no `__main__`, use the console script). The project has **adopted VSG's default style as the canonical formatter** (like black/gofmt): VSG owns whitespace, indentation, casing, alignment and layout. Config is [`vsg_config.yaml`](vsg_config.yaml) — the only deviations from defaults are **4-space indent** (`rule.global.indent_size: 4`) and **`instantiation_034` disabled** (the design uses direct entity instantiation with explicit architecture selection, e.g. `entity work.vert_line_counter(T_Structure)`). Check: `vsg -f <file> -c vsg_config.yaml`; fix: add `--fix`. An [`.editorconfig`](.editorconfig) mirrors the 4-space indent so the editor Tab key agrees with the formatter. A **pre-commit hook** ([`.pre-commit-config.yaml`](.pre-commit-config.yaml)) runs `vsg --fix` on staged VHDL every commit — set up per PC with `pip install pre-commit && pre-commit install`.
+- **Compile-time lint**: run GHDL analysis with `-Wall -Wunused` for a stronger pass. The whole tree is clean under `-Wall` except two intentional/benign categories: unconnected `OUT` ports left `open` in `video_sync` (`-Wmissing-assoc`) and the `Reference` architecture name colliding with a VHDL-AMS reserved word in `bit3_counter` (`-Wreserved-word`).
 
 ### VHDL LS gotchas
 - **Time literals require whitespace** between the integer and the unit. `wait for 50ns;` is rejected as "Invalid integer character 'n'" — write `wait for 50 ns;`. Vivado tolerates the no-space form but VHDL LS is strict. All testbenches have been normalised.
@@ -151,6 +153,18 @@ LOW). vsync and the n_sync equation were already book-correct; only hsync moved.
 The `nhsyncpulses` logic = `XNOR(c3·c4, c5)` (6c) was verified to match the book.
 
 ## Naming & ordering consistency
+
+> **Formatting is now VSG-owned (2026-07-16).** The whole tree was run through
+> `vsg --fix` and reformatted to VSG's default style: **lowercase keywords,
+> types and architecture names** (`std_logic`, `entity`, `end entity`,
+> `architecture structural`), 4-space indent, VSG alignment, `)` on its own
+> line. This supersedes the earlier hand-casing below — architecture *names*
+> like `Behavioral`/`T_Structure` still read Pascal-case in this doc for
+> readability, but in source they are lowercase (VHDL is case-insensitive, so
+> instantiations still bind). Don't hand-fight the formatter; run it. The
+> *semantic* conventions below (snake_case identifiers, port ordering, `s_*`/
+> `*_n`/`*_c` prefixes, active-low `n`-prefix) still hold — VSG doesn't touch
+> those. All sims re-verified green after the reformat.
 
 Cross-cutting cleanup. **Conventions chosen (2026-06-27):** lowercase
 `snake_case` for all identifiers; architecture `Behavioral` for the reference

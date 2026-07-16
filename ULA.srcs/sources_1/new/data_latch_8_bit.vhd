@@ -32,118 +32,121 @@
 -- is delay-free structural fan-out and is synthesis-clean.
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity data_latch_8_bit is
-    Port ( enable       : in  STD_LOGIC;                     -- active-low latch enable (= not datalatch): '0' transparent, '1' hold
-           data         : in  STD_LOGIC_VECTOR (7 downto 0); -- byte in (from display RAM)
-           data_out     : out STD_LOGIC_VECTOR (7 downto 0); -- latched byte, TRUE polarity -> attribute/colour path
-           data_out_n   : out STD_LOGIC_VECTOR (7 downto 0)  -- latched byte, ACTIVE-LOW -> shift8 data_n(7:0)
-           );
-end data_latch_8_bit;
+    port (
+        enable     : in    std_logic;                    -- active-low latch enable (= not datalatch): '0' transparent, '1' hold
+        data       : in    std_logic_vector(7 downto 0); -- byte in (from display RAM)
+        data_out   : out   std_logic_vector(7 downto 0); -- latched byte, TRUE polarity -> attribute/colour path
+        data_out_n : out   std_logic_vector(7 downto 0)  -- latched byte, ACTIVE-LOW -> shift8 data_n(7:0)
+    );
+end entity data_latch_8_bit;
 
-architecture Structural of data_latch_8_bit is
+architecture structural of data_latch_8_bit is
+
     -- per-bit taps from each latch cell: q_i (true) and q_bar_i (active-low)
-    signal q_0  : std_logic;
+    signal q_0     : std_logic;
     signal q_bar_0 : std_logic;
-    signal q_1  : std_logic;
+    signal q_1     : std_logic;
     signal q_bar_1 : std_logic;
-    signal q_2  : std_logic;
+    signal q_2     : std_logic;
     signal q_bar_2 : std_logic;
-    signal q_3  : std_logic;
+    signal q_3     : std_logic;
     signal q_bar_3 : std_logic;
-    signal q_4  : std_logic;
+    signal q_4     : std_logic;
     signal q_bar_4 : std_logic;
-    signal q_5  : std_logic;
+    signal q_5     : std_logic;
     signal q_bar_5 : std_logic;
-    signal q_6  : std_logic;
+    signal q_6     : std_logic;
     signal q_bar_6 : std_logic;
-    signal q_7  : std_logic;
+    signal q_7     : std_logic;
     signal q_bar_7 : std_logic;
 
 begin
+
     -- fan the eight cell taps out onto the two output buses
-    data_out(0)     <= q_0;
-    data_out_n(0)   <= q_bar_0;
-    data_out(1)     <= q_1;
-    data_out_n(1)   <= q_bar_1;
-    data_out(2)     <= q_2;
-    data_out_n(2)   <= q_bar_2;
-    data_out(3)     <= q_3;
-    data_out_n(3)   <= q_bar_3;
-    data_out(4)     <= q_4;
-    data_out_n(4)   <= q_bar_4;
-    data_out(5)     <= q_5;
-    data_out_n(5)   <= q_bar_5;
-    data_out(6)     <= q_6;
-    data_out_n(6)   <= q_bar_6;
-    data_out(7)     <= q_7;
-    data_out_n(7)   <= q_bar_7;
+    data_out(0)   <= q_0;
+    data_out_n(0) <= q_bar_0;
+    data_out(1)   <= q_1;
+    data_out_n(1) <= q_bar_1;
+    data_out(2)   <= q_2;
+    data_out_n(2) <= q_bar_2;
+    data_out(3)   <= q_3;
+    data_out_n(3) <= q_bar_3;
+    data_out(4)   <= q_4;
+    data_out_n(4) <= q_bar_4;
+    data_out(5)   <= q_5;
+    data_out_n(5) <= q_bar_5;
+    data_out(6)   <= q_6;
+    data_out_n(6) <= q_bar_6;
+    data_out(7)   <= q_7;
+    data_out_n(7) <= q_bar_7;
 
     -- eight latch bit-slices, all sharing the common active-low enable
-latch_0: entity work.data_latch_1_bit
-    port map (
-                e       => enable,
-                d       => data(0),
-                q       => q_0,
-                q_bar   => q_bar_0
-                );
+    latch_0 : entity work.data_latch_1_bit
+        port map (
+            e     => enable,
+            d     => data(0),
+            q     => q_0,
+            q_bar => q_bar_0
+        );
 
-latch_1: entity work.data_latch_1_bit
-    port map (
-                e       => enable,
-                d       => data(1),
-                q       => q_1,
-                q_bar   => q_bar_1
-                );
+    latch_1 : entity work.data_latch_1_bit
+        port map (
+            e     => enable,
+            d     => data(1),
+            q     => q_1,
+            q_bar => q_bar_1
+        );
 
-latch_2: entity work.data_latch_1_bit
-    port map (
-                e       => enable,
-                d       => data(2),
-                q       => q_2,
-                q_bar   => q_bar_2
-                );
+    latch_2 : entity work.data_latch_1_bit
+        port map (
+            e     => enable,
+            d     => data(2),
+            q     => q_2,
+            q_bar => q_bar_2
+        );
 
-latch_3: entity work.data_latch_1_bit
-    port map (
-                e       => enable,
-                d       => data(3),
-                q       => q_3,
-                q_bar   => q_bar_3
-                );
+    latch_3 : entity work.data_latch_1_bit
+        port map (
+            e     => enable,
+            d     => data(3),
+            q     => q_3,
+            q_bar => q_bar_3
+        );
 
-latch_4: entity work.data_latch_1_bit
-    port map (
-                e       => enable,
-                d       => data(4),
-                q       => q_4,
-                q_bar   => q_bar_4
-                );
+    latch_4 : entity work.data_latch_1_bit
+        port map (
+            e     => enable,
+            d     => data(4),
+            q     => q_4,
+            q_bar => q_bar_4
+        );
 
-latch_5: entity work.data_latch_1_bit
-    port map (
-                e       => enable,
-                d       => data(5),
-                q       => q_5,
-                q_bar   => q_bar_5
-                );
+    latch_5 : entity work.data_latch_1_bit
+        port map (
+            e     => enable,
+            d     => data(5),
+            q     => q_5,
+            q_bar => q_bar_5
+        );
 
-latch_6: entity work.data_latch_1_bit
-    port map (
-                e       => enable,
-                d       => data(6),
-                q       => q_6,
-                q_bar   => q_bar_6
-                );
+    latch_6 : entity work.data_latch_1_bit
+        port map (
+            e     => enable,
+            d     => data(6),
+            q     => q_6,
+            q_bar => q_bar_6
+        );
 
-latch_7: entity work.data_latch_1_bit
-    port map (
-                e       => enable,
-                d       => data(7),
-                q       => q_7,
-                q_bar   => q_bar_7
-                );
+    latch_7 : entity work.data_latch_1_bit
+        port map (
+            e     => enable,
+            d     => data(7),
+            q     => q_7,
+            q_bar => q_bar_7
+        );
 
-end Structural;
+end architecture structural;

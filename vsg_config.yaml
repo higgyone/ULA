@@ -1,0 +1,70 @@
+# VHDL Style Guide (VSG) configuration for the ULA project.
+#
+# The project has ADOPTED VSG's default style as the canonical formatter
+# (like black / gofmt): VSG owns whitespace, indentation, casing, alignment
+# and structural layout. Formatting is not hand-maintained and not argued
+# about in review -- run the formatter.
+#
+# The ONLY deliberate deviation from VSG defaults is indent size: the
+# project uses 4 spaces per level (VSG defaults to 2). indent_size /
+# indent_style live on every rule, so they are set once here via the
+# `global` rule config, which fans the value out to all rules. Keep
+# indent_style = spaces (the default) so it stays tab-key friendly via
+# .editorconfig; switch to smart_tabs only if the project moves to tabs.
+#
+# Run:   vsg -f <file.vhd> -c vsg_config.yaml          # check
+# Fix:   vsg -f <file.vhd> -c vsg_config.yaml --fix    # reformat in place
+#
+# The pre-commit hook (.pre-commit-config.yaml) runs this with --fix on
+# every commit, so committed VHDL is always VSG-clean.
+
+rule:
+  global:
+    indent_size: 4
+
+  # ---- Formatting is fully adopted; the rules below are the DELIBERATE
+  # opt-outs where VSG's default *semantic/structural* mandates conflict
+  # with this project's design choices. Everything else stays default. ----
+
+  # CRITICAL: signals carry initial values (`:= '0'`/`:= '1'`) on purpose.
+  # The cross-coupled NOR flip-flops / latches (d_ff_nor, data_latch_1_bit,
+  # single_bit_shift_register, ...) need Case-A seed values to start defined
+  # and avoid a t=0 delta-cycle hang in GHDL/xsim. Removing them would break
+  # every gate-level simulation. Do NOT enable this rule.
+  signal_007:
+    disable: true
+
+  # Same rationale for variables: testbench golden-model / helper variables
+  # rely on their initial values.
+  variable_007:
+    disable: true
+
+  # Ports intentionally may carry (or deliberately omit) defaults per the
+  # gate-accurate design; don't let VSG strip them.
+  port_012:
+    disable: true
+
+  # The design uses DIRECT ENTITY INSTANTIATION. instantiation_034 wants
+  # component instantiation (can't select an architecture without a separate
+  # configuration); instantiation_036 wants an explicit architecture
+  # identifier on every instance (the design omits it where a unit has a
+  # single architecture, and names it, e.g. (T_Structure), only where it
+  # matters). Both fight the chosen style, so both are disabled.
+  instantiation_034:
+    disable: true
+  instantiation_036:
+    disable: true
+
+  # Process labels are optional here. Enabling process_016/018 would demand a
+  # label on every (mostly testbench) process -- a manual change with no
+  # functional value for this project. Left off; revisit if desired.
+  process_016:
+    disable: true
+  process_018:
+    disable: true
+
+  # `architecture Reference` (bit3_counter) collides with a VHDL-AMS reserved
+  # word. Harmless in plain VHDL-2008 (also just a -Wreserved-word note in
+  # GHDL). Kept for readability rather than renamed.
+  reserved_001:
+    disable: true

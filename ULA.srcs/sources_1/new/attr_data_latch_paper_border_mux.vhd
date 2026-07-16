@@ -52,67 +52,67 @@
 -- ungated ink line is a don't-care off-screen.
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity attr_data_latch_paper_border_mux is
-    Port (
-        attr_data       : in  STD_LOGIC_VECTOR (7 downto 0); -- attribute byte from display RAM
-        attr_latch_n    : in  STD_LOGIC;                     -- active-low latch enable: '0' transparent, '1' hold
-        border_colour   : in  STD_LOGIC_VECTOR (2 downto 0); -- border reg (port 0xFE); b0-Blue, b1-Red, b2-Green
-        vid_en          : in  STD_LOGIC;                     -- '1' display area (paper), '0' border region
-        ink             : out STD_LOGIC_VECTOR (2 downto 0); -- foreground colour; b0-Blue, b1-Red, b2-Green
-        paper_border    : out STD_LOGIC_VECTOR (2 downto 0); -- background: paper (display) or border (off-screen)
-        al6_hl          : out STD_LOGIC;                     -- BRIGHT (attr bit 6), gated by vid_en
-        al7_fl          : out STD_LOGIC                      -- FLASH  (attr bit 7), gated by vid_en
-           );
-end attr_data_latch_paper_border_mux;
+    port (
+        attr_data     : in    std_logic_vector(7 downto 0); -- attribute byte from display RAM
+        attr_latch_n  : in    std_logic;                    -- active-low latch enable: '0' transparent, '1' hold
+        border_colour : in    std_logic_vector(2 downto 0); -- border reg (port 0xFE); b0-Blue, b1-Red, b2-Green
+        vid_en        : in    std_logic;                    -- '1' display area (paper), '0' border region
+        ink           : out   std_logic_vector(2 downto 0); -- foreground colour; b0-Blue, b1-Red, b2-Green
+        paper_border  : out   std_logic_vector(2 downto 0); -- background: paper (display) or border (off-screen)
+        al6_hl        : out   std_logic;                    -- BRIGHT (attr bit 6), gated by vid_en
+        al7_fl        : out   std_logic                     -- FLASH  (attr bit 7), gated by vid_en
+    );
+end entity attr_data_latch_paper_border_mux;
 
-architecture Structural of attr_data_latch_paper_border_mux is
-    signal data_latch_out : STD_LOGIC_VECTOR (7 downto 0);   -- latched attribute byte
+architecture structural of attr_data_latch_paper_border_mux is
 
-    signal vid_en_n       : STD_LOGIC;                       -- shared inverter: not vid_en
+    signal data_latch_out : std_logic_vector(7 downto 0); -- latched attribute byte
+
+    signal vid_en_n : std_logic; -- shared inverter: not vid_en
 
     -- per-colour-bit mux intermediates (a/c/e = border legs, b/d/f = paper legs)
-    signal a_o          : STD_LOGIC;
-    signal b_o          : STD_LOGIC;
-    signal c_o          : STD_LOGIC;
-    signal d_o          : STD_LOGIC;
-    signal e_o          : STD_LOGIC;
-    signal f_o          : STD_LOGIC;
+    signal a_o : std_logic;
+    signal b_o : std_logic;
+    signal c_o : std_logic;
+    signal d_o : std_logic;
+    signal e_o : std_logic;
+    signal f_o : std_logic;
 
 begin
 
-        -- single shared inverter for the video-enable select line
-        vid_en_n <= not vid_en;
+    -- single shared inverter for the video-enable select line
+    vid_en_n <= not vid_en;
 
-        -- INK: foreground colour straight from the latched attribute byte
-        ink <= data_latch_out(2 downto 0);
+    -- INK: foreground colour straight from the latched attribute byte
+    ink <= data_latch_out(2 downto 0);
 
-        -- PAPER/BORDER 2:1 mux per colour bit:
-        --   border leg live when vid_en='0', paper leg live when vid_en='1'
-        a_o <= not(border_colour(0) or vid_en);       -- Blue  border
-        b_o <= not(data_latch_out(3) or vid_en_n);    -- Blue  paper
-        c_o <= not(border_colour(1) or vid_en);       -- Red   border
-        d_o <= not(data_latch_out(4) or vid_en_n);    -- Red   paper
-        e_o <= not(border_colour(2) or vid_en);       -- Green border
-        f_o <= not(data_latch_out(5) or vid_en_n);    -- Green paper
+    -- PAPER/BORDER 2:1 mux per colour bit:
+    --   border leg live when vid_en='0', paper leg live when vid_en='1'
+    a_o <= not(border_colour(0) or vid_en);    -- Blue  border
+    b_o <= not(data_latch_out(3) or vid_en_n); -- Blue  paper
+    c_o <= not(border_colour(1) or vid_en);    -- Red   border
+    d_o <= not(data_latch_out(4) or vid_en_n); -- Red   paper
+    e_o <= not(border_colour(2) or vid_en);    -- Green border
+    f_o <= not(data_latch_out(5) or vid_en_n); -- Green paper
 
-        paper_border(0) <= not(a_o or b_o);           -- Blue  out
-        paper_border(1) <= not(c_o or d_o);           -- Red   out
-        paper_border(2) <= not(e_o or f_o);           -- Green out
+    paper_border(0) <= not(a_o or b_o); -- Blue  out
+    paper_border(1) <= not(c_o or d_o); -- Red   out
+    paper_border(2) <= not(e_o or f_o); -- Green out
 
-        -- BRIGHT / FLASH: pass the attribute bit only in the display area
-        al6_hl  <= not(not(data_latch_out(6)) or vid_en_n);
-        al7_fl  <= not(not(data_latch_out(7)) or vid_en_n);
+    -- BRIGHT / FLASH: pass the attribute bit only in the display area
+    al6_hl <= not(not(data_latch_out(6)) or vid_en_n);
+    al7_fl <= not(not(data_latch_out(7)) or vid_en_n);
 
+    data_latch_8 : entity work.data_latch_8_bit
+        port map (
+            enable     => attr_latch_n,
+            data       => attr_data,
+            data_out   => data_latch_out,
+            data_out_n => open
+        );
 
-data_latch_8: entity work.data_latch_8_bit
-    port map (
-                enable      => attr_latch_n,
-                data        => attr_data,
-                data_out    => data_latch_out,
-                data_out_n  => open
-                );
-
-end Structural;
+end architecture structural;

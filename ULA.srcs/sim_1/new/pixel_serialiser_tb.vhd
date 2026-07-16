@@ -31,86 +31,99 @@
 --   Any mismatch is a fatal error; a clean run prints "ALL TESTS PASSED".
 ----------------------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity pixel_serialiser_tb is
 --  Port ( );
-end pixel_serialiser_tb;
+end entity pixel_serialiser_tb;
 
-architecture Behavioral of pixel_serialiser_tb is
-    constant T      : time := 20 ns;   -- clk period
-    constant SETTLE : time := 6 ns;    -- > worst-case gate settle after an edge
+architecture behavioral of pixel_serialiser_tb is
+
+    constant t      : time := 20 ns; -- clk period
+    constant settle : time := 6 ns;  -- > worst-case gate settle after an edge
 
     -- Two test patterns. Each is shifted out of serial_data MSB-first (bit7..bit0).
-    constant BYTE1 : std_logic_vector(7 downto 0) := "10110100";  -- 0xB4
-    constant BYTE2 : std_logic_vector(7 downto 0) := "00101101";  -- 0x2D
+    constant byte1 : std_logic_vector(7 downto 0) := "10110100"; -- 0xB4
+    constant byte2 : std_logic_vector(7 downto 0) := "00101101"; -- 0x2D
 
-    signal clk          : std_logic := '0';
-    signal SLoad        : std_logic := '1';                              -- start in LOAD mode
-    signal data_latch_n : std_logic := '0';                             -- active-low: start transparent
+    signal clk          : std_logic                    := '0';
+    signal sload        : std_logic                    := '1'; -- start in LOAD mode
+    signal data_latch_n : std_logic                    := '0'; -- active-low: start transparent
     signal data         : std_logic_vector(7 downto 0) := (others => '0');
     signal serial_data  : std_logic;
 
     -- Check serial_data after the falling edge / stimulus just settled.
-    procedure check(signal sv : in std_logic;
-                    expected  : in std_logic;
-                    msg       : in string) is
+
+    procedure check (
+        signal sv : in std_logic;
+        expected  : in std_logic;
+        msg       : in string
+    ) is
     begin
+
         assert sv = expected
             report "FAIL: " & msg & " - expected serial_data=" & std_logic'image(expected)
-                 & " got " & std_logic'image(sv)
+                   & " got " & std_logic'image(sv)
             severity failure;
-        report "PASS: " & msg severity note;
-    end procedure;
+        report "PASS: " & msg
+            severity note;
+
+    end procedure check;
 
 begin
 
-    dut: entity work.pixel_serialiser(Structural)
+    dut : entity work.pixel_serialiser(Structural)
         port map (
             clk          => clk,
-            SLoad        => SLoad,
+            sload        => sload,
             data_latch_n => data_latch_n,
             data         => data,
             serial_data  => serial_data
         );
 
-    --*****************************************************************
+    -- *****************************************************************
     -- clock: free-running, falling edge is the active (commit) edge
-    --*****************************************************************
-    process
+    -- *****************************************************************
+    process is
     begin
+
         clk <= '0';
-        wait for T / 2;
+        wait for t / 2;
         clk <= '1';
-        wait for T / 2;
+        wait for t / 2;
+
     end process;
 
-    --*****************************************************************
+    -- *****************************************************************
     -- stimulus + self-check
-    --*****************************************************************
-    process
+    -- *****************************************************************
+    process is
     begin
+
         --------------------------------------------------------------
         -- BYTE1: transparent latch path. Latch stays open (data_latch_n
         -- ='0'), so the byte flows straight through to the shift reg's
         -- load inputs; LOAD it, then shift the 8 bits out MSB-first.
         --------------------------------------------------------------
-        data         <= BYTE1;
-        data_latch_n <= '0';               -- transparent: latch follows data
-        SLoad        <= '1';               -- load mode
-        wait for SETTLE;                   -- let the latch pass the byte through
+        data         <= byte1;
+        data_latch_n <= '0';                                                         -- transparent: latch follows data
+        sload        <= '1';                                                         -- load mode
+        wait for settle;                                                             -- let the latch pass the byte through
 
-        wait until falling_edge(clk);      -- LOAD edge: shift reg grabs BYTE1
-        wait for SETTLE;
+        wait until falling_edge(clk);                                                -- LOAD edge: shift reg grabs BYTE1
+        wait for settle;
         check(serial_data, BYTE1(7), "BYTE1 load: serial_data = bit7 (MSB)");
 
-        SLoad <= '0';                      -- switch to SHIFT for every following edge
+        sload <= '0';                                                                -- switch to SHIFT for every following edge
+
         for i in 6 downto 0 loop
+
             wait until falling_edge(clk);
-            wait for SETTLE;
+            wait for settle;
             check(serial_data, BYTE1(i),
                   "BYTE1 shift: serial_data = bit" & integer'image(i));
+
         end loop;
 
         --------------------------------------------------------------
@@ -119,30 +132,35 @@ begin
         -- garbage. The LOAD edge must still load BYTE2 (the held value),
         -- proving the latch isolates the shift reg from the live input.
         --------------------------------------------------------------
-        data         <= BYTE2;
-        data_latch_n <= '0';               -- transparent: capture BYTE2
-        wait for SETTLE;
+        data         <= byte2;
+        data_latch_n <= '0';                                                         -- transparent: capture BYTE2
+        wait for settle;
 
-        data_latch_n <= '1';               -- hold BYTE2 in the latch
-        wait for SETTLE;
-        data         <= x"FF";             -- garbage under the held latch (must be ignored)
-        wait for SETTLE;
+        data_latch_n <= '1';                                                         -- hold BYTE2 in the latch
+        wait for settle;
+        data         <= x"FF";                                                       -- garbage under the held latch (must be ignored)
+        wait for settle;
 
-        SLoad <= '1';                      -- load mode
-        wait until falling_edge(clk);      -- LOAD edge: must grab the HELD BYTE2, not 0xFF
-        wait for SETTLE;
+        sload <= '1';                                                                -- load mode
+        wait until falling_edge(clk);                                                -- LOAD edge: must grab the HELD BYTE2, not 0xFF
+        wait for settle;
         check(serial_data, BYTE2(7), "BYTE2 load (held): serial_data = bit7 (MSB)");
 
-        SLoad <= '0';
+        sload <= '0';
+
         for i in 6 downto 0 loop
+
             wait until falling_edge(clk);
-            wait for SETTLE;
+            wait for settle;
             check(serial_data, BYTE2(i),
                   "BYTE2 shift: serial_data = bit" & integer'image(i));
+
         end loop;
 
-        report "ALL TESTS PASSED" severity note;
+        report "ALL TESTS PASSED"
+            severity note;
         wait;
+
     end process;
 
-end Behavioral;
+end architecture behavioral;

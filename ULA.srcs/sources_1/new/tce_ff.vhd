@@ -23,32 +23,41 @@
 --     X     no edge   |  q         qbar         (hold)
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity tce_ff is
-    Port ( clk    : in  STD_LOGIC;
-           enable : in  STD_LOGIC;
-           q      : out STD_LOGIC;
-           qbar   : out STD_LOGIC;
-           carry  : out STD_LOGIC);
-end tce_ff;
+    port (
+        clk    : in    std_logic;
+        enable : in    std_logic;
+        q      : out   std_logic;
+        qbar   : out   std_logic;
+        carry  : out   std_logic
+    );
+end entity tce_ff;
 
-architecture Behavioral of tce_ff is
+architecture behavioral of tce_ff is
+
     signal d_in     : std_logic;
     signal q_int    : std_logic;
     signal qbar_int : std_logic;
+
 begin
+
     -- Enable mux: toggle when enabled, hold otherwise.
-    d_in <= qbar_int when enable = '1' else q_int;
+    d_in <= qbar_int when enable = '1' else
+            q_int;
 
     ff : entity work.d_ff_nor(Behavioral)
-        port map ( clk  => clk,
-                   d    => d_in,
-                   q    => q_int,
-                   qbar => qbar_int );
+        port map (
+            clk  => clk,
+            d    => d_in,
+            q    => q_int,
+            qbar => qbar_int
+        );
 
     q     <= q_int;
     qbar  <= qbar_int;
-    carry <= not ((not enable) or qbar_int);   -- = enable and q : stage carry-out
-end Behavioral;
+    carry <= not ((not enable) or qbar_int); -- = enable and q : stage carry-out
+
+end architecture behavioral;

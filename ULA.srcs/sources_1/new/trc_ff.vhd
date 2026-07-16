@@ -23,32 +23,41 @@
 --     X    no edge   |  q         qbar
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity trc_ff is
-    Port ( clk   : in  STD_LOGIC;
-           reset : in  STD_LOGIC;
-           q     : out STD_LOGIC;
-           qbar  : out STD_LOGIC;
-           carry : out STD_LOGIC);
-end trc_ff;
+    port (
+        clk   : in    std_logic;
+        reset : in    std_logic;
+        q     : out   std_logic;
+        qbar  : out   std_logic;
+        carry : out   std_logic
+    );
+end entity trc_ff;
 
-architecture Behavioral of trc_ff is
+architecture behavioral of trc_ff is
+
     signal d_in     : std_logic;
     signal q_int    : std_logic;
     signal qbar_int : std_logic;
+
 begin
+
     -- T with sync reset: d = '0' on reset; otherwise d = qbar (toggle).
-    d_in <= '0' when reset = '1' else qbar_int;
+    d_in <= '0' when reset = '1' else
+            qbar_int;
 
     ff : entity work.d_ff_nor(Behavioral)
-        port map ( clk  => clk,
-                   d    => d_in,
-                   q    => q_int,
-                   qbar => qbar_int );
+        port map (
+            clk  => clk,
+            d    => d_in,
+            q    => q_int,
+            qbar => qbar_int
+        );
 
     q     <= q_int;
     qbar  <= qbar_int;
-    carry <= q_int;   -- enable hardwired '1', so carry-out = q
-end Behavioral;
+    carry <= q_int; -- enable hardwired '1', so carry-out = q
+
+end architecture behavioral;

@@ -34,48 +34,48 @@
 -- the original ULA layout; it is not a uniform ripple counter.)
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
-
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity master_horiz_counter is
-port(
-      clk7         : in     std_logic;          -- master clock
-      reset        : in     std_logic;
-      tclk_a       : in     std_logic := '0';   -- always assumed to be '0'
-      c0           : out    std_logic;
-      c1           : out    std_logic;
-      c2           : out    std_logic;
-      c3           : out    std_logic;
-      c4           : out    std_logic;
-      c5           : out    std_logic;
-      c6           : out    std_logic;
-      c7           : out    std_logic;
-      c8           : out    std_logic;
-      clk_hc6      : out    std_logic;            -- clock for 3 bit counter, same as c5
-      hc_rst       : out    std_logic             -- horizontal counter reset
-   );
-end master_horiz_counter;
+    port (
+        clk7    : in    std_logic;        -- master clock
+        reset   : in    std_logic;
+        tclk_a  : in    std_logic := '0'; -- always assumed to be '0'
+        c0      : out   std_logic;
+        c1      : out   std_logic;
+        c2      : out   std_logic;
+        c3      : out   std_logic;
+        c4      : out   std_logic;
+        c5      : out   std_logic;
+        c6      : out   std_logic;
+        c7      : out   std_logic;
+        c8      : out   std_logic;
+        clk_hc6 : out   std_logic;        -- clock for 3 bit counter, same as c5
+        hc_rst  : out   std_logic         -- horizontal counter reset
+    );
+end entity master_horiz_counter;
 
-architecture Behavioral of master_horiz_counter is
+architecture behavioral of master_horiz_counter is
 
-    signal c0_n : std_logic;
-    signal c1_n : std_logic;
-    signal c2_n : std_logic;
-    signal c3_n : std_logic;
-    signal c4_n : std_logic;
-    signal c5_n : std_logic;
+    signal c0_n   : std_logic;
+    signal c1_n   : std_logic;
+    signal c2_n   : std_logic;
+    signal c3_n   : std_logic;
+    signal c4_n   : std_logic;
+    signal c5_n   : std_logic;
     signal clk_c0 : std_logic;
     signal clk_c1 : std_logic;
     signal clk_c2 : std_logic;
     signal clk_c3 : std_logic;
     signal clk_c4 : std_logic;
     signal clk_c5 : std_logic;
-    
-    signal clk8_6 : std_logic_vector (2 downto 0);
+
+    signal clk8_6   : std_logic_vector(2 downto 0);
     signal s_clkhc6 : std_logic;
 
 begin
+
     --------------------------------------------------------------
     -- NOR-gated clock chain for C0..C5 (see header for derivation)
     --------------------------------------------------------------
@@ -96,68 +96,68 @@ begin
     c7 <= clk8_6(1);
     c8 <= clk8_6(2);
 
---******************************************************************
---  Counter cell instances (C0..C5 = clk_div_2; C6..C8 = bit3_counter)
---******************************************************************
-count_0: entity work.clk_div_2
-  port map(
-     clk_in  => clk_c0,
-     reset => reset,
-     clk_out => c0,
-     clk_out_n => c0_n
-     );
-     
-count_1: entity work.clk_div_2
-  port map(
-     clk_in => clk_c1,
-     reset => reset,
-     clk_out => c1,
-     clk_out_n => c1_n
-     );
+    -- ******************************************************************
+    --  Counter cell instances (C0..C5 = clk_div_2; C6..C8 = bit3_counter)
+    -- ******************************************************************
+    count_0 : entity work.clk_div_2
+        port map (
+            clk_in    => clk_c0,
+            reset     => reset,
+            clk_out   => c0,
+            clk_out_n => c0_n
+        );
 
-count_2: entity work.clk_div_2
-  port map(
-     clk_in => clk_c2,
-     reset => reset,
-     clk_out => c2,
-     clk_out_n => c2_n
-     );
+    count_1 : entity work.clk_div_2
+        port map (
+            clk_in    => clk_c1,
+            reset     => reset,
+            clk_out   => c1,
+            clk_out_n => c1_n
+        );
 
-count_3: entity work.clk_div_2
-  port map(
-     clk_in => clk_c3,
-     reset => reset,
-     clk_out => c3,
-     clk_out_n => c3_n
-     );
-     
-count_4: entity work.clk_div_2
-  port map(
-     clk_in => clk_c4,
-     reset => reset,
-     clk_out => c4,
-     clk_out_n => c4_n
-     );
+    count_2 : entity work.clk_div_2
+        port map (
+            clk_in    => clk_c2,
+            reset     => reset,
+            clk_out   => c2,
+            clk_out_n => c2_n
+        );
 
-count_5: entity work.clk_div_2
-  port map(
-     clk_in => clk_c5,
-     reset => reset,
-     clk_out => c5,
-     clk_out_n => c5_n
-     );     
-     
--- C6..C8 use the schematic-faithful T_Structure architecture (chained
--- trc_ff/trce_ff with a rippling carry), verified modulo-7 equivalent to
--- the Structural/Reference archs at every clock boundary. Its outputs
--- ripple-glitch between states (gate-delayed, like the real ULA); these
--- settle well before they are sampled downstream.
-b3c: entity work.bit3_counter(T_Structure)
-port map(
-      clk => s_clkhc6,
-      reset => reset,
-      output => clk8_6,
-      overflow => hc_rst
-   );
-     
-end Behavioral;
+    count_3 : entity work.clk_div_2
+        port map (
+            clk_in    => clk_c3,
+            reset     => reset,
+            clk_out   => c3,
+            clk_out_n => c3_n
+        );
+
+    count_4 : entity work.clk_div_2
+        port map (
+            clk_in    => clk_c4,
+            reset     => reset,
+            clk_out   => c4,
+            clk_out_n => c4_n
+        );
+
+    count_5 : entity work.clk_div_2
+        port map (
+            clk_in    => clk_c5,
+            reset     => reset,
+            clk_out   => c5,
+            clk_out_n => c5_n
+        );
+
+    -- C6..C8 use the schematic-faithful T_Structure architecture (chained
+    -- trc_ff/trce_ff with a rippling carry), verified modulo-7 equivalent to
+    -- the Structural/Reference archs at every clock boundary. Its outputs
+    -- ripple-glitch between states (gate-delayed, like the real ULA); these
+    -- settle well before they are sampled downstream.
+    b3c : entity work.bit3_counter(T_Structure)
+        port map (
+            clk      => s_clkhc6,
+            reset    => reset,
+            output   => clk8_6,
+            overflow => hc_rst
+        );
+
+end architecture behavioral;

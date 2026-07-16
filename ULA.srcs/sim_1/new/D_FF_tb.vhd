@@ -1,100 +1,104 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
+-- Company:
+-- Engineer:
+--
 -- Create Date: 29.06.2020 09:55:58
--- Design Name: 
+-- Design Name:
 -- Module Name: D_FF_tb - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 
--- 
--- Dependencies: 
--- 
+-- Project Name:
+-- Target Devices:
+-- Tool Versions:
+-- Description:
+--
+-- Dependencies:
+--
 -- Revision:
 -- Revision 0.01 - File Created
 -- Additional Comments:
--- 
+--
 ----------------------------------------------------------------------------------
 
-
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
+-- use IEEE.NUMERIC_STD.ALL;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
+-- library UNISIM;
+-- use UNISIM.VComponents.all;
 
-entity D_FF_tb is
+entity d_ff_tb is
 --  Port ( );
-end D_FF_tb;
+end entity d_ff_tb;
 
-architecture Behavioral of D_FF_tb is
-    constant T  : time    := 10 ns; -- clk period
-    signal clk  : std_logic;
-    signal d    : std_logic :='0';
-    signal q    : std_logic;
-    signal q_bar : std_logic;
+architecture behavioral of d_ff_tb is
+
+    constant t     : time      := 10 ns; -- clk period
+    signal   clk   : std_logic;
+    signal   d     : std_logic := '0';
+    signal   q     : std_logic;
+    signal   q_bar : std_logic;
+
 begin
-    dFlipFlop: entity work.d_ff(Behavioral)
-        port map(
-            clk => clk,
-            d => d,
-            q => q,
-            q_bar => q_bar
-            );
 
-   --*****************************************************************
-   -- clock
-   --*****************************************************************
-   -- 20 ns clock running forever
-   process
-   begin
-      clk <= '0';
-      wait for T / 2;
-      clk <= '1';
-      wait for T / 2;
-   end process;
-    
+    dflipflop : entity work.d_ff(Behavioral)
+        port map (
+            clk   => clk,
+            d     => d,
+            q     => q,
+            q_bar => q_bar
+        );
+
+    -- *****************************************************************
+    -- clock
+    -- *****************************************************************
+    -- 20 ns clock running forever
+    process is
+    begin
+
+        clk <= '0';
+        wait for t / 2;
+        clk <= '1';
+        wait for t / 2;
+
+    end process;
+
     -- Tie d to q_bar so the FF toggles on every falling edge.
     -- Concurrent assignment, so d tracks q_bar every time it changes
     -- (not a one-shot sample at t=0 where q_bar is still 'U').
 
     d <= q_bar;
-   --process 
---   begin 
+-- process
+--   begin
 ----        d <= '1';
 ----        wait for 50ns;
-        
+
 ----        wait for 100ns;
 --        if rising_edge(clk) then
 --            d <= q_bar;
 --        end if;
 --    end process;
-    --wait for 100ns;
-    --d <= qb_out;
+-- wait for 100ns;
+-- d <= qb_out;
 --   d <= '1';
 --   wait for 50ns;
 --   qb_out <= q_bar;
 --   d <= qb_out;
-       --d <= q_bar;
-       --wait for 50ns;
+-- d <= q_bar;
+-- wait for 50ns;
 --       d <= '1';
 --       wait for 50ns;
-       
+
 --      d <= '0';
 --      wait for 50ns;
 --      d <= '1';
 --       wait for 50ns;
-       
+
 --      d <= '0';
 --      wait for 50ns;
 --      d <= q_bar;
 
-end Behavioral;
+end architecture behavioral;

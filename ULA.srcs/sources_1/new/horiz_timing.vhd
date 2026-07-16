@@ -55,78 +55,100 @@
 --   sync counter reset      447..  C[8:0] = 110 111 111
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
 
 entity horiz_timing is
-    Port (
-        clk      : in  std_logic;
-        reset    : in  std_logic;
-        hsync_5c : out std_logic;
-        hsync_6c : out std_logic;
-        nHblank  : out std_logic;
-        c8       : out std_logic;   -- H-counter MSB (HIGH for pixels 256..447); exposed so video_sync can gate the horizontal border
-        clk_hc6  : out std_logic;
-        hc_rst   : out std_logic
+    port (
+        clk      : in    std_logic;
+        reset    : in    std_logic;
+        hsync_5c : out   std_logic;
+        hsync_6c : out   std_logic;
+        nhblank  : out   std_logic;
+        c8       : out   std_logic;   -- H-counter MSB (HIGH for pixels 256..447); exposed so video_sync can gate the horizontal border
+        clk_hc6  : out   std_logic;
+        hc_rst   : out   std_logic
     );
-end horiz_timing;
+end entity horiz_timing;
 
-architecture Behavioral of horiz_timing is
-    signal c0, c1, c2, c3, c4, c5, c6, c7 : std_logic;
+architecture behavioral of horiz_timing is
+
+    signal c0        : std_logic;
+    signal c1        : std_logic;
+    signal c2        : std_logic;
+    signal c3        : std_logic;
+    signal c4        : std_logic;
+    signal c5        : std_logic;
+    signal c6        : std_logic;
+    signal c7        : std_logic;
     signal s_c8      : std_logic;   -- H-counter MSB; backs the c8 output port (cf. s_clk_hc6 / s_hc_rst)
     signal s_clk_hc6 : std_logic;
     signal s_hc_rst  : std_logic;
 
-    signal blank1, blank2                          : std_logic;
-    signal nHSyncA_5c, nHSyncB_5c, nHSyncPulses_5c : std_logic;
-    signal X, nHSyncA_6c, nHSyncB_6c, nHSyncPulses_6c : std_logic;
-    signal nHSyncSelect                            : std_logic;
+    signal blank1, blank2  : std_logic;
+    signal nhsynca_5c      : std_logic;
+    signal nhsyncb_5c      : std_logic;
+    signal nhsyncpulses_5c : std_logic;
+    signal x               : std_logic;
+    signal nhsynca_6c      : std_logic;
+    signal nhsyncb_6c      : std_logic;
+    signal nhsyncpulses_6c : std_logic;
+    signal nhsyncselect    : std_logic;
+
 begin
-    mhc: entity work.master_horiz_counter(Behavioral)
-        port map(
+
+    mhc : entity work.master_horiz_counter(Behavioral)
+        port map (
             clk7    => clk,
             reset   => reset,
             tclk_a  => '0',
-            c0 => c0, c1 => c1, c2 => c2, c3 => c3, c4 => c4,
-            c5 => c5, c6 => c6, c7 => c7, c8 => s_c8,
+            c0      => c0,
+            c1      => c1,
+            c2      => c2,
+            c3      => c3,
+            c4      => c4,
+            c5      => c5,
+            c6      => c6,
+            c7      => c7,
+            c8      => s_c8,
             clk_hc6 => s_clk_hc6,
             hc_rst  => s_hc_rst
         );
 
     clk_hc6 <= s_clk_hc6;
     hc_rst  <= s_hc_rst;
-    c8      <= s_c8;    -- expose the H-counter MSB for the border decode in video_sync
+    c8      <= s_c8; -- expose the H-counter MSB for the border decode in video_sync
 
     --------------------------------------------------------------
     -- Horizontal blanking — LOW during pixels 320..415
     --------------------------------------------------------------
     -- Start of blanking: C8=1, C7=0, C6=1 -> pixel 320
-    blank1  <= not((not s_c8) or c7 or (not c6));
+    blank1 <= not((not s_c8) or c7 or (not c6));
     -- End of blanking:   C8=1, C7=1, C5=0 -> through pixel 415
     blank2  <= not((not s_c8) or (not c7) or c5);
-    nHblank <= not(blank1 or blank2);
+    nhblank <= not(blank1 or blank2);
 
     --------------------------------------------------------------
     -- hsync 5c — pulse pixels 336..367
     --------------------------------------------------------------
-    nHSyncA_5c      <= not(c5 or c4);                 -- front porch
-    nHSyncB_5c      <= not((not c5) or (not c4));     -- back porch
-    nHSyncPulses_5c <= nHSyncA_5c or nHSyncB_5c;
+    nhsynca_5c      <= not(c5 or c4);             -- front porch
+    nhsyncb_5c      <= not((not c5) or (not c4)); -- back porch
+    nhsyncpulses_5c <= nhsynca_5c or nhsyncb_5c;
 
     --------------------------------------------------------------
     -- hsync 6c — pulse pixels 344..375 (delayed by 1/2 c3)
     -- X = NOR((not c4),(not c3)) = c4 AND c3
     --------------------------------------------------------------
-    X               <= not((not c4) or (not c3));
-    nHSyncA_6c      <= not(c5 or X);
-    nHSyncB_6c      <= not((not c5) or (not X));
-    nHSyncPulses_6c <= nHSyncA_6c or nHSyncB_6c;
+    x               <= not((not c4) or (not c3));
+    nhsynca_6c      <= not(c5 or x);
+    nhsyncb_6c      <= not((not c5) or (not x));
+    nhsyncpulses_6c <= nhsynca_6c or nhsyncb_6c;
 
     --------------------------------------------------------------
     -- Sync select — HIGH (= no pulse) outside the blanking window
     --------------------------------------------------------------
-    nHSyncSelect <= (not s_c8) or c7 or (not c6);
+    nhsyncselect <= (not s_c8) or c7 or (not c6);
 
     -- Book pg 90: hsync = NOR(nc6, c7, nc8, nhsyncpulses) = not(nHSyncSelect or
     -- nHSyncPulses). hsync is therefore active-HIGH (1 during the sync pulse),
@@ -134,6 +156,7 @@ begin
     -- in video_sync comes out as a correct active-LOW csync (LOW during any
     -- sync). Previously this was a bare OR (active-LOW hsync), which fed the
     -- wrong polarity into the composite NOR and inverted/suppressed it.
-    hsync_5c <= not(nHSyncSelect or nHSyncPulses_5c);
-    hsync_6c <= not(nHSyncSelect or nHSyncPulses_6c);
-end Behavioral;
+    hsync_5c <= not(nhsyncselect or nhsyncpulses_5c);
+    hsync_6c <= not(nhsyncselect or nhsyncpulses_6c);
+
+end architecture behavioral;

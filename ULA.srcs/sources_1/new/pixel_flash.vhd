@@ -44,36 +44,38 @@
 --   the V-counter flash_clk sense matches this when it is wired up.
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity pixel_flash is
-    Port (
-        fl              : in  STD_LOGIC;   -- flash enable (attr7 AND vid_en = al7_fl)
-        flash_clk       : in  STD_LOGIC;   -- slow flash toggle from the V counter
-        serial_data     : in  STD_LOGIC;   -- raw pixel select bit (from pixel_serialiser)
-        data_select_n   : out STD_LOGIC);  -- active-low ink/paper select: '0'=ink, '1'=paper
-end pixel_flash;
+    port (
+        fl            : in    std_logic; -- flash enable (attr7 AND vid_en = al7_fl)
+        flash_clk     : in    std_logic; -- slow flash toggle from the V counter
+        serial_data   : in    std_logic; -- raw pixel select bit (from pixel_serialiser)
+        data_select_n : out   std_logic  -- active-low ink/paper select: '0'=ink, '1'=paper
+    );
+end entity pixel_flash;
 
-architecture Structural of pixel_flash is
+architecture structural of pixel_flash is
 
-    signal a_o  : std_logic;   -- NOT fl
-    signal b_o  : std_logic;   -- flash-gate: fl AND NOT flash_clk
-    signal c_o  : std_logic;   -- XNOR internal
-    signal d_o  : std_logic;   -- XNOR internal
-    signal e_o  : std_logic;   -- XNOR internal
+    signal a_o : std_logic; -- NOT fl
+    signal b_o : std_logic; -- flash-gate: fl AND NOT flash_clk
+    signal c_o : std_logic; -- XNOR internal
+    signal d_o : std_logic; -- XNOR internal
+    signal e_o : std_logic; -- XNOR internal
 
-    constant TG : time := 1 ns;   -- modelled gate propagation delay (sim only)
+    constant tg : time := 1 ns; -- modelled gate propagation delay (sim only)
 
 begin
+
     -- flash-gate: assert b_o only when flashing AND in the swap half-period
-    a_o <= not(fl)              after TG;
-    b_o <= not(a_o or flash_clk) after TG; -- = fl AND NOT flash_clk
+    a_o <= not(fl)              after tg;
+    b_o <= not(a_o or flash_clk) after tg; -- = fl AND NOT flash_clk
 
     -- 4-NOR XNOR(b_o, serial_data): invert the pixel select when b_o='1'
-    c_o <= not(b_o or serial_data) after TG;
-    d_o <= not(b_o or c_o)      after TG;
-    e_o <= not(c_o or serial_data) after TG;
-    data_select_n <= not(d_o or e_o) after TG; -- = XNOR(b_o, serial_data)
+    c_o           <= not(b_o or serial_data) after tg;
+    d_o           <= not(b_o or c_o)      after tg;
+    e_o           <= not(c_o or serial_data) after tg;
+    data_select_n <= not(d_o or e_o) after tg; -- = XNOR(b_o, serial_data)
 
-end Structural;
+end architecture structural;
