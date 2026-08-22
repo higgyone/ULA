@@ -17,7 +17,7 @@
 -- Drive sequence (mirrors pixel_serialiser_tb, which signed off the front path):
 --   1. Present the attribute byte and capture it: input latch transparent
 --      (attr_data_latch_n='0') -> output latch transparent
---      (attr_output_latch='1') -> then hold the output latch (='0'). This
+--      (attr_output_latch_n='0') -> then hold the output latch (='1'). This
 --      freezes the cell's colours + fl/hl for all 8 pixels (double buffer).
 --   2. Capture the pixel byte in its latch, then LOAD the shift register
 --      (s_load='1', one falling clk edge): serial pixel = bit7 (MSB).
@@ -128,18 +128,18 @@ architecture behavioral of attr_output_latch_border_select_mux_tb is
         )
     );
 
-    signal clk_7              : std_logic                    := '0';
-    signal flash_clk          : std_logic                    := '0';
-    signal s_load             : std_logic                    := '0';
-    signal pixel_data_latch_n : std_logic                    := '1';
-    signal pixel_data         : std_logic_vector(7 downto 0) := (others => '0');
-    signal attr_data_latch_n  : std_logic                    := '1';
-    signal attr_data          : std_logic_vector(7 downto 0) := (others => '0');
-    signal border_colour_bgr  : std_logic_vector(2 downto 0) := (others => '0');
-    signal video_en           : std_logic                    := '0';
-    signal attr_output_latch  : std_logic                    := '0';
-    signal v_sync             : std_logic                    := '0';
-    signal h_blank_n          : std_logic                    := '1';
+    signal clk_7               : std_logic                    := '0';
+    signal flash_clk           : std_logic                    := '0';
+    signal s_load              : std_logic                    := '0';
+    signal pixel_data_latch_n  : std_logic                    := '1';
+    signal pixel_data          : std_logic_vector(7 downto 0) := (others => '0');
+    signal attr_data_latch_n   : std_logic                    := '1';
+    signal attr_data           : std_logic_vector(7 downto 0) := (others => '0');
+    signal border_colour_bgr   : std_logic_vector(2 downto 0) := (others => '0');
+    signal video_en            : std_logic                    := '0';
+    signal attr_output_latch_n : std_logic                    := '1';
+    signal v_sync              : std_logic                    := '0';
+    signal h_blank_n           : std_logic                    := '1';
 
     signal blue  : std_logic;
     signal green : std_logic;
@@ -213,23 +213,23 @@ begin
 
     dut : entity work.attr_output_latch_border_select_mux(structural)
         port map (
-            clk_7              => clk_7,
-            flash_clk          => flash_clk,
-            s_load             => s_load,
-            pixel_data_latch_n => pixel_data_latch_n,
-            pixel_data         => pixel_data,
-            attr_data_latch_n  => attr_data_latch_n,
-            attr_data          => attr_data,
-            border_colour_bgr  => border_colour_bgr,
-            video_en           => video_en,
-            attr_output_latch  => attr_output_latch,
-            v_sync             => v_sync,
-            h_blank_n          => h_blank_n,
-            blue               => blue,
-            green              => green,
-            red                => red,
-            hl                 => hl,
-            fl                 => fl
+            clk_7               => clk_7,
+            flash_clk           => flash_clk,
+            s_load              => s_load,
+            pixel_data_latch_n  => pixel_data_latch_n,
+            pixel_data          => pixel_data,
+            attr_data_latch_n   => attr_data_latch_n,
+            attr_data           => attr_data,
+            border_colour_bgr   => border_colour_bgr,
+            video_en            => video_en,
+            attr_output_latch_n => attr_output_latch_n,
+            v_sync              => v_sync,
+            h_blank_n           => h_blank_n,
+            blue                => blue,
+            green               => green,
+            red                 => red,
+            hl                  => hl,
+            fl                  => fl
         );
 
     -- free-running clock; falling edge is the active (commit) edge
@@ -259,14 +259,14 @@ begin
             ------------------------------------------------------------------
             -- 1) present + capture the attribute byte into the double buffer
             ------------------------------------------------------------------
-            attr_data         <= sc.attr;
-            border_colour_bgr <= sc.border;
-            video_en          <= sc.vid_en;
-            attr_data_latch_n <= '0';                                                                 -- input latch transparent
-            attr_output_latch <= '1';                                                                 -- output latch transparent
-            wait for 2 * settle;                                                                      -- let attr flow through both latches
-            attr_output_latch <= '0';                                                                 -- HOLD: freeze colours + hl/fl
-            attr_data_latch_n <= '1';                                                                 -- hold input latch too
+            attr_data           <= sc.attr;
+            border_colour_bgr   <= sc.border;
+            video_en            <= sc.vid_en;
+            attr_data_latch_n   <= '0';                                                                 -- input latch transparent
+            attr_output_latch_n <= '0';                                                                 -- output latch transparent
+            wait for 2 * settle;                                                                        -- let attr flow through both latches
+            attr_output_latch_n <= '1';                                                                 -- HOLD: freeze colours + hl/fl
+            attr_data_latch_n   <= '1';                                                                 -- hold input latch too
             wait for settle;
 
             -- live (unlatched) colour-mux context for this scenario
@@ -291,13 +291,13 @@ begin
             -- 2) capture the pixel byte, then LOAD the shift register
             ------------------------------------------------------------------
             pixel_data         <= sc.pixel;
-            pixel_data_latch_n <= '0';                                                                -- capture pixel byte
+            pixel_data_latch_n <= '0';                                                                  -- capture pixel byte
             wait for settle;
-            pixel_data_latch_n <= '1';                                                                -- hold it
+            pixel_data_latch_n <= '1';                                                                  -- hold it
             wait for settle;
 
-            s_load <= '1';                                                                            -- load mode
-            wait until falling_edge(clk_7);                                                           -- LOAD edge: serial = bit7 (MSB)
+            s_load <= '1';                                                                              -- load mode
+            wait until falling_edge(clk_7);                                                             -- LOAD edge: serial = bit7 (MSB)
             wait for settle;
 
             ------------------------------------------------------------------
@@ -315,7 +315,7 @@ begin
                 severity failure;
             checks := checks + 1;
 
-            s_load <= '0';                                                                            -- shift mode for the rest
+            s_load <= '0';                                                                              -- shift mode for the rest
 
             for i in 6 downto 0 loop
 

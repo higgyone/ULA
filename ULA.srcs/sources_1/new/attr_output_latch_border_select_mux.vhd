@@ -48,23 +48,23 @@ library ieee;
 
 entity attr_output_latch_border_select_mux is
     port (
-        clk_7              : in    std_logic;                    -- 7MHz clock
-        flash_clk          : in    std_logic;
-        s_load             : in    std_logic;                    -- serial pixel load
-        pixel_data_latch_n : in    std_logic;                    -- latch pixel data
-        pixel_data         : in    std_logic_vector(7 downto 0); -- pixel data
-        attr_data_latch_n  : in    std_logic;                    -- when to latch the attribute data
-        attr_data          : in    std_logic_vector(7 downto 0); -- D0-2 ink, D3-5 paper, D6 hl, D7 fl
-        border_colour_bgr  : in    std_logic_vector(2 downto 0); -- blue, green ed bits
-        video_en           : in    std_logic;                    -- enable video; dont display on blank
-        attr_output_latch  : in    std_logic;                    -- latch attr output data to rgb mux
-        v_sync             : in    std_logic;
-        h_blank_n          : in    std_logic;
-        blue               : out   std_logic;                    -- output blue bit
-        green              : out   std_logic;                    -- output green bit
-        red                : out   std_logic;                    -- output red bit
-        hl                 : out   std_logic;
-        fl                 : out   std_logic
+        clk_7               : in    std_logic;                    -- 7MHz clock
+        flash_clk           : in    std_logic;
+        s_load              : in    std_logic;                    -- serial pixel load
+        pixel_data_latch_n  : in    std_logic;                    -- latch pixel data
+        pixel_data          : in    std_logic_vector(7 downto 0); -- pixel data
+        attr_data_latch_n   : in    std_logic;                    -- when to latch the attribute data
+        attr_data           : in    std_logic_vector(7 downto 0); -- D0-2 ink, D3-5 paper, D6 hl, D7 fl
+        border_colour_bgr   : in    std_logic_vector(2 downto 0); -- blue, green ed bits
+        video_en            : in    std_logic;                    -- enable video; dont display on blank
+        attr_output_latch_n : in    std_logic;                    -- ACTIVE-LOW output-latch enable ('0' transparent, '1' hold)
+        v_sync              : in    std_logic;
+        h_blank_n           : in    std_logic;
+        blue                : out   std_logic;                    -- output blue bit
+        green               : out   std_logic;                    -- output green bit
+        red                 : out   std_logic;                    -- output red bit
+        hl                  : out   std_logic;
+        fl                  : out   std_logic
     );
 end entity attr_output_latch_border_select_mux;
 
@@ -81,13 +81,10 @@ architecture structural of attr_output_latch_border_select_mux is
     signal pb2_g               : std_logic; -- PAPER/BORDER Green
     signal al_6                : std_logic; -- BRIGHT before output latch (attr D6, gated by vid_en)
     signal al_7                : std_logic; -- FLASH  before output latch (attr D7, gated by vid_en)
-    signal attr_output_latch_n : std_logic; -- active-low output-latch enable (= not attr_output_latch)
     signal fl_i                : std_logic; -- LATCHED flash: colour mux out -> pixel_flash in AND top fl
 
 begin
 
-    -- output latch takes an active-low enable; top strobe is active-high
-    attr_output_latch_n <= not(attr_output_latch);
     -- expose the latched flash bit (also fed back into pixel_flash below)
     fl <= fl_i;
 
