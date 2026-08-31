@@ -18,6 +18,9 @@
 library ieee;
     use ieee.std_logic_1164.all;
 
+library std;
+    use std.env.all;
+
 entity single_bit_shift_reg_tb is
 --  Port ( );
 end entity single_bit_shift_reg_tb;
@@ -134,7 +137,7 @@ begin
 
         report "ALL TESTS PASSED"
             severity note;
-        wait;
+        finish;
 
     end process;
 

@@ -34,6 +34,9 @@
 library ieee;
     use ieee.std_logic_1164.all;
 
+library std;
+    use std.env.all;
+
 entity pixel_serialiser_tb is
 --  Port ( );
 end entity pixel_serialiser_tb;
@@ -159,7 +162,7 @@ begin
 
         report "ALL TESTS PASSED"
             severity note;
-        wait;
+        finish;
 
     end process;
 

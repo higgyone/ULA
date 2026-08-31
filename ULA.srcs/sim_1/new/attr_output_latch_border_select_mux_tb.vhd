@@ -31,6 +31,9 @@
 library ieee;
     use ieee.std_logic_1164.all;
 
+library std;
+    use std.env.all;
+
 entity attr_output_latch_border_select_mux_tb is
 end entity attr_output_latch_border_select_mux_tb;
 
@@ -340,7 +343,7 @@ begin
 
         report "ALL TESTS PASSED (" & integer'image(checks) & " checks)"
             severity note;
-        wait;
+        finish;
 
     end process stim;
 

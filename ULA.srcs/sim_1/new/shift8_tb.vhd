@@ -28,6 +28,9 @@
 library ieee;
     use ieee.std_logic_1164.all;
 
+library std;
+    use std.env.all;
+
 entity shift8_tb is
 --  Port ( );
 end entity shift8_tb;
@@ -144,7 +147,7 @@ begin
 
         report "ALL TESTS PASSED"
             severity note;
-        wait;
+        finish;
 
     end process;
 
