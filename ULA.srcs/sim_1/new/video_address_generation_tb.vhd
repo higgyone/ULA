@@ -133,7 +133,7 @@ architecture behavioral of video_address_generation_tb is
 
 begin
 
-    dut : entity work.video_address_generation(behavioral)
+    dut : entity work.video_address_generation(structural)
         port map (
             vid_ras_n => ras_n,
             c0_n      => not cv(0),
