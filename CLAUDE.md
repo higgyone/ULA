@@ -528,36 +528,103 @@ Remaining work in order:
   - ~~Re-run `video_sync_tb`~~ ✅ done — self-checking, passes end-to-end.
 **Phase 5 — Video output**
 
+Phase 5 has **two strands**, and both live on the `phase5-video` branch — the
+branch is the video generator as a whole, digital and analogue (user's call,
+2026-09-12).
+
+---
+
+#### Strand A — digital RGB data path
+
 Build order follows the book's video-output **data path** (Chris Smith), not the
 old "border_reg first" list. The pipeline, in the order the book presents it:
 
-1. **Pixel data latch + shift register block** — the pixel byte is captured in a
-   data latch, loaded into an **8-bit shift register**, and serialised MSB-first
-   at the pixel clock (1 ink/paper-select bit per pixel). *The 8-bit register
-   (`shift8`, chain of eight `single_bit_shift_register` cells) is built +
-   verified; the pixel data latch (8× `data_latch_1_bit`) feeds its parallel-load
-   inputs.*
-2. **Double-buffered attribute byte fetch block** — two attribute latches so the
-   next attribute is prefetched while the current one is still displayed.
-3. **Flash mode** — flash toggle derived from the V counter; swaps ink/paper.
-4. **Attribute output latch + border-select multiplexer** — final colour select
-   between the current attribute (ink/paper/bright, chosen by the serialised
-   pixel bit) and the border colour.
-5. `border_reg.vhd` — port `0xFE` write, capture bits 2:0 as border colour.
-   Comes **after** the blocks above; it just supplies one input to the
-   border-select mux in step 4.
+1. ✅ **Pixel data latch + shift register block** — pixel byte captured in a data
+   latch, loaded into an **8-bit shift register**, serialised MSB-first at the
+   pixel clock (1 ink/paper-select bit per pixel). `data_latch_1_bit` →
+   `data_latch_8_bit`, `single_bit_shift_register` → `shift8`, tied together by
+   **`pixel_serialiser`** (xsim, 16 checks).
+2. ✅ **Attribute byte fetch + paper/border mux** —
+   **`attr_data_latch_paper_border_mux`** (xsim, 19 checks). Input half of the
+   double buffer; unpacks the attribute byte into ink / paper-or-border /
+   bright / flash, border selected by `vid_en`.
+3. ✅ **Flash mode** — **`pixel_flash`** (xsim, 8 checks, exhaustive) produces
+   `data_select_n`; **`flash_clock`** (xsim, 12 checks) is the ~1.56 Hz toggle
+   (5-stage ripple /32 off `v8`, one edge per frame at the 311→0 wrap).
+4. ✅ **Attribute output latch + colour mux + blanking** —
+   **`attr_output_latch_colour_mux`** (xsim, 13 checks). Output half of the
+   double buffer, ink/paper 2:1 NOR-NOR mux, and the final blanking mux folded
+   straight into the colour NORs (`v_sync` / `h_blank` → black).
+5. ✅ **Integration wrapper** — **`attr_output_latch_border_select_mux`** (xsim,
+   70 checks) wires blocks 1–4 into one datapath. Note its output-latch enable
+   is **active-low** (`attr_output_latch_n`), matching what the control-clock
+   block emits.
+6. ⏳ **`border_reg.vhd`** — port `0xFE` write, capture bits 2:0 as border
+   colour. Comes **after** the blocks above; it just supplies the wrapper's
+   `border_colour_bgr` input. **This is the last small module of strand A.**
 
-Supporting logic (slot in as the data path needs it): pixel/attribute **address
-generation** (`pixel_fetch` — C/V counters → ZX scrambled VRAM address) and the
-final **blanking mux** (`nHblank`/`nBorder` gating the colour output).
+Supporting logic — all ✅ done:
+- **`latch_and_shift_reg_control_clks`** (xsim, 133 checks) — decodes every
+  control strobe (`pixel_data_latch_n`, `attr_data_latch_n`, `s_load`,
+  `attr_output_latch_n`, `video_en`) from the H-counter low bits.
+- **`ras_cas_generation`** (xsim, 40 checks) — DRAM RAS/CAS strobes. **The one
+  deliberately non-gate-accurate block in the project** (synchronous rebuild;
+  the book's analogue delays have no FPGA equivalent). DRAM cycle is 4 pixels.
+- **`video_address_generation`** (xsim, 51 checks) — the `pixel_fetch` work:
+  C/V counters → ZX scrambled VRAM row/column address on a6..a0, plus `ae_n`.
+- Final **blanking mux** — folded into `attr_output_latch_colour_mux` rather
+  than built as a separate block.
 
-**➡ IMMEDIATE next task (current work): finish the 8-bit `data_latch` wrapper.**
-The 8-bit shift register (`shift8`) is done + merged. Now build the pixel data
-latch that drives its parallel-load inputs: `data_latch_8_bit.vhd` (WIP in tree)
-tiles eight `data_latch_1_bit` cells — common `e` strobe, `d(7:0)` in,
-`q_bar(7:0)` out → `shift8` `data_n(7:0)` load inputs. Then a self-checking TB
-(same tiling pattern as `shift8`). After that: attribute fetch, flash mode,
-attribute output latch + border-select mux, then `border_reg.vhd`.
+---
+
+#### Strand B — analogue video signal generation (colour → RF modulator)
+
+Turning the digital RGB + sync into the composite signal the Spectrum actually
+puts on the aerial socket. Runs from colour generation through to the RF
+modulator feed.
+
+1. ✅ **`pal_v_burst`** (xsim, 332 checks) — PAL colour-burst gate with
+   line-parity alternation. Burst window `NOR(c4,c5,c6,c7_n,c8_n)` = pixels
+   384..399, which lands on the **back porch** (inside h-blank 320..415, after
+   the 5c hsync pulse 336..367); 16 px @ 7 MHz = 2.29 µs vs the real ~2.25 µs.
+   Line parity is `v0` latched with `e => sync_n`, so it is sampled during sync
+   and then frozen for the whole line.
+   **⚠ POLARITY TRAP:** `burst_star_n` (ACTIVE LOW, = burst AND q) and
+   `burst_star` (ACTIVE HIGH, = burst AND NOT q) are **opposite-polarity, NOT a
+   complement pair** — they happen to share a level inside the window. Compare
+   *assertions*, never raw levels, when wiring these.
+2. ⏳ **Colour generation** — encode the digital R/G/B (+ bright) into the
+   PAL colour-difference signals, phase-alternated per line by the
+   `burst_star` / `burst_star_n` outputs above.
+3. ⏳ **Composite assembly** — sum luminance + chroma + composite sync
+   (`n_sync_5c`/`n_sync_6c` from `video_sync`) + the burst.
+4. ⏳ **RF modulator feed** — the final output stage.
+
+---
+
+**➡ IMMEDIATE next tasks.** Strand A needs only `border_reg.vhd`. Strand B
+continues with colour generation. Then the **top-level assembly** wiring
+`video_sync` + `ras_cas_generation` + `video_address_generation` +
+`latch_and_shift_reg_control_clks` + `flash_clock` +
+`attr_output_latch_border_select_mux` + the strand-B chain into one video
+generator.
+
+**⚠ OPEN DESIGN QUESTION — settle before the top-level wiring.** The `c0`/`c1`
+taps come off a **ripple** counter but `ras_cas_generation` samples them on
+`clk_14`; its own header flags that a resync into the `clk_14` domain may be
+needed. Decide whether that resync lives **inside** `ras_cas_generation` or at
+the **integration point** — it determines whether the top level needs resync
+registers of its own, and `video_address_generation` now consumes `vid_ras_n`,
+so it is downstream of the answer.
+
+**Testbench convention (learned the hard way).** Any NEW self-checking TB with a
+free-running clock process **must** call `finish` (`library std; use std.env.all;`)
+or gate its clock on a `sim_done` flag. Four TBs previously ended the stimulus
+process on a bare `wait;` while the clock kept toggling, so `run all` passed every
+check and then span forever — xsim had to be killed (exit code 4), which looks
+exactly like a hang. Fixed in `138960f`. Stimulus-only / eyeball TBs are the
+exception: they are meant to be run with an explicit `run <time>`.
+
 Mentor mode: offer walk-through vs review-my-sketch before writing VHDL.
 
 **Phase 6 — CPU interface**
