@@ -104,10 +104,16 @@ architecture behavioral of yuv_tb is
     signal burst_star   : std_logic := '0';
     signal burst_star_n : std_logic := '0';
 
-    -- DUT output. Declared as plain INTEGER (the base type) rather than
-    -- millivolts_t so an out-of-range result is reported by the assert below
-    -- instead of only tripping a subtype check.
-    signal y_n : integer;
+    -- DUT output. MUST be millivolts_t, matching the port exactly: for a scalar
+    -- `out` port VHDL requires the actual's subtype to match the formal's, and
+    -- GHDL enforces it ("range of formal is different"). xsim is lenient here,
+    -- so a plain INTEGER passes there and fails under GHDL.
+    --
+    -- Nothing is lost by constraining it: the PORT is already millivolts_t, so
+    -- an out-of-range value trips the DUT's own subtype check before it could
+    -- ever reach this signal. The range assert below is kept as a belt-and-
+    -- braces check on the reference model.
+    signal y_n : millivolts_t;
 
     signal checks : integer := 0;
 
