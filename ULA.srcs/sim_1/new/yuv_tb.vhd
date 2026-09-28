@@ -97,7 +97,10 @@
 -- ── What it proves ───────────────────────────────────────────────────
 --   1. EXHAUSTIVE: all 2**5 = 32 combinations of sync_n, hl_n and the three
 --      colour bits, each checked against the reference model.
---   2. SYNC: sync_n asserted gives exactly 4300 regardless of colour. This is
+--   2. SYNC: sync_n asserted turns ONLY the sync sink off. Black then gives
+--      exactly 4300 (top of range); the colour sinks still subtract, so
+--      bright white gives 1792, not 4300. (In the real ULA the pixel is
+--      blanked during sync, so only the black case occurs.) This is
 --      the check that catches the sync contribution being applied
 --      unconditionally -- a real bug this module had, where the summing line
 --      referenced the CONSTANT V_SYNC_Y instead of the signal v_sync_c_y
@@ -648,9 +651,10 @@ begin
         -- add to the count; the value is in naming what each proves.
         --------------------------------------------------------------
 
-        -- SYNC: sink off, output rises to the top of range. Must be 4300
-        -- regardless of the colour bits -- the case that catches the sync
-        -- contribution being subtracted unconditionally.
+        -- SYNC: only the sync sink turns off. Black rises to the top of
+        -- range (4300); bright white still loses its colour currents
+        -- (1792). Both catch the sync contribution being subtracted
+        -- unconditionally (that would give 2449 and 259).
         check_y(sync_n, hl_n, red_i, green_i, blue_i, y_n, checks,
                 '0', '1', '0', '0', '0');
         report "PASS: sync asserted, black  -> 4300 mV (top of range)"
@@ -658,7 +662,8 @@ begin
 
         check_y(sync_n, hl_n, red_i, green_i, blue_i, y_n, checks,
                 '0', '0', '1', '1', '1');
-        report "PASS: sync asserted, bright white -> 4300 mV (colour ignored)"
+        report "PASS: sync asserted, bright white -> " & integer'image(y_n)
+               & " mV (colour sinks still on)"
             severity note;
 
         -- BLACK INVARIANCE: with no guns conducting there is nothing for

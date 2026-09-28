@@ -123,7 +123,7 @@
 --   pal_v_burst (burst). Outputs are millivolts_t. Converting to DAC codes
 --   belongs in a separate boundary module, so the DAC choice stays out of here.
 --
--- Verified by yuv_tb (113 checks): exhaustive sweeps of all three channels
+-- Verified by yuv_tb (111 checks): exhaustive sweeps of all three channels
 -- against reference models built independently from the currents, plus the
 -- book's anchor values, ordering, symmetry and pair-sum checks.
 ----------------------------------------------------------------------------------
