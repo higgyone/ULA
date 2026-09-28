@@ -121,8 +121,18 @@
 --      symmetric -- so ordering is checked separately.
 --   9. U SYMMETRY: each complementary pair sums to 2 x zero within +/-10 mV
 --      (see the 8 mV note above). This catches a wrong or swapped current.
---  10. V EXHAUSTIVE: all 2**5 = 32 combinations of the five V inputs against
---      the V reference model.
+--  10. V SWEEP: all 2**5 = 32 combinations of the five V inputs against the
+--      V reference model, EXCEPT the 2 whose reference value is below 0 mV.
+--      Those draw every colour sink AND both burst sinks at once (-220 and
+--      -462 mV) -- "a coloured pixel during an even-line burst" -- which the
+--      circuit cannot produce: the pixel is blanked during the burst, so
+--      black_star forces green_star_n to '0'. The real floor is 496 mV (red,
+--      or cyan on an inverted line; book 0.495 V) and the book gives V no
+--      clamp, so the DUT is right not to have one. Driving them anyway would
+--      push v outside millivolts_t and abort the run with a bound-check
+--      failure. The TB asserts every skipped case is one of those impossible
+--      states and that exactly 2 were skipped, so the skip cannot hide a real
+--      out-of-range result.
 --  11. V LANDMARKS: zero point 1925, red 496 and cyan 3342 (normal-line
 --      extremes), burst 967 on even lines and 2883 on odd lines.
 --  12. V ORDERING: cyan > zero > red on a normal line -- catches an inverted
@@ -594,6 +604,10 @@ begin
         variable v_burst_even : integer;
         variable v_burst_odd  : integer;
 
+        -- V sweep: combinations skipped as physically impossible
+        variable v_skipped   : integer := 0;
+        variable v_sweep_exp : integer;
+
     begin
 
         --------------------------------------------------------------
@@ -816,7 +830,9 @@ begin
         --==============================================================
 
         --------------------------------------------------------------
-        -- EXHAUSTIVE SWEEP: all 32 combinations of the five V inputs.
+        -- SWEEP: all 32 combinations of the five V inputs, skipping the
+        -- 2 impossible ones whose value would be below 0 mV (see header
+        -- item 10). std_logic'val(n + 2) maps 0/1 to '0'/'1'.
         --------------------------------------------------------------
         for r in 0 to 1 loop
 
@@ -828,11 +844,28 @@ begin
 
                         for bn in 0 to 1 loop
 
-                            check_v(red_star, green_star_n, blue_star_n,
-                                    burst_star, burst_star_n, v, checks,
-                                    std_logic'val(r + 2), std_logic'val(g + 2),
-                                    std_logic'val(b + 2), std_logic'val(bu + 2),
-                                    std_logic'val(bn + 2));
+                            v_sweep_exp := expected_v(std_logic'val(r + 2),
+                                                      std_logic'val(g + 2),
+                                                      std_logic'val(b + 2),
+                                                      std_logic'val(bu + 2),
+                                                      std_logic'val(bn + 2));
+
+                            if (v_sweep_exp < 0) then
+                                -- only "coloured pixel during the even-line burst"
+                                -- may be skipped: both burst sinks on AND
+                                -- green_star_n on, which blanking makes impossible
+                                assert r = 1 and g = 1 and bu = 1 and bn = 1
+                                    report "FAIL V: REACHABLE state below 0 mV: "
+                                           & integer'image(v_sweep_exp)
+                                    severity failure;
+                                v_skipped := v_skipped + 1;
+                            else
+                                check_v(red_star, green_star_n, blue_star_n,
+                                        burst_star, burst_star_n, v, checks,
+                                        std_logic'val(r + 2), std_logic'val(g + 2),
+                                        std_logic'val(b + 2), std_logic'val(bu + 2),
+                                        std_logic'val(bn + 2));
+                            end if;
 
                         end loop;
 
@@ -844,7 +877,13 @@ begin
 
         end loop;
 
-        report "PASS: exhaustive sweep of all 32 V input combinations"
+        assert v_skipped = 2
+            report "FAIL V: expected 2 impossible states skipped, got "
+                   & integer'image(v_skipped)
+            severity failure;
+
+        report "PASS: V sweep, 30 of 32 combinations ("
+               & integer'image(v_skipped) & " impossible states skipped)"
             severity note;
 
         --------------------------------------------------------------
