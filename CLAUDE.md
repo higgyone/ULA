@@ -577,11 +577,13 @@ Supporting logic — all ✅ done:
 
 ---
 
-#### Strand B — analogue video signal generation (colour → RF modulator)
+#### Strand B — analogue video signal generation (colour → Y/U/V levels)
 
-Turning the digital RGB + sync into the composite signal the Spectrum actually
-puts on the aerial socket. Runs from colour generation through to the RF
-modulator feed.
+Turning the digital RGB + sync into the three analogue levels the ULA drives to
+the PCB's PAL encoder: inverted luminance `y_n` and the colour differences `u`
+and `v`. **The ULA's own part of this strand is ✅ complete** (steps 1–4). The
+subcarrier modulation and RF stage are done OFF-chip on the real Spectrum (the
+LM1889 encoder), so on the FPGA they are board-level work, not ULA work.
 
 1. ✅ **`pal_v_burst`** (xsim, 332 checks) — PAL colour-burst gate with
    line-parity alternation. Burst window `NOR(c4,c5,c6,c7_n,c8_n)` = pixels
@@ -593,21 +595,54 @@ modulator feed.
    `burst_star` (ACTIVE HIGH, = burst AND NOT q) are **opposite-polarity, NOT a
    complement pair** — they happen to share a level inside the window. Compare
    *assertions*, never raw levels, when wiring these.
-2. ⏳ **Colour generation** — encode the digital R/G/B (+ bright) into the
-   PAL colour-difference signals, phase-alternated per line by the
-   `burst_star` / `burst_star_n` outputs above.
-3. ⏳ **Composite assembly** — sum luminance + chroma + composite sync
-   (`n_sync_5c`/`n_sync_6c` from `video_sync`) + the burst.
-4. ⏳ **RF modulator feed** — the final output stage.
+2. ✅ **`yuv_control_signals`** (xsim, 770 checks) — the PAL V-switch (a
+   4-NOR XNOR of each colour with `timing`) and the sink-control signals for
+   the U and V networks. **The `_n` suffix encodes the SIGN of that colour's
+   coefficient**, not an active-low sense:
+   `V = +0.615R −0.515G −0.100B`, `U = −0.147R −0.289G +0.436B`. The single
+   positive term in each (`red_star`, `blue_ii`) has no `_n` and carries an
+   extra buffering inversion. The `not(not(x))` buffers are the book's and are
+   deliberate — do not simplify them away.
+3. ✅ **`yuv`** (xsim, `yuv_tb` 111 checks) — the Y, U and V output levels.
+   **Deliberately NOT gate-accurate** (second exception, with
+   `ras_cas_generation`): it models the analogue resistor network behaviourally,
+   in **integer millivolts** (`millivolts_t`, package `yuv_levels_pkg` at the top
+   of `yuv.vhd`). Each channel is a **current-summing DAC**:
+   `output = 4300 − Σ(conducting sink currents) × R`. Key facts — the full
+   account is in the `yuv.vhd` header:
+   - **Every sink conducts when its input is '1'**, whatever its name.
+   - Y: R = 3.1 k; BRIGHT *selects* each colour's current rather than adding
+     one, so black is 2449 mV either way; bright white saturates the output
+     transistor and is clamped at 259 mV.
+   - U: R = 1550 Ω, fixed black-level sink; V: R = 3.1 k, no fixed sink.
+   - **U/V zero point** (the book's "black/white"): U 2015 mV, V 1925 mV. Black
+     is encoded as white so both land exactly on it.
+   - The colour burst is a DC offset in U and V on the back porch: −U on every
+     line, ±V alternating (135° even lines, 225° odd lines).
+   - **Source of truth is the CURRENTS, not the book's voltage tables**, which
+     are inconsistently rounded and contain errors (U's current columns are
+     copies of Y's; the V odd-line burst is printed as 3.112 V where the
+     currents give ~2.88 V). Do not "correct" the constants to match the book.
+4. ✅ **`yuv_video`** (xsim, 6009 checks) — structural wrapper joining
+   `pal_v_burst` + `yuv_control_signals` + `yuv` into one block: RGB, BRIGHT,
+   sync and the counter taps in; `y_n`, `u`, `v` out. Pure wiring.
+   **Caller requirement:** RGB must be `'0'` during horizontal blanking — the
+   burst window lies inside it, and a coloured pixel during an even-line burst
+   would drive `v` below 0 mV. The colour back-end's blanking provides this;
+   confirm it when the two are wired together.
+5. ⏳ **DAC boundary module** — convert `millivolts_t` to DAC codes for whichever
+   DAC is chosen. Kept separate so the DAC choice stays out of `yuv`.
+6. ⏳ **Encoder / modulator (off-ULA)** — the LM1889's job: put U and V on
+   quadrature 4.43 MHz subcarriers and add Y and sync. Only needed if the FPGA
+   board is to produce composite video itself.
 
 ---
 
-**➡ IMMEDIATE next tasks.** Strand A needs only `border_reg.vhd`. Strand B
-continues with colour generation. Then the **top-level assembly** wiring
-`video_sync` + `ras_cas_generation` + `video_address_generation` +
+**➡ IMMEDIATE next tasks.** Strand A needs only `border_reg.vhd`. Strand B's
+ULA blocks are done. Next is the **top-level assembly** wiring `video_sync` +
+`ras_cas_generation` + `video_address_generation` +
 `latch_and_shift_reg_control_clks` + `flash_clock` +
-`attr_output_latch_border_select_mux` + the strand-B chain into one video
-generator.
+`attr_output_latch_border_select_mux` + `yuv_video` into one video generator.
 
 **⚠ OPEN DESIGN QUESTION — settle before the top-level wiring.** The `c0`/`c1`
 taps come off a **ripple** counter but `ras_cas_generation` samples them on
@@ -624,6 +659,21 @@ process on a bare `wait;` while the clock kept toggling, so `run all` passed eve
 check and then span forever — xsim had to be killed (exit code 4), which looks
 exactly like a hang. Fixed in `138960f`. Stimulus-only / eyeball TBs are the
 exception: they are meant to be run with an explicit `run <time>`.
+
+**xsim is more lenient than GHDL — a pass in xsim is not a pass in GHDL.** Two
+cases have bitten this project, both in `yuv_tb`:
+- **Port subtype matching.** A TB signal connected to a scalar `out` port must
+  have the port's exact subtype (`millivolts_t`, not plain `integer`). GHDL
+  rejects a mismatch ("range of formal is different"); xsim accepts it.
+- **Integer range checks.** Driving a value outside a constrained integer
+  subtype aborts the run in GHDL; xsim does not check and reports a pass.
+The Vivado PC has no GHDL, so anything touching constrained integer types should
+be re-run in the GHDL regression on the other PC.
+
+**VHDL is case-insensitive.** `v_sync_y` and the constant `V_SYNC_Y` are the same
+name. The UPPER-constant / lower-signal convention gives no compiler protection:
+a one-letter slip can resolve silently to the wrong object and still compile and
+elaborate.
 
 Mentor mode: offer walk-through vs review-my-sketch before writing VHDL.
 
