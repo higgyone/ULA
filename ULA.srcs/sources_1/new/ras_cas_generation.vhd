@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------------------
--- ras_cas_generation — DRAM RAS/CAS strobe generator (SYNCHRONOUS implementation)
+-- ras_cas_generation — video DRAM strobe generator (SYNCHRONOUS implementation)
 --
 -- ⚠ DELIBERATELY NOT GATE-ACCURATE. Every other cell in this project mirrors the
 -- Ferranti ULA gate-for-gate, but the ULA builds its fine DRAM timing from ANALOG
@@ -7,6 +7,17 @@
 -- ignored by synthesis, inverter chains optimise to a wire, IDELAY maxes ~2.5 ns).
 -- So this ONE block is rebuilt synchronously. The original gate-level draft (Chris
 -- Smith, "The ZX Spectrum ULA", page 127) is preserved in the REFERENCE block below.
+--
+-- ── VIDEO STROBES ONLY: the CPU merge lives in cpu_memory_access ─────
+-- This block makes the video side's RAS and its two CAS legs and hands them, ACTIVE
+-- HIGH, to cpu_memory_access, which merges them with the CPU's strobes and drives
+-- the DRAM pins:
+--     ras_n = NOR(ram_16, vid_ras)
+--     cas_n = NOR(mux_select, vid_cas_ac, vid_cas_bd)  (via com_cas_n + buffer)
+-- Those are the same gates as the book's page-127 n_ras / d_out / n_cas (see the
+-- REFERENCE block), drawn in both places in the book; the merge is done ONCE, in
+-- cpu_memory_access (option B, 2026-10-04). In both places the merge is a plain gate
+-- after this block's registers, so it makes no difference to glitches where it sits.
 --
 -- ── The DRAM cycle is 4 PIXELS, not 8 ────────────────────────────────
 -- One RAS cycle fetches a BYTE PAIR (two CAS strobes) and occupies 4 pixel clocks
@@ -25,24 +36,27 @@
 -- The 14 MHz period (71.4 ns) is half a pixel, so a tick index is formed as
 --   tick = c1 & c0 & clk_7      (clk_7 = '0' first half of the pixel, '1' second)
 -- giving 0..7 across the 4-pixel cycle. All DRAM AC minimums are met:
---   RAS→CAS 71 ns (≥20) · CAS-high gap 71 ns (≥60) · CAS-low 143 ns (≥100) ·
+--   RAS→CAS 71 ns (≥20, and enough for the '157 address muxes, which switch on
+--   ras_n, to settle) · CAS-high gap 71 ns (≥60) · CAS-low 143 ns (≥100) ·
 --   RAS held 143 ns past the last CAS↓ (≥100) · RAS 429 ns, high 143 ns before
 --   the next cycle (precharge).
 --
--- ── The 8-tick waveform (active-low, '0' = strobe asserted) ──────────
---   tick | pixel.phase | vid_ras_n | vid_cas_n | event
---   -----+-------------+-----------+-----------+------------------------
---     0  |   px0 .0    |    0      |    1      | RAS↓  (cycle starts)
---     1  |   px0 .1    |    0      |    0      | CAS↓  first byte  (A/C)
---     2  |   px1 .0    |    0      |    0      |
---     3  |   px1 .1    |    0      |    1      | CAS↑  (precharge gap)
---     4  |   px2 .0    |    0      |    0      | CAS↓  second byte (B/D)
---     5  |   px2 .1    |    0      |    0      |
---     6  |   px3 .0    |    1      |    0      | RAS↑  (CAS still low)
---     7  |   px3 .1    |    1      |    1      | CAS↑  (cycle done)
---   The byte captured by each CAS is latched a pixel later by the control-clock
---   strobes (see latch_and_shift_reg_control_clks): display bytes at pixels 1
---   and 5, attribute bytes at pixels 3 and 7.
+-- ── The 8-tick waveform ('1' = strobe asserted, all three ACTIVE HIGH) ─
+--   tick | pixel.phase | vid_ras | vid_cas_ac | vid_cas_bd | event
+--   -----+-------------+---------+------------+------------+---------------------
+--     0  |   px0 .0    |    1    |     0      |     0      | RAS↓ (cycle starts)
+--     1  |   px0 .1    |    1    |     1      |     0      | CAS↓ first byte (A/C)
+--     2  |   px1 .0    |    1    |     1      |     0      |
+--     3  |   px1 .1    |    1    |     0      |     0      | CAS↑ (precharge gap)
+--     4  |   px2 .0    |    1    |     0      |     1      | CAS↓ second byte (B/D)
+--     5  |   px2 .1    |    1    |     0      |     1      |
+--     6  |   px3 .0    |    0    |     0      |     1      | RAS↑ (CAS still low)
+--     7  |   px3 .1    |    0    |     0      |     0      | CAS↑ (cycle done)
+--   ("RAS↓" / "CAS↓" describe the DRAM pins, which are active low.)
+--   The two CAS legs never overlap, so OR-ing them gives the single combined
+--   video CAS. The byte captured by each CAS is latched a pixel later by the
+--   control-clock strobes (see latch_and_shift_reg_control_clks): display bytes at
+--   pixels 1 and 5, attribute bytes at pixels 3 and 7.
 --
 -- ── Ports ────────────────────────────────────────────────────────────
 --   clk_14     14 MHz master clock — registers the strobes (de-glitches the
@@ -52,11 +66,11 @@
 --   n_vid_c3   display-fetch enable, active-LOW ('0' = inside the fetch window).
 --              Holds the video strobes de-asserted in the border/blank and in the
 --              c3-low CPU gap. DEFERRED input.
---   cpu_ras    CPU-side RAS, active-low. DEFERRED (real source later).
---   cpu_cas    CPU-side CAS, active-low. DEFERRED (real source later).
---   n_ras      DRAM RAS out, active-low = video RAS merged with cpu_ras
---   n_cas      DRAM CAS out, active-low = video CAS merged with cpu_cas
---   n_vid_ras  video RAS tap, active-low — for the address mux / contention logic
+--   vid_ras    video RAS, ACTIVE HIGH            -> cpu_memory_access
+--   vid_cas_ac video CAS, bytes A and C, ACTIVE HIGH -> cpu_memory_access
+--   vid_cas_bd video CAS, bytes B and D, ACTIVE HIGH -> cpu_memory_access
+--   n_vid_ras  video RAS, active-LOW tap         -> video_address_generation
+--              (row/column phase select)
 --
 -- Integration note: c0/c1 come from a ripple counter and clk_7 is derived from
 -- clk_14 by division, so when this block is wired to the real counter (rather
@@ -69,16 +83,15 @@ library ieee;
 
 entity ras_cas_generation is
     port (
-        clk_14    : in    std_logic; -- 14 MHz master clock (register clock)
-        clk_7     : in    std_logic; -- pixel clock as half-pixel phase bit
-        c0        : in    std_logic; -- horizontal counter bit 0
-        c1        : in    std_logic; -- horizontal counter bit 1
-        n_vid_c3  : in    std_logic; -- active-low display-fetch enable; deferred
-        cpu_ras   : in    std_logic; -- CPU-side RAS, active-low; deferred
-        cpu_cas   : in    std_logic; -- CPU-side CAS, active-low; deferred
-        n_ras     : out   std_logic; -- DRAM RAS, active-low
-        n_cas     : out   std_logic; -- DRAM CAS, active-low
-        n_vid_ras : out   std_logic  -- video RAS tap, active-low
+        clk_14     : in    std_logic; -- 14 MHz master clock (register clock)
+        clk_7      : in    std_logic; -- pixel clock as half-pixel phase bit
+        c0         : in    std_logic; -- horizontal counter bit 0
+        c1         : in    std_logic; -- horizontal counter bit 1
+        n_vid_c3   : in    std_logic; -- active-low display-fetch enable; deferred
+        vid_ras    : out   std_logic; -- video RAS, active high
+        vid_cas_ac : out   std_logic; -- video CAS, bytes A and C, active high
+        vid_cas_bd : out   std_logic; -- video CAS, bytes B and D, active high
+        n_vid_ras  : out   std_logic  -- video RAS tap, active low
     );
 end entity ras_cas_generation;
 
@@ -87,20 +100,21 @@ architecture synchronous of ras_cas_generation is
     -- position within the 4-pixel DRAM cycle: {c1, c0, half-pixel phase} = 0..7
     signal tick : std_logic_vector(2 downto 0);
 
-    -- registered video strobes (active-low), before the CPU merge
-    signal vid_ras_n : std_logic := '1';
-    signal vid_cas_n : std_logic := '1';
+    -- registered video strobes (active high)
+    signal ras_r    : std_logic := '0';
+    signal cas_ac_r : std_logic := '0';
+    signal cas_bd_r : std_logic := '0';
 
 begin
 
     tick <= c1 & c0 & clk_7;
 
     ------------------------------------------------------------------
-    -- Decode the 8-tick RAS/CAS waveform (see table in header) and
-    -- REGISTER it on clk_14: this cleans up the ripple counter and
-    -- pins every strobe edge to a clock edge. Held de-asserted ('1')
-    -- outside the display fetch window (n_vid_c3 = '1'), which covers
-    -- both the border/blank and the c3-low CPU gap.
+    -- Decode the 8-tick waveform (see table in header) and REGISTER it
+    -- on clk_14: this cleans up the ripple counter and pins every
+    -- strobe edge to a clock edge. Held de-asserted ('0') outside the
+    -- display fetch window (n_vid_c3 = '1'), which covers both the
+    -- border/blank and the c3-low CPU gap.
     ------------------------------------------------------------------
     strobe_reg : process (clk_14) is
     begin
@@ -112,62 +126,55 @@ begin
 
                     when "000" =>
 
-                        vid_ras_n <= '0';     -- RAS down, cycle starts
-                        vid_cas_n <= '1';
+                        ras_r    <= '1';      -- RAS, cycle starts
+                        cas_ac_r <= '0';
+                        cas_bd_r <= '0';
 
-                    when "001" =>
+                    when "001" | "010" =>
 
-                        vid_ras_n <= '0';     -- CAS down: first byte (A/C)
-                        vid_cas_n <= '0';
-
-                    when "010" =>
-
-                        vid_ras_n <= '0';
-                        vid_cas_n <= '0';
+                        ras_r    <= '1';      -- first CAS: byte A / C
+                        cas_ac_r <= '1';
+                        cas_bd_r <= '0';
 
                     when "011" =>
 
-                        vid_ras_n <= '0';     -- CAS up: precharge gap
-                        vid_cas_n <= '1';
+                        ras_r    <= '1';      -- CAS precharge gap
+                        cas_ac_r <= '0';
+                        cas_bd_r <= '0';
 
-                    when "100" =>
+                    when "100" | "101" =>
 
-                        vid_ras_n <= '0';     -- CAS down: second byte (B/D)
-                        vid_cas_n <= '0';
-
-                    when "101" =>
-
-                        vid_ras_n <= '0';
-                        vid_cas_n <= '0';
+                        ras_r    <= '1';      -- second CAS: byte B / D
+                        cas_ac_r <= '0';
+                        cas_bd_r <= '1';
 
                     when "110" =>
 
-                        vid_ras_n <= '1';     -- RAS up (CAS still low)
-                        vid_cas_n <= '0';
+                        ras_r    <= '0';      -- RAS released, CAS still on
+                        cas_ac_r <= '0';
+                        cas_bd_r <= '1';
 
                     when others =>
 
-                        vid_ras_n <= '1';     -- tick 7: CAS up, cycle done
-                        vid_cas_n <= '1';
+                        ras_r    <= '0';      -- tick 7: cycle done
+                        cas_ac_r <= '0';
+                        cas_bd_r <= '0';
 
                 end case;
 
             else
-                vid_ras_n <= '1';             -- outside the fetch window: idle
-                vid_cas_n <= '1';
+                ras_r    <= '0';              -- outside the fetch window: idle
+                cas_ac_r <= '0';
+                cas_bd_r <= '0';
             end if;
         end if;
 
     end process strobe_reg;
 
-    ------------------------------------------------------------------
-    -- Merge the video strobes with the CPU side. Both active-low, so a
-    -- plain AND drives the DRAM strobe low if EITHER side is asserting.
-    -- n_vid_ras is tapped out separately for the address-mux / contention.
-    ------------------------------------------------------------------
-    n_ras     <= vid_ras_n and cpu_ras;
-    n_cas     <= vid_cas_n and cpu_cas;
-    n_vid_ras <= vid_ras_n;
+    vid_ras    <= ras_r;
+    vid_cas_ac <= cas_ac_r;
+    vid_cas_bd <= cas_bd_r;
+    n_vid_ras  <= not ras_r;
 
 end architecture synchronous;
 
