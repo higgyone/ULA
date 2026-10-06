@@ -37,7 +37,7 @@ architecture behavioral of master_horiz_counter_tb is
     -- garbage at the boundaries. 143 ns gives T/2 = 71 ns >> settle,
     -- so every falling-edge sample is clean. (Do not drop below ~50 ns.)
     constant t       : time      := 143 ns; -- 7 MHz real pixel clock
-    signal   clk_7   : std_logic;
+    signal   clk_7_n : std_logic;
     signal   tclk_a  : std_logic := '0';
     signal   reset   : std_logic;
     signal   c0      : std_logic;
@@ -56,7 +56,7 @@ begin
 
     mhc : entity work.master_horiz_counter(Behavioral)
         port map (
-            clk7    => clk_7,
+            clk_7_n => clk_7_n,
             reset   => reset,
             tclk_a  => tclk_a,
             c0      => c0,
@@ -79,9 +79,9 @@ begin
     process is
     begin
 
-        clk_7 <= '0';
+        clk_7_n <= '0';
         wait for t / 2;
-        clk_7 <= '1';
+        clk_7_n <= '1';
         wait for t / 2;
 
     end process;
@@ -99,19 +99,19 @@ begin
     end process;
 
     -- *****************************************************************
-    -- Self-check: full count increments by 1 each clk7, wraps at 448
+    -- Self-check: full count increments by 1 each clk_7_n, wraps at 448
     -- *****************************************************************
     -- The full line count is the 9-bit tap concatenation c8..c0
     -- (= c_upper*64 + c_lower), which runs 0..447 (64 x 7). Rather than
     -- predict the absolute start phase (tricky with the gated clocks,
     -- synchronous reset and after-TG gate delays), we LOCK onto the
     -- actual count after reset and then assert it advances by exactly 1
-    -- (mod 448) every clk7. This catches any skip, stuck bit, or wrong
+    -- (mod 448) every clk_7_n. This catches any skip, stuck bit, or wrong
     -- wrap without depending on the start phase.
     --
-    -- Sampled on the FALLING edge of clk7 (mid-period), by which point
+    -- Sampled on the FALLING edge of clk_7_n (mid-period), by which point
     -- the ripple chain and the T_Structure C6-C8 stage have settled.
-    check_proc : process (clk_7) is
+    check_proc : process (clk_7_n) is
 
         variable taps    : std_logic_vector(8 downto 0);
         variable act     : integer range 0 to 511;
@@ -120,7 +120,7 @@ begin
 
     begin
 
-        if falling_edge(clk_7) then
+        if falling_edge(clk_7_n) then
             if (reset = '1') then
                 locked := false;                 -- re-lock after every reset
             else

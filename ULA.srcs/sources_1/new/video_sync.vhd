@@ -20,7 +20,7 @@ library ieee;
 
 entity video_sync is
     port (
-        clk       : in    std_logic;
+        clk_7_n   : in    std_logic;
         reset     : in    std_logic;
         tclk_a    : in    std_logic; -- retained for back-compat; unused (horiz_timing ties it to '0')
         hsync_5c  : out   std_logic;
@@ -71,7 +71,7 @@ begin
     ----------------------------------------------------------------
     ht : entity work.horiz_timing(Behavioral)
         port map (
-            clk      => clk,
+            clk_7_n  => clk_7_n,
             reset    => reset,
             hsync_5c => h_5c,
             hsync_6c => h_6c,

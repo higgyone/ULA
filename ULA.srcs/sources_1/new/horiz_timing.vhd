@@ -61,7 +61,7 @@ library ieee;
 
 entity horiz_timing is
     port (
-        clk      : in    std_logic;
+        clk_7_n  : in    std_logic;
         reset    : in    std_logic;
         hsync_5c : out   std_logic;
         hsync_6c : out   std_logic;
@@ -100,7 +100,7 @@ begin
 
     mhc : entity work.master_horiz_counter(Behavioral)
         port map (
-            clk7    => clk,
+            clk_7_n => clk_7_n,
             reset   => reset,
             tclk_a  => '0',
             c0      => c0,

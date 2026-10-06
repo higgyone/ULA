@@ -28,7 +28,7 @@ end entity horiz_timing_tb;
 architecture behavioral of horiz_timing_tb is
 
     constant t       : time      := 143 ns; -- clk period
-    signal   clk_7   : std_logic;
+    signal   clk_7_n : std_logic;
     signal   tclk_a  : std_logic := '0';
     signal   reset   : std_logic;
     signal   c0      : std_logic;
@@ -51,7 +51,7 @@ begin
 
     mhc : entity work.master_horiz_counter(Behavioral)
         port map (
-            clk7    => clk_7,
+            clk_7_n => clk_7_n,
             reset   => reset,
             tclk_a  => tclk_a,
             c0      => c0,
@@ -69,7 +69,7 @@ begin
 
     ht : entity work.horiz_timing(Behavioral)
         port map (
-            clk      => clk_7,
+            clk_7_n  => clk_7_n,
             reset    => reset,
             hsync_5c => hsync_5c,
             hsync_6c => hsync_6c,
@@ -79,9 +79,9 @@ begin
     process is
     begin
 
-        clk_7 <= '0';
+        clk_7_n <= '0';
         wait for t / 2;
-        clk_7 <= '1';
+        clk_7_n <= '1';
         wait for t / 2;
 
     end process;

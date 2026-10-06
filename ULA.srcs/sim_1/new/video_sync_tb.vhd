@@ -44,7 +44,7 @@ architecture behavioral of video_sync_tb is
     constant last_line : integer := 315;    -- run a little past the 312 wrap
     constant c8_hi_off : integer := 300;    -- step from the ~pixel-4 sample into the c8=1 region (~pixel 304)
 
-    signal clk_7     : std_logic := '0';
+    signal clk_7_n   : std_logic := '0';
     signal reset     : std_logic := '1';
     signal hsync_5c  : std_logic;
     signal hsync_6c  : std_logic;
@@ -73,7 +73,7 @@ begin
 
     dut : entity work.video_sync(Behavioral)
         port map (
-            clk       => clk_7,
+            clk_7_n   => clk_7_n,
             reset     => reset,
             tclk_a    => '0',
             hsync_5c  => hsync_5c,
@@ -91,9 +91,9 @@ begin
 
         while not sim_done loop
 
-            clk_7 <= '0';
+            clk_7_n <= '0';
             wait for t / 2;
-            clk_7 <= '1';
+            clk_7_n <= '1';
             wait for t / 2;
 
         end loop;
@@ -128,7 +128,7 @@ begin
 
             for i in 1 to n loop
 
-                wait until rising_edge(clk_7);
+                wait until rising_edge(clk_7_n);
 
             end loop;
 
@@ -141,7 +141,7 @@ begin
         -- so '0' is its inactive level, already true at pixel 0 right
         -- after reset. Step a few pixels in so the per-line sample sits
         -- clear of the line-boundary carry ripple.
-        wait until rising_edge(clk_7) and hsync_5c = '0';
+        wait until rising_edge(clk_7_n) and hsync_5c = '0';
         wait_cycles(4);
         line := 0;
 
@@ -229,14 +229,14 @@ begin
     begin
 
         wait until reset = '0';
-        wait until rising_edge(clk_7) and hsync_5c = '0';  -- ~pixel 0 of line 0 (inactive-LOW)
+        wait until rising_edge(clk_7_n) and hsync_5c = '0';  -- ~pixel 0 of line 0 (inactive-LOW)
 
         loop
 
             dbg_pixel <= px;
             dbg_line  <= ln;
             dbg_vline <= ln mod v_lines;
-            wait until rising_edge(clk_7);
+            wait until rising_edge(clk_7_n);
 
             if (px = pix_line - 1) then
                 px := 0;

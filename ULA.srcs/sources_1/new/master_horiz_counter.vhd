@@ -6,7 +6,7 @@
 --
 -- Structurally split to match the Chris Smith schematic (pg 90):
 --   C0..C5 — six clk_div_2 cells (each = d_ff_nor wired as a T-FF)
---            with NOR-gated clocks derived from clk7 and the lower
+--            with NOR-gated clocks derived from clk_7_n and the lower
 --            bits. This is the ULA's "gated clock" style rather than
 --            a pure ripple chain, and keeps the +1 timing tight.
 --   C6..C8 — bit3_counter (modulo-7, three d_ff_nor cells) clocked
@@ -21,17 +21,25 @@
 --             for the vertical line counter).
 --
 -- NOR-gated clock derivation per cell (read: "C_n toggles when all
--- lower bits are 1 at the next clk7 edge"):
+-- lower bits are 1 at the next clk_7_n edge"):
 --
---   clk_c0 = NOT clk7                            ; C0 always toggles
---   clk_c1 = NOR(c0_n, clk7)         = c0 . !clk7; C1 toggles when c0=1
---   clk_c2 = NOR(c0_n, c1_n, clk7)   = c0.c1.!clk7
---   clk_c3 = NOR(c0_n..c2_n, clk7)   = c0.c1.c2.!clk7
+--   clk_c0 = NOT clk_7_n                            ; C0 always toggles
+--   clk_c1 = NOR(c0_n, clk_7_n)         = c0 . !clk_7_n; C1 toggles when c0=1
+--   clk_c2 = NOR(c0_n, c1_n, clk_7_n)   = c0.c1.!clk_7_n
+--   clk_c3 = NOR(c0_n..c2_n, clk_7_n)   = c0.c1.c2.!clk_7_n
 --   clk_c4 = NOT c3_n                = c3        ; C4 ripples off C3
 --   clk_c5 = NOR(c3_n, c4_n)         = c3 . c4   ; C5 falls when c3.c4 falls
 --
 -- (The mix of styles — gated for C0..C3, ripple for C4..C5 — mirrors
 -- the original ULA layout; it is not a uniform ripple counter.)
+--
+-- CLOCK POLARITY: the master clock is clk_7_n, as in the book. The
+-- cells are negative-edge d_ff_nor flops on NOT clk_7_n, so the count
+-- advances on the RISING edge of clk_7_n = the FALLING edge of clk_7.
+-- Within each pixel clk_7 is therefore '0' for the first half and '1'
+-- for the second, which ras_cas_generation relies on (its half-pixel
+-- phase bit). Feeding the true clk_7 here would flip that and scramble
+-- the RAS/CAS tick order.
 ----------------------------------------------------------------------
 
 library ieee;
@@ -39,7 +47,7 @@ library ieee;
 
 entity master_horiz_counter is
     port (
-        clk7    : in    std_logic;        -- master clock
+        clk_7_n : in    std_logic;        -- master clock
         reset   : in    std_logic;
         tclk_a  : in    std_logic := '0'; -- always assumed to be '0'
         c0      : out   std_logic;
@@ -79,10 +87,10 @@ begin
     --------------------------------------------------------------
     -- NOR-gated clock chain for C0..C5 (see header for derivation)
     --------------------------------------------------------------
-    clk_c0 <= not clk7;
-    clk_c1 <= c0_n nor clk7;
-    clk_c2 <= not(c0_n or c1_n or clk7);
-    clk_c3 <= not(c2_n or c1_n or c0_n or clk7);
+    clk_c0 <= not clk_7_n;
+    clk_c1 <= c0_n nor clk_7_n;
+    clk_c2 <= not(c0_n or c1_n or clk_7_n);
+    clk_c3 <= not(c2_n or c1_n or c0_n or clk_7_n);
     clk_c4 <= not c3_n;
     clk_c5 <= c4_n nor c3_n;
 
