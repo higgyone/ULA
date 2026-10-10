@@ -35,6 +35,8 @@ Implications:
 - **Simulation (non-Vivado / Claude PC)**: **GHDL 6.0.0 (mcode backend)** for fast CLI regression when Vivado isn't available. Installed via `winget install ghdl.ghdl.ucrt64.mcode`. See "GHDL CLI simulation" below. Testbenches are portable between GHDL and xsim as long as `--std=08` is used and the gate-level FFs keep their init values + `after TG` delays.
 - **Constraints**: `ULA.srcs/arty_35/imports/constraints/Arty-A7-35-Master.xdc` — Digilent's master XDC for the Arty A7-35T (Rev. D/E). All pins are commented out by default; uncomment and rename ports as the top-level design grows.
 - **Editor (non-Vivado PC)**: VS Code with `puorc.awesome-vhdl` (syntax) + `hbohlin.vhdl-ls` (language server). The repo ships a [`vhdl_ls.toml`](vhdl_ls.toml) at the root that puts every `.vhd` in `ULA.srcs/sources_1/new/` and `ULA.srcs/sim_1/new/` into a library called `defaultlib` (VHDL LS reserves `work` as the "current library" alias, so the actual library name must be different).
+- **Linter / formatter**: **VSG (VHDL Style Guide)** — `pip install vsg`, invoked as `vsg.exe` (note: `python -m vsg` has no `__main__`, use the console script). The project has **adopted VSG's default style as the canonical formatter** (like black/gofmt): VSG owns whitespace, indentation, casing, alignment and layout. Config is [`vsg_config.yaml`](vsg_config.yaml) — the only deviations from defaults are **4-space indent** (`rule.global.indent_size: 4`) and **`instantiation_034` disabled** (the design uses direct entity instantiation with explicit architecture selection, e.g. `entity work.vert_line_counter(T_Structure)`). Check: `vsg -f <file> -c vsg_config.yaml`; fix: add `--fix`. An [`.editorconfig`](.editorconfig) mirrors the 4-space indent so the editor Tab key agrees with the formatter. A **pre-commit hook** ([`.pre-commit-config.yaml`](.pre-commit-config.yaml)) runs `vsg --fix` on staged VHDL every commit (VSG pinned + isolated by pre-commit at rev `3.35.0` — note the tag has **no** `v` prefix). Per-PC setup: install the `pre-commit` driver in an isolated venv and put the launcher on PATH (**pipx is broken on the dev box** — a Windows launcher-encoding bug in pipx 1.16, fails regardless of `--backend`; the manual venv is the pipx-equivalent), then `pre-commit install`. See the header of `.pre-commit-config.yaml` for the exact commands.
+- **Compile-time lint**: run GHDL analysis with `-Wall -Wunused` for a stronger pass. The whole tree is clean under `-Wall` except two intentional/benign categories: unconnected `OUT` ports left `open` in `video_sync` (`-Wmissing-assoc`) and the `Reference` architecture name colliding with a VHDL-AMS reserved word in `bit3_counter` (`-Wreserved-word`).
 
 ### VHDL LS gotchas
 - **Time literals require whitespace** between the integer and the unit. `wait for 50ns;` is rejected as "Invalid integer character 'n'" — write `wait for 50 ns;`. Vivado tolerates the no-space form but VHDL LS is strict. All testbenches have been normalised.
@@ -151,6 +153,18 @@ LOW). vsync and the n_sync equation were already book-correct; only hsync moved.
 The `nhsyncpulses` logic = `XNOR(c3·c4, c5)` (6c) was verified to match the book.
 
 ## Naming & ordering consistency
+
+> **Formatting is now VSG-owned (2026-07-16).** The whole tree was run through
+> `vsg --fix` and reformatted to VSG's default style: **lowercase keywords,
+> types and architecture names** (`std_logic`, `entity`, `end entity`,
+> `architecture structural`), 4-space indent, VSG alignment, `)` on its own
+> line. This supersedes the earlier hand-casing below — architecture *names*
+> like `Behavioral`/`T_Structure` still read Pascal-case in this doc for
+> readability, but in source they are lowercase (VHDL is case-insensitive, so
+> instantiations still bind). Don't hand-fight the formatter; run it. The
+> *semantic* conventions below (snake_case identifiers, port ordering, `s_*`/
+> `*_n`/`*_c` prefixes, active-low `n`-prefix) still hold — VSG doesn't touch
+> those. All sims re-verified green after the reformat.
 
 Cross-cutting cleanup. **Conventions chosen (2026-06-27):** lowercase
 `snake_case` for all identifiers; architecture `Behavioral` for the reference
@@ -278,7 +292,11 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > composite decode passes end-to-end.
 >
 > **Phase 5 pixel-data path underway (mentor-mode).** Pixel-path FRONT BLOCK
-> complete + GHDL-verified (all with self-checking TBs; xsim sign-off pending):
+> complete + GHDL-verified (all with self-checking TBs). **`pixel_serialiser_tb`
+> ✅ xsim-verified on the Vivado PC** — that run exercises the whole integrated
+> front path (data_latch_8_bit + shift8), so the block is signed off; the
+> component TBs (`data_latch_8_bit_tb`, standalone `shift8_tb`) can still be run
+> in xsim individually if desired but the integration passes. Modules:
 > `single_bit_shift_register`; the 8-bit `shift8` (parallel-load shift-left pixel
 > register, chain of 8; merged from `phase5-pixel-shiftreg`); `data_latch_1_bit`
 > (video data latch bit — active-low `e = not datalatch`; `q_bar → shift-reg
@@ -286,12 +304,20 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
 > `enable`); and **`pixel_serialiser`** — the structural wrapper tying them
 > together: `data → data_latch_8_bit → (data_out_n, active-low) → shift8.data_n →
 > serial_data`, MSB-first; `Sin` tied to `SLoad` per the book schematic; latch
-> true output + shift `q_bar` left `open` for now. **Next design task: the
-> ATTRIBUTE fetch path** — double-buffered attribute byte latches (prefetch next
-> attr while current displays), then flash mode (V-counter toggle), then the
-> attribute output latch + border-select mux, then `border_reg.vhd` (port `0xFE`
-> write → border colour bits 2:0), and the rest of Phase 5 (`pixel_fetch`,
-> `colour_mux`, `video_out`).
+> true output + shift `q_bar` left `open` for now.
+>
+> **Attribute path started.** `attr_data_latch_paper_border_mux` ✅ built +
+> GHDL-verified (self-checking TB, 20 checks): an 8-bit attribute `data_latch_8_bit`
+> feeding a per-colour-bit 2:1 NOR-NOR mux that outputs PAPER (attr bits 5:3) in
+> the display area or BORDER (`border_colour`, port 0xFE) in the border, selected
+> by `vid_en` (shared `vid_en_n` inverter). Also taps INK (attr 2:0, ungated),
+> BRIGHT (`al6_hl` = attr6 AND vid_en) and FLASH (`al7_fl` = attr7 AND vid_en).
+> Attribute byte layout: b7 FLASH | b6 BRIGHT | b5:3 PAPER | b2:0 INK, colours GRB
+> (b0 Blue, b1 Red, b2 Green). **Next design task:** double-buffered attribute
+> fetch (prefetch next attr while current displays) + flash toggle from the V
+> counter (25 Hz), then wire the serialised pixel bit into the final INK vs
+> paper_border mux; then `border_reg.vhd` (port `0xFE` write → border colour bits
+> 2:0), and the rest of Phase 5 (`pixel_fetch`, `colour_mux`, `video_out`).
 > User wants mentor-mode: offer walk-through vs review-my-sketch before writing.
 > Vivado on this PC: `C:\AMDDesignTools\2025.2\Vivado\bin` (not on PATH); CLI sim
 > via `xvhdl`/`xelab`/`xsim` works (see "video_sync verification"). Note: `ULA.xpr`
@@ -502,36 +528,153 @@ Remaining work in order:
   - ~~Re-run `video_sync_tb`~~ ✅ done — self-checking, passes end-to-end.
 **Phase 5 — Video output**
 
+Phase 5 has **two strands**, and both live on the `phase5-video` branch — the
+branch is the video generator as a whole, digital and analogue (user's call,
+2026-09-12).
+
+---
+
+#### Strand A — digital RGB data path
+
 Build order follows the book's video-output **data path** (Chris Smith), not the
 old "border_reg first" list. The pipeline, in the order the book presents it:
 
-1. **Pixel data latch + shift register block** — the pixel byte is captured in a
-   data latch, loaded into an **8-bit shift register**, and serialised MSB-first
-   at the pixel clock (1 ink/paper-select bit per pixel). *The 8-bit register
-   (`shift8`, chain of eight `single_bit_shift_register` cells) is built +
-   verified; the pixel data latch (8× `data_latch_1_bit`) feeds its parallel-load
-   inputs.*
-2. **Double-buffered attribute byte fetch block** — two attribute latches so the
-   next attribute is prefetched while the current one is still displayed.
-3. **Flash mode** — flash toggle derived from the V counter; swaps ink/paper.
-4. **Attribute output latch + border-select multiplexer** — final colour select
-   between the current attribute (ink/paper/bright, chosen by the serialised
-   pixel bit) and the border colour.
-5. `border_reg.vhd` — port `0xFE` write, capture bits 2:0 as border colour.
-   Comes **after** the blocks above; it just supplies one input to the
-   border-select mux in step 4.
+1. ✅ **Pixel data latch + shift register block** — pixel byte captured in a data
+   latch, loaded into an **8-bit shift register**, serialised MSB-first at the
+   pixel clock (1 ink/paper-select bit per pixel). `data_latch_1_bit` →
+   `data_latch_8_bit`, `single_bit_shift_register` → `shift8`, tied together by
+   **`pixel_serialiser`** (xsim, 16 checks).
+2. ✅ **Attribute byte fetch + paper/border mux** —
+   **`attr_data_latch_paper_border_mux`** (xsim, 19 checks). Input half of the
+   double buffer; unpacks the attribute byte into ink / paper-or-border /
+   bright / flash, border selected by `vid_en`.
+3. ✅ **Flash mode** — **`pixel_flash`** (xsim, 8 checks, exhaustive) produces
+   `data_select_n`; **`flash_clock`** (xsim, 12 checks) is the ~1.56 Hz toggle
+   (5-stage ripple /32 off `v8`, one edge per frame at the 311→0 wrap).
+4. ✅ **Attribute output latch + colour mux + blanking** —
+   **`attr_output_latch_colour_mux`** (xsim, 13 checks). Output half of the
+   double buffer, ink/paper 2:1 NOR-NOR mux, and the final blanking mux folded
+   straight into the colour NORs (`v_sync` / `h_blank` → black).
+5. ✅ **Integration wrapper** — **`attr_output_latch_border_select_mux`** (xsim,
+   70 checks) wires blocks 1–4 into one datapath. Note its output-latch enable
+   is **active-low** (`attr_output_latch_n`), matching what the control-clock
+   block emits.
+6. ⏳ **`border_reg.vhd`** — port `0xFE` write, capture bits 2:0 as border
+   colour. Comes **after** the blocks above; it just supplies the wrapper's
+   `border_colour_bgr` input. **This is the last small module of strand A.**
 
-Supporting logic (slot in as the data path needs it): pixel/attribute **address
-generation** (`pixel_fetch` — C/V counters → ZX scrambled VRAM address) and the
-final **blanking mux** (`nHblank`/`nBorder` gating the colour output).
+Supporting logic — all ✅ done:
+- **`latch_and_shift_reg_control_clks`** (xsim, 133 checks) — decodes every
+  control strobe (`pixel_data_latch_n`, `attr_data_latch_n`, `s_load`,
+  `attr_output_latch_n`, `video_en`) from the H-counter low bits.
+- **`ras_cas_generation`** (xsim, 40 checks) — DRAM RAS/CAS strobes. **The one
+  deliberately non-gate-accurate block in the project** (synchronous rebuild;
+  the book's analogue delays have no FPGA equivalent). DRAM cycle is 4 pixels.
+- **`video_address_generation`** (xsim, 51 checks) — the `pixel_fetch` work:
+  C/V counters → ZX scrambled VRAM row/column address on a6..a0, plus `ae_n`.
+- Final **blanking mux** — folded into `attr_output_latch_colour_mux` rather
+  than built as a separate block.
 
-**➡ IMMEDIATE next task (current work): finish the 8-bit `data_latch` wrapper.**
-The 8-bit shift register (`shift8`) is done + merged. Now build the pixel data
-latch that drives its parallel-load inputs: `data_latch_8_bit.vhd` (WIP in tree)
-tiles eight `data_latch_1_bit` cells — common `e` strobe, `d(7:0)` in,
-`q_bar(7:0)` out → `shift8` `data_n(7:0)` load inputs. Then a self-checking TB
-(same tiling pattern as `shift8`). After that: attribute fetch, flash mode,
-attribute output latch + border-select mux, then `border_reg.vhd`.
+---
+
+#### Strand B — analogue video signal generation (colour → Y/U/V levels)
+
+Turning the digital RGB + sync into the three analogue levels the ULA drives to
+the PCB's PAL encoder: inverted luminance `y_n` and the colour differences `u`
+and `v`. **The ULA's own part of this strand is ✅ complete** (steps 1–4). The
+subcarrier modulation and RF stage are done OFF-chip on the real Spectrum (the
+LM1889 encoder), so on the FPGA they are board-level work, not ULA work.
+
+1. ✅ **`pal_v_burst`** (xsim, 332 checks) — PAL colour-burst gate with
+   line-parity alternation. Burst window `NOR(c4,c5,c6,c7_n,c8_n)` = pixels
+   384..399, which lands on the **back porch** (inside h-blank 320..415, after
+   the 5c hsync pulse 336..367); 16 px @ 7 MHz = 2.29 µs vs the real ~2.25 µs.
+   Line parity is `v0` latched with `e => sync_n`, so it is sampled during sync
+   and then frozen for the whole line.
+   **⚠ POLARITY TRAP:** `burst_star_n` (ACTIVE LOW, = burst AND q) and
+   `burst_star` (ACTIVE HIGH, = burst AND NOT q) are **opposite-polarity, NOT a
+   complement pair** — they happen to share a level inside the window. Compare
+   *assertions*, never raw levels, when wiring these.
+2. ✅ **`yuv_control_signals`** (xsim, 770 checks) — the PAL V-switch (a
+   4-NOR XNOR of each colour with `timing`) and the sink-control signals for
+   the U and V networks. **The `_n` suffix encodes the SIGN of that colour's
+   coefficient**, not an active-low sense:
+   `V = +0.615R −0.515G −0.100B`, `U = −0.147R −0.289G +0.436B`. The single
+   positive term in each (`red_star`, `blue_ii`) has no `_n` and carries an
+   extra buffering inversion. The `not(not(x))` buffers are the book's and are
+   deliberate — do not simplify them away.
+3. ✅ **`yuv`** (xsim, `yuv_tb` 111 checks) — the Y, U and V output levels.
+   **Deliberately NOT gate-accurate** (second exception, with
+   `ras_cas_generation`): it models the analogue resistor network behaviourally,
+   in **integer millivolts** (`millivolts_t`, package `yuv_levels_pkg` at the top
+   of `yuv.vhd`). Each channel is a **current-summing DAC**:
+   `output = 4300 − Σ(conducting sink currents) × R`. Key facts — the full
+   account is in the `yuv.vhd` header:
+   - **Every sink conducts when its input is '1'**, whatever its name.
+   - Y: R = 3.1 k; BRIGHT *selects* each colour's current rather than adding
+     one, so black is 2449 mV either way; bright white saturates the output
+     transistor and is clamped at 259 mV.
+   - U: R = 1550 Ω, fixed black-level sink; V: R = 3.1 k, no fixed sink.
+   - **U/V zero point** (the book's "black/white"): U 2015 mV, V 1925 mV. Black
+     is encoded as white so both land exactly on it.
+   - The colour burst is a DC offset in U and V on the back porch: −U on every
+     line, ±V alternating (135° even lines, 225° odd lines).
+   - **Source of truth is the CURRENTS, not the book's voltage tables**, which
+     are inconsistently rounded and contain errors (U's current columns are
+     copies of Y's; the V odd-line burst is printed as 3.112 V where the
+     currents give ~2.88 V). Do not "correct" the constants to match the book.
+4. ✅ **`yuv_video`** (xsim, 6009 checks) — structural wrapper joining
+   `pal_v_burst` + `yuv_control_signals` + `yuv` into one block: RGB, BRIGHT,
+   sync and the counter taps in; `y_n`, `u`, `v` out. Pure wiring.
+   **Caller requirement:** RGB must be `'0'` during horizontal blanking — the
+   burst window lies inside it, and a coloured pixel during an even-line burst
+   would drive `v` below 0 mV. The colour back-end's blanking provides this;
+   confirm it when the two are wired together.
+5. ⏳ **DAC boundary module** — convert `millivolts_t` to DAC codes for whichever
+   DAC is chosen. Kept separate so the DAC choice stays out of `yuv`.
+6. ⏳ **Encoder / modulator (off-ULA)** — the LM1889's job: put U and V on
+   quadrature 4.43 MHz subcarriers and add Y and sync. Only needed if the FPGA
+   board is to produce composite video itself.
+
+---
+
+**➡ IMMEDIATE next tasks.** Strand A needs only `border_reg.vhd`. Strand B's
+ULA blocks are done. Next is the **top-level assembly** wiring `video_sync` +
+`ras_cas_generation` + `video_address_generation` +
+`latch_and_shift_reg_control_clks` + `flash_clock` +
+`attr_output_latch_border_select_mux` + `yuv_video` into one video generator.
+
+**⚠ OPEN DESIGN QUESTION — settle before the top-level wiring.** The `c0`/`c1`
+taps come off a **ripple** counter but `ras_cas_generation` samples them on
+`clk_14`; its own header flags that a resync into the `clk_14` domain may be
+needed. Decide whether that resync lives **inside** `ras_cas_generation` or at
+the **integration point** — it determines whether the top level needs resync
+registers of its own, and `video_address_generation` now consumes `vid_ras_n`,
+so it is downstream of the answer.
+
+**Testbench convention (learned the hard way).** Any NEW self-checking TB with a
+free-running clock process **must** call `finish` (`library std; use std.env.all;`)
+or gate its clock on a `sim_done` flag. Four TBs previously ended the stimulus
+process on a bare `wait;` while the clock kept toggling, so `run all` passed every
+check and then span forever — xsim had to be killed (exit code 4), which looks
+exactly like a hang. Fixed in `138960f`. Stimulus-only / eyeball TBs are the
+exception: they are meant to be run with an explicit `run <time>`.
+
+**xsim is more lenient than GHDL — a pass in xsim is not a pass in GHDL.** Two
+cases have bitten this project, both in `yuv_tb`:
+- **Port subtype matching.** A TB signal connected to a scalar `out` port must
+  have the port's exact subtype (`millivolts_t`, not plain `integer`). GHDL
+  rejects a mismatch ("range of formal is different"); xsim accepts it.
+- **Integer range checks.** Driving a value outside a constrained integer
+  subtype aborts the run in GHDL; xsim does not check and reports a pass.
+The Vivado PC has no GHDL, so anything touching constrained integer types should
+be re-run in the GHDL regression on the other PC.
+
+**VHDL is case-insensitive.** `v_sync_y` and the constant `V_SYNC_Y` are the same
+name. The UPPER-constant / lower-signal convention gives no compiler protection:
+a one-letter slip can resolve silently to the wrong object and still compile and
+elaborate.
+
 Mentor mode: offer walk-through vs review-my-sketch before writing VHDL.
 
 **Phase 6 — CPU interface**

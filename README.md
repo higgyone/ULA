@@ -1,8 +1,8 @@
-# ULA
+# ULA for the ZX pectrum
 
 Gate-accurate VHDL recreation of the Ferranti/Amstrad ULA chip used in the **ZX Spectrum 48K**, targeting a Digilent **Arty A7-35T** FPGA board (Artix-7 XC7A35T) and developed in **Vivado**.
 
-The implementation follows Chris Smith's book *The ZX Spectrum ULA*, mirroring the schematics on pages 90 (horizontal timing) and 92 (vertical timing).
+The implementation follows Chris Smith's book *The ZX Spectrum ULA*. Buy the book it is great!
 
 ## Status
 

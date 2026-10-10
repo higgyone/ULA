@@ -60,18 +60,19 @@
 -- real silicon power-up state comes from place-and-route.
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity data_latch_1_bit is
-    Port (
-        e     : in  STD_LOGIC;   -- active-low enable (= not datalatch): '0' transparent, '1' hold
-        d     : in  STD_LOGIC;   -- data bit in (from display RAM byte)
-        q     : out STD_LOGIC;   -- latched data (true)
-        q_bar : out STD_LOGIC);  -- latched data (active-low) -> shift-reg data_n
-end data_latch_1_bit;
+    port (
+        e     : in    std_logic; -- active-low enable (= not datalatch): '0' transparent, '1' hold
+        d     : in    std_logic; -- data bit in (from display RAM byte)
+        q     : out   std_logic; -- latched data (true)
+        q_bar : out   std_logic  -- latched data (active-low) -> shift-reg data_n
+    );
+end entity data_latch_1_bit;
 
-architecture Structural of data_latch_1_bit is
+architecture structural of data_latch_1_bit is
 
     -- Seeded to the "transparent, holding 0" state (e='0', d='0', q='0'):
     --   b_o = NOR(e, d)    = NOR(0,0) = 1
@@ -83,18 +84,19 @@ architecture Structural of data_latch_1_bit is
     signal c_o : std_logic := '1';
     signal d_o : std_logic := '0';
 
-    constant TG : time := 1 ns;   -- modelled NOR propagation delay (sim only)
+    constant tg : time := 1 ns;   -- modelled NOR propagation delay (sim only)
 
 begin
+
     -- input stage (gated by active-low enable e)
-    b_o <= not (e or d)       after TG;
-    a_o <= not (e or b_o)     after TG;
+    b_o <= not (e or d)       after tg;
+    a_o <= not (e or b_o)     after tg;
 
     -- cross-coupled SR latch
-    c_o <= not (a_o or d_o)   after TG;
-    d_o <= not (b_o or c_o)   after TG;
+    c_o <= not (a_o or d_o)   after tg;
+    d_o <= not (b_o or c_o)   after tg;
 
     q_bar <= c_o;
     q     <= d_o;
 
-end Structural;
+end architecture structural;

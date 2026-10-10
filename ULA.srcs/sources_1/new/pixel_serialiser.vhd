@@ -29,40 +29,42 @@
 -- constant, keeping this recreation schematic-faithful.
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity pixel_serialiser is
-    Port ( clk          : in  STD_LOGIC;                     -- pixel clock (falling-edge commit in shift8)
-           SLoad        : in  STD_LOGIC;                     -- '1' load latched byte, '0' shift left
-           data_latch_n : in  STD_LOGIC;                     -- active-low latch enable (= not datalatch)
-           data         : in  STD_LOGIC_VECTOR (7 downto 0); -- byte in (from display RAM)
-           serial_data  : out STD_LOGIC                      -- serial pixel stream, MSB first
-           );
-end pixel_serialiser;
+    port (
+        clk          : in    std_logic;                    -- pixel clock (falling-edge commit in shift8)
+        sload        : in    std_logic;                    -- '1' load latched byte, '0' shift left
+        data_latch_n : in    std_logic;                    -- active-low latch enable (= not datalatch)
+        data         : in    std_logic_vector(7 downto 0); -- byte in (from display RAM)
+        serial_data  : out   std_logic                     -- serial pixel stream, MSB first
+    );
+end entity pixel_serialiser;
 
-architecture Structural of pixel_serialiser is
+architecture structural of pixel_serialiser is
+
     -- latch's active-low output bus -> shift register's active-low load bus
-    signal latch_data_out_n : STD_LOGIC_VECTOR (7 downto 0);
+    signal latch_data_out_n : std_logic_vector(7 downto 0);
 
 begin
 
-data_latch_8: entity work.data_latch_8_bit
-    port map (
-                enable      => data_latch_n,
-                data        => data,
-                data_out    => open,               -- true byte -> attribute/colour path (later)
-                data_out_n  => latch_data_out_n
-                );
+    data_latch_8 : entity work.data_latch_8_bit
+        port map (
+            enable     => data_latch_n,
+            data       => data,
+            data_out   => open,
+            data_out_n => latch_data_out_n
+        );
 
-shift_8: entity work.shift8
-    port map (
-                clk     => clk,
-                SLoad   => SLoad,
-                Sin     => SLoad,                  -- serial-in tied to SLoad per book schematic (don't-care for the 8 valid pixels)
-                data_n  => latch_data_out_n,
-                q       => serial_data,
-                q_bar   => open
-                );
+    shift_8 : entity work.shift8
+        port map (
+            clk    => clk,
+            sload  => sload,
+            sin    => sload,
+            data_n => latch_data_out_n,
+            q      => serial_data,
+            q_bar  => open
+        );
 
-end Structural;
+end architecture structural;

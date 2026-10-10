@@ -26,78 +26,109 @@
 -- PASS = simulation runs to the "TB PASS" note with no assertion errors.
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
 
 entity vert_line_counter_tb is
-end vert_line_counter_tb;
+end entity vert_line_counter_tb;
 
-architecture Behavioral of vert_line_counter_tb is
-    constant T     : time    := 100 ns;          -- clk_hc6 period; T/2 = 50 ns >> gate-ripple settle (~9 ns)
-    constant V_MAX : integer := 311;             -- last line; counter visits 0..311 = 312 states
-    constant N_DISABLED : integer := 3;          -- leading cycles with enable low (hold test)
+architecture behavioral of vert_line_counter_tb is
 
-    signal clk_hc6 : std_logic := '0';
-    signal hc_rst  : std_logic := '0';
-    signal v0, v1, v2, v3, v4, v5, v6, v7, v8 : std_logic;
-    signal vrst    : std_logic;
-    signal sim_done : boolean := false;
+    constant t          : time    := 100 ns; -- clk_hc6 period; T/2 = 50 ns >> gate-ripple settle (~9 ns)
+    constant v_max      : integer := 311;    -- last line; counter visits 0..311 = 312 states
+    constant n_disabled : integer := 3;      -- leading cycles with enable low (hold test)
+
+    signal clk_hc6  : std_logic := '0';
+    signal hc_rst   : std_logic := '0';
+    signal v0       : std_logic;
+    signal v1       : std_logic;
+    signal v2       : std_logic;
+    signal v3       : std_logic;
+    signal v4       : std_logic;
+    signal v5       : std_logic;
+    signal v6       : std_logic;
+    signal v7       : std_logic;
+    signal v8       : std_logic;
+    signal vrst     : std_logic;
+    signal sim_done : boolean   := false;
+
 begin
 
     -- Device under test -------------------------------------------------
-    vlc: entity work.Vert_Line_counter(T_Structure)
-        port map(
-            hcrst        => hc_rst,
-            clk_hc6      => clk_hc6,
-            v0 => v0, v1 => v1, v2 => v2, v3 => v3, v4 => v4,
-            v5 => v5, v6 => v6, v7 => v7, v8 => v8,
-            vrst => vrst
+    vlc : entity work.vert_line_counter(T_Structure)
+        port map (
+            hcrst   => hc_rst,
+            clk_hc6 => clk_hc6,
+            v0      => v0,
+            v1      => v1,
+            v2      => v2,
+            v3      => v3,
+            v4      => v4,
+            v5      => v5,
+            v6      => v6,
+            v7      => v7,
+            v8      => v8,
+            vrst    => vrst
         );
 
     -- clk_hc6 generator -------------------------------------------------
-    clkgen: process
+    clkgen : process is
     begin
+
         while not sim_done loop
+
             clk_hc6 <= '0';
-            wait for T / 2;
+            wait for t / 2;
             clk_hc6 <= '1';
-            wait for T / 2;
+            wait for t / 2;
+
         end loop;
+
         wait;
-    end process;
+
+    end process clkgen;
 
     -- hcrst stimulus: low for the first N_DISABLED cycles (proves
     -- the counter holds), then high so it advances one line per cycle.
     -- Driven on the rising edge so it is stable at the falling edge the
     -- DUT (and the checker) sample on.
-    hcrst_stim: process
+    hcrst_stim : process is
+
         variable cyc : integer := 0;
+
     begin
+
         wait until rising_edge(clk_hc6);
         cyc := cyc + 1;
-        if cyc <= N_DISABLED then
+
+        if (cyc <= n_disabled) then
             hc_rst <= '0';
         else
             hc_rst <= '1';
         end if;
-    end process;
+
+    end process hcrst_stim;
 
     -- Golden checker: advance the expected count on the falling edge
     -- exactly as the DUT does, then compare on the following rising edge.
-    check: process
-        variable expected   : integer := 0;
-        variable exp_vrst    : std_logic := '0';
-        variable actual      : integer;
-        variable vec         : std_logic_vector(8 downto 0);
-        variable wraps_seen  : integer := 0;
+    check : process is
+
+        variable expected   : integer   := 0;
+        variable exp_vrst   : std_logic := '0';
+        variable actual     : integer;
+        variable vec        : std_logic_vector(8 downto 0);
+        variable wraps_seen : integer   := 0;
+
     begin
+
         loop
+
             wait until falling_edge(clk_hc6);
 
             -- Mirror the DUT's synchronous count update (enable sampled here).
-            if hc_rst = '1' then
-                if expected = V_MAX then
+            if (hc_rst = '1') then
+                if (expected = v_max) then
                     expected   := 0;
                     wraps_seen := wraps_seen + 1;
                 else
@@ -106,7 +137,7 @@ begin
             end if;
 
             -- T_Structure: vrst is combinational, high while count = 311 with hcrst high
-            if expected = V_MAX and hc_rst = '1' then
+            if (expected = v_max and hc_rst = '1') then
                 exp_vrst := '1';
             else
                 exp_vrst := '0';
@@ -130,7 +161,7 @@ begin
 
             -- Stop a few lines past the first wrap: this exercises
             -- 310, 311 (vrst high), wrap->0, then 1,2,3 (vrst low again).
-            if wraps_seen >= 1 and expected = 3 then
+            if (wraps_seen >= 1 and expected = 3) then
                 report "Vert_Line_counter TB PASS: " &
                        integer'image(wraps_seen) &
                        " frame wrap(s) verified, increment/hold/vrst all OK"
@@ -138,7 +169,9 @@ begin
                 sim_done <= true;
                 wait;
             end if;
-        end loop;
-    end process;
 
-end Behavioral;
+        end loop;
+
+    end process check;
+
+end architecture behavioral;

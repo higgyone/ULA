@@ -58,17 +58,20 @@
 -- real silicon timing comes from place-and-route.
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity d_ff_nor is
-    Port ( clk  : in  STD_LOGIC;
-           d    : in  STD_LOGIC;
-           q    : out STD_LOGIC;
-           qbar : out STD_LOGIC);
-end d_ff_nor;
+    port (
+        clk  : in    std_logic;
+        d    : in    std_logic;
+        q    : out   std_logic;
+        qbar : out   std_logic
+    );
+end entity d_ff_nor;
 
-architecture Behavioral of d_ff_nor is
+architecture behavioral of d_ff_nor is
+
     -- All six internal NOR-network signals are initialised to the
     -- "Case A" stable state:  d=0 captured, clk='0' phase, q='0'.
     --
@@ -91,15 +94,18 @@ architecture Behavioral of d_ff_nor is
     signal e_o : std_logic := '0';
     signal f_o : std_logic := '1';
 
-    constant TG : time := 1 ns;   -- modelled NOR propagation delay (sim only)
+    constant tg : time := 1 ns;   -- modelled NOR propagation delay (sim only)
+
 begin
-    a_o <= not (d_o or b_o)        after TG;
-    b_o <= not (a_o or clk)        after TG;
-    c_o <= not (b_o or clk or d_o) after TG;
-    d_o <= not (d   or c_o)        after TG;
-    e_o <= not (b_o or f_o)        after TG;
-    f_o <= not (c_o or e_o)        after TG;
+
+    a_o <= not (d_o or b_o)        after tg;
+    b_o <= not (a_o or clk)        after tg;
+    c_o <= not (b_o or clk or d_o) after tg;
+    d_o <= not (d   or c_o)        after tg;
+    e_o <= not (b_o or f_o)        after tg;
+    f_o <= not (c_o or e_o)        after tg;
 
     q    <= e_o;
     qbar <= f_o;
-end Behavioral;
+
+end architecture behavioral;

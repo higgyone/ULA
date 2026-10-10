@@ -26,30 +26,39 @@
 --   clk_out_n = qbar  (inverse)
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 entity clk_div_2 is
-    port ( clk_in    : in  std_logic;
-           reset     : in  std_logic;
-           clk_out   : out std_logic;
-           clk_out_n : out std_logic );
-end clk_div_2;
+    port (
+        clk_in    : in    std_logic;
+        reset     : in    std_logic;
+        clk_out   : out   std_logic;
+        clk_out_n : out   std_logic
+    );
+end entity clk_div_2;
 
-architecture Behavioral of clk_div_2 is
+architecture behavioral of clk_div_2 is
+
     signal d_in     : std_logic;
     signal q_int    : std_logic;
     signal qbar_int : std_logic;
+
 begin
+
     -- T-FF via D-FF: d = qbar (toggle) unless reset clears it.
-    d_in <= '0' when reset = '1' else qbar_int;
+    d_in <= '0' when reset = '1' else
+            qbar_int;
 
     ff : entity work.d_ff_nor(Behavioral)
-        port map ( clk  => clk_in,
-                   d    => d_in,
-                   q    => q_int,
-                   qbar => qbar_int );
+        port map (
+            clk  => clk_in,
+            d    => d_in,
+            q    => q_int,
+            qbar => qbar_int
+        );
 
     clk_out   <= q_int;
     clk_out_n <= qbar_int;
-end Behavioral;
+
+end architecture behavioral;

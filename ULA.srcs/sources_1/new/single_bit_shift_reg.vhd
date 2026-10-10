@@ -63,8 +63,8 @@
 -- place-and-route.
 ----------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+    use ieee.std_logic_1164.all;
 
 -- Operating modes (in plain words):
 --   The cell remembers one bit and, on each falling edge of clk, replaces it
@@ -83,51 +83,54 @@ use IEEE.STD_LOGIC_1164.ALL;
 --   high the cell samples the chosen input; on the falling edge it stores that
 --   bit and then holds it steady on q (and its inverse on q_bar) until the next
 --   falling edge.
-entity single_bit_shift_register is
-    Port ( clk        : in STD_LOGIC;
-           data_n     : in STD_LOGIC; -- active-low parallel-load bit (LOAD, set='1')
-           data_1_n   : in STD_LOGIC; -- active-low shift-in bit from neighbour (SHIFT, set='0')
-           set        : in STD_LOGIC; -- '1' = LOAD from data_n, '0' = SHIFT from data_1_n
-           q          : out STD_LOGIC;
-           q_bar      : out STD_LOGIC);
-end single_bit_shift_register;
 
-architecture Structure of single_bit_shift_register is
+entity single_bit_shift_register is
+    port (
+        clk      : in    std_logic;
+        data_n   : in    std_logic; -- active-low parallel-load bit (LOAD, set='1')
+        data_1_n : in    std_logic; -- active-low shift-in bit from neighbour (SHIFT, set='0')
+        set      : in    std_logic; -- '1' = LOAD from data_n, '0' = SHIFT from data_1_n
+        q        : out   std_logic;
+        q_bar    : out   std_logic
+    );
+end entity single_bit_shift_register;
+
+architecture structure of single_bit_shift_register is
 
     -- Seeded to the "holding 0" state (clk='0', set='0', q='0'):
     --   a_out=0 b_out=1 c_out=0  master holding 0
     --   g_out=0 h_out=1          slave  holding 0  => q=0, q_bar=1
     --   e_out=1 d_out=0 f_out=0 i_out=1  mux/fold nets consistent
-    signal a_out : STD_LOGIC := '0';
-    signal b_out : STD_LOGIC := '1';
-    signal c_out : STD_LOGIC := '0';
-    signal d_out : STD_LOGIC := '0';
-    signal e_out : STD_LOGIC := '1';
-    signal f_out : STD_LOGIC := '0';
-    signal g_out : STD_LOGIC := '0';
-    signal h_out : STD_LOGIC := '1';
-    signal i_out : STD_LOGIC := '1';
+    signal a_out : std_logic := '0';
+    signal b_out : std_logic := '1';
+    signal c_out : std_logic := '0';
+    signal d_out : std_logic := '0';
+    signal e_out : std_logic := '1';
+    signal f_out : std_logic := '0';
+    signal g_out : std_logic := '0';
+    signal h_out : std_logic := '1';
+    signal i_out : std_logic := '1';
 
-    constant TG : time := 1 ns;   -- modelled NOR propagation delay (sim only)
+    constant tg : time := 1 ns;   -- modelled NOR propagation delay (sim only)
 
 begin
 
     -- input mux: set selects parallel data (data_n) vs shift-in (data_1_n)
-    f_out <= not( set or data_1_n)         after TG;
-    e_out <= not( set)                     after TG;
-    d_out <= not( e_out or data_n)         after TG;
+    f_out <= not(set or data_1_n)         after tg;
+    e_out <= not(set)                     after tg;
+    d_out <= not(e_out or data_n)         after tg;
 
     -- master latch (gated by clk)
-    c_out <= not( clk or b_out)            after TG;
-    b_out <= not( clk or a_out)            after TG;
-    a_out <= not( b_out or i_out)          after TG;
-    i_out <= not( c_out or d_out or f_out) after TG;
+    c_out <= not(clk or b_out)            after tg;
+    b_out <= not(clk or a_out)            after tg;
+    a_out <= not(b_out or i_out)          after tg;
+    i_out <= not(c_out or d_out or f_out) after tg;
 
     -- slave SR latch
-    h_out <= not( c_out or g_out)          after TG;
-    g_out <= not( b_out or h_out)          after TG;
+    h_out <= not(c_out or g_out)          after tg;
+    g_out <= not(b_out or h_out)          after tg;
 
     q     <= g_out;
     q_bar <= h_out;
 
-end Structure;
+end architecture structure;
