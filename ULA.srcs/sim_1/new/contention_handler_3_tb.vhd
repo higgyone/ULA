@@ -152,7 +152,7 @@ architecture behavioral of contention_handler_3_tb is
 
 begin
 
-    -- the ULA-port decode the book puts outside this block
+    -- the PCB's gate, OFF the ULA: /IORQ OR A0 drives the ULA's ioreq_n pin
     ioreq_n <= a0 or iorq_n;
 
     dut : entity work.contention_handler_3(structural)

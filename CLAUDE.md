@@ -182,6 +182,37 @@ spelling wins for traceability — e.g. `shift8`'s `Sin` (serial-in) and `SLoad`
 on a port.) `Sin` is active-low. A future naming pass should **not** "correct"
 these — leave book-named ports alone.
 
+**Data-bus port naming (D0–D7) — the book's names.** The ULA's D pins are
+shared and bidirectional. Each block's data ports are named for the D bit they
+connect to, with the direction **from the ULA's side**, as the book does
+(book do0 / di3 → `do_0` / `di_3` in the project's style):
+- **`do_N`** — data OUT of the ULA: a pin it **drives** onto the bus, only
+  during a port read. `keyboard_input` do_0..do_4, `cassette_input` do_6 (EAR).
+  Driven as `'0'` / `'H'` (open-collector pad with a weak on-chip pull-up),
+  released to `'H'` outside a read so the CPU or DRAM can drive the pin.
+- **`di_N`** — data IN to the ULA: a bus bit it **reads**, latched on a port
+  write. `border_reg` di_0..di_2, `cassette_speaker_out` di_3 (MIC), di_4
+  (speaker).
+- Vectors indexed `(7 downto 0)` with element *n* = D*n*: `pixel_data`,
+  `attr_data` (read during video fetches).
+
+**The address pins A0–A6 are bidirectional too.** They are the multiplexed
+DRAM address bus. During a video fetch the ULA drives them
+(`video_address_generation` a0..a6, enabled by `ae_n`). Otherwise the PCB's
+'157 multiplexers drive them with the CPU address, selected by `ras_n`:
+`ras_n` high passes the B inputs (CPU A0–A6, the row), `ras_n` low passes the
+A inputs (CPU A7–A13, the column). The ULA reads **A0** from this bus:
+`io_port_decode_0xfe` uses it, relying on `ras_n` staying high through an I/O
+cycle (no /MREQ, so no RAS) so the pin carries CPU A0. At the top level these
+pins are `inout`, with `ae_n` deciding when the ULA drives.
+
+What makes it all line up is the **bit number**. At the top level all of these
+join one resolved `std_logic_vector(7 downto 0)` bus, bit *n* to every port
+numbered *n* (`do_N`, `di_N`, element *n*). D5 is input only (cell 31 is
+the analogue cassette interface); nothing in the ULA drives D7. Still to build:
+the **`port_rd_n` / `port_wr_n` decode** (`IORQ_n`, `RD_n` / `WR_n`, `A0 = '0'`),
+which every I/O block takes as an input.
+
 **⏳ TODO — reconcile active-low ("not") signal naming.** Inverted/active-low
 signals are currently spelled three different ways across the design: `n`-prefix
 (`nBorder`, `nHblank`), `_n`-suffix (`data_n`, `data_1_n`), and `_bar`-suffix

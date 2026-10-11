@@ -74,8 +74,10 @@
 --   c0_n        horizontal counter bit 0, inverted (the 3.5 MHz source)
 --   c2, c3      horizontal counter bits 2 and 3 (the contention window)
 --   a14, a15    Z80 address bits 14 and 15
---   ioreq_n     I/O request to the ULA port = a0 OR iorq_n, active low
---               (the OR gate is not built yet)
+--   ioreq_n     I/O request to the ULA port, active low: a ULA PIN. It is
+--               the Z80's /IORQ OR'd with A0 OFF-CHIP, on the PCB, so it is
+--               low only for an I/O cycle to an even address. Nothing inside
+--               the ULA generates it (the testbench models the PCB gate).
 --   mreq_n      Z80 /MREQ, active low
 --   border      ACTIVE HIGH: '1' in the border (only nborder exists so far,
 --               so the wiring stage needs an inverter)
