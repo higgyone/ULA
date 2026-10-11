@@ -55,7 +55,7 @@ entity attr_output_latch_border_select_mux is
         pixel_data          : in    std_logic_vector(7 downto 0); -- pixel data
         attr_data_latch_n   : in    std_logic;                    -- when to latch the attribute data
         attr_data           : in    std_logic_vector(7 downto 0); -- D0-2 ink, D3-5 paper, D6 hl, D7 fl
-        border_colour_bgr   : in    std_logic_vector(2 downto 0); -- blue, green ed bits
+        border_colour_bgr   : in    std_logic_vector(2 downto 0); -- border_reg: (0) blue, (1) red, (2) green
         video_en            : in    std_logic;                    -- enable video; dont display on blank
         attr_output_latch_n : in    std_logic;                    -- ACTIVE-LOW output-latch enable ('0' transparent, '1' hold)
         v_sync              : in    std_logic;
