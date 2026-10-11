@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------------
 -- cassette_input_tb — self-checking TB for the EAR input on data bit 6.
 --
--- The DUT's d6 pin is open collector with a weak on-chip pull-up: it pulls
+-- The DUT's do_6 pin is open collector with a weak on-chip pull-up: it pulls
 -- LOW ('0') or releases to 'H'. The TB adds NO pull-up of its own and checks
 -- the RESOLVED bus, so a released pin must read exactly 'H' (a bare 'Z' or a
 -- strongly driven '1' would fail).
@@ -78,7 +78,7 @@ begin
         port map (
             port_rd_n => port_rd_n,
             ear       => ear,
-            d6        => d(6)
+            do_6      => d(6)
         );
 
     -- another device that can drive D6 (no pull-up here: the ULA's own weak
@@ -94,11 +94,11 @@ begin
             k3        => k(3),
             k4        => k(4),
             port_rd_n => port_rd_n,
-            d0        => d(0),
-            d1        => d(1),
-            d2        => d(2),
-            d3        => d(3),
-            d4        => d(4)
+            do_0      => d(0),
+            do_1      => d(1),
+            do_2      => d(2),
+            do_3      => d(3),
+            do_4      => d(4)
         );
 
     -- EAR comes from the tape while it plays, otherwise from the test steps

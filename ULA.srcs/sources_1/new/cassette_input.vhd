@@ -9,9 +9,9 @@
 -- ── The gates ────────────────────────────────────────────────────────
 --   s_d6_n = NOR(port_rd_n, ear)   '1' only while reading the port AND EAR is
 --                                  low
---   d6     = NOT s_d6_n            (gate array), then the D6 pin's output stage
+--   do_6     = NOT s_d6_n            (gate array), then the D6 pin's output stage
 --
---     port_rd_n  ear | s_d6_n | d6 pin
+--     port_rd_n  ear | s_d6_n | do_6 pin
 --     ---------------+--------+-----------------------------------------
 --         0       0  |   1    |  '0'  pulled low: EAR low
 --         0       1  |   0    |  'H'  released, weak pull-up: EAR high
@@ -38,7 +38,7 @@
 --   ear        tape input level ('1' high, '0' low)
 --   port_rd_n  ULA port read, active low (an even-address I/O read; the
 --              gate that makes it is not built yet)
---   d6         data bus bit 6: '0' for EAR low during a read, otherwise 'H'
+--   do_6         data bus bit 6: '0' for EAR low during a read, otherwise 'H'
 --              (open collector released, weak on-chip pull-up)
 --
 -- Verified by cassette_input_tb.
@@ -51,7 +51,7 @@ entity cassette_input is
     port (
         port_rd_n : in    std_logic; -- ULA port read, active low
         ear       : in    std_logic; -- tape input level
-        d6        : out   std_logic  -- data bus bit 6
+        do_6      : out   std_logic  -- data bus bit 6
     );
 end entity cassette_input;
 
@@ -66,7 +66,7 @@ begin
 
     -- onto the data bus through the D6 pad (collector follower + weak
     -- pull-up): pull the pin LOW for EAR low, otherwise release it ('H')
-    d6 <= '0' when s_d6_n = '1' else
-          'H';
+    do_6 <= '0' when s_d6_n = '1' else
+            'H';
 
 end architecture structural;

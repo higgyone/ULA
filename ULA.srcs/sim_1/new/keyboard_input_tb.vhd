@@ -157,11 +157,11 @@ begin
             k3        => k(3),
             k4        => k(4),
             port_rd_n => port_rd_n,
-            d0        => d(0),
-            d1        => d(1),
-            d2        => d(2),
-            d3        => d(3),
-            d4        => d(4)
+            do_0      => d(0),
+            do_1      => d(1),
+            do_2      => d(2),
+            do_3      => d(3),
+            do_4      => d(4)
         );
 
     stim : process is

@@ -69,7 +69,7 @@
 --   k0..k4     keyboard column lines, active low ('0' = key down)
 --   port_rd_n  ULA port read, active low (an even-address I/O read; the
 --              gate that makes it is not built yet)
---   d0..d4     data bus bits 0..4: '0' for a key down during a read,
+--   do_0..do_4     data bus bits 0..4: '0' for a key down during a read,
 --              otherwise 'H' (open collector released, weak on-chip pull-up)
 --
 -- Verified by keyboard_input_tb.
@@ -86,11 +86,11 @@ entity keyboard_input is
         k3        : in    std_logic; -- keyboard column 3, active low
         k4        : in    std_logic; -- keyboard column 4, active low
         port_rd_n : in    std_logic; -- ULA port read, active low
-        d0        : out   std_logic; -- data bus bit 0
-        d1        : out   std_logic; -- data bus bit 1
-        d2        : out   std_logic; -- data bus bit 2
-        d3        : out   std_logic; -- data bus bit 3
-        d4        : out   std_logic  -- data bus bit 4
+        do_0      : out   std_logic; -- data bus bit 0
+        do_1      : out   std_logic; -- data bus bit 1
+        do_2      : out   std_logic; -- data bus bit 2
+        do_3      : out   std_logic; -- data bus bit 3
+        do_4      : out   std_logic  -- data bus bit 4
     );
 end entity keyboard_input;
 
@@ -114,15 +114,15 @@ begin
     -- onto the data bus through the D-pin pads (collector follower + weak
     -- pull-up): pull the pin LOW for a key down, otherwise release it to the
     -- weak pull-up ('H')
-    d0 <= '0' when s_d0_n = '1' else
-          'H';
-    d1 <= '0' when s_d1_n = '1' else
-          'H';
-    d2 <= '0' when s_d2_n = '1' else
-          'H';
-    d3 <= '0' when s_d3_n = '1' else
-          'H';
-    d4 <= '0' when s_d4_n = '1' else
-          'H';
+    do_0 <= '0' when s_d0_n = '1' else
+            'H';
+    do_1 <= '0' when s_d1_n = '1' else
+            'H';
+    do_2 <= '0' when s_d2_n = '1' else
+            'H';
+    do_3 <= '0' when s_d3_n = '1' else
+            'H';
+    do_4 <= '0' when s_d4_n = '1' else
+            'H';
 
 end architecture structural;

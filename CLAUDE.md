@@ -182,6 +182,27 @@ spelling wins for traceability — e.g. `shift8`'s `Sin` (serial-in) and `SLoad`
 on a port.) `Sin` is active-low. A future naming pass should **not** "correct"
 these — leave book-named ports alone.
 
+**Data-bus port naming (D0–D7) — the book's names.** The ULA's D pins are
+shared and bidirectional. Each block's data ports are named for the D bit they
+connect to, with the direction **from the ULA's side**, as the book does
+(book do0 / di3 → `do_0` / `di_3` in the project's style):
+- **`do_N`** — data OUT of the ULA: a pin it **drives** onto the bus, only
+  during a port read. `keyboard_input` do_0..do_4, `cassette_input` do_6 (EAR).
+  Driven as `'0'` / `'H'` (open-collector pad with a weak on-chip pull-up),
+  released to `'H'` outside a read so the CPU or DRAM can drive the pin.
+- **`di_N`** — data IN to the ULA: a bus bit it **reads**, latched on a port
+  write. `border_reg` di_0..di_2, `cassette_speaker_out` di_3 (MIC), di_4
+  (speaker).
+- Vectors indexed `(7 downto 0)` with element *n* = D*n*: `pixel_data`,
+  `attr_data` (read during video fetches).
+
+What makes it all line up is the **bit number**. At the top level all of these
+join one resolved `std_logic_vector(7 downto 0)` bus, bit *n* to every port
+numbered *n* (`do_N`, `di_N`, element *n*). D5 is input only (cell 31 is
+the analogue cassette interface); nothing in the ULA drives D7. Still to build:
+the **`port_rd_n` / `port_wr_n` decode** (`IORQ_n`, `RD_n` / `WR_n`, `A0 = '0'`),
+which every I/O block takes as an input.
+
 **⏳ TODO — reconcile active-low ("not") signal naming.** Inverted/active-low
 signals are currently spelled three different ways across the design: `n`-prefix
 (`nBorder`, `nHblank`), `_n`-suffix (`data_n`, `data_1_n`), and `_bar`-suffix
