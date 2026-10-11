@@ -44,7 +44,11 @@
 --             is how the ULA reads the bus: DRAM data in video fetches, and
 --             the CPU's writes to the ULA port. (Not part of this block.)
 --     D5 is INPUT ONLY: it has no output transistor, so nothing in the ULA
---             can drive it.
+--             can drive it. D5 is not used as an output because its
+--             peripheral cell, cell 31, is taken by the ANALOGUE CASSETTE
+--             INTERFACE instead. That leaves D5 with only its input buffer,
+--             and its logic comes from cell 28, which is shared with the CPU
+--             clock output (phi clock).
 --
 --   That matters because D0..D7 are a SHARED bus. A weak pull-up is easily
 --   overridden, so whenever this block is not pulling a pin low, any other
@@ -57,8 +61,9 @@
 --   driver's value whenever another driver is present.
 --
 -- ── Not covered here ─────────────────────────────────────────────────
---   D5..D7 of the port read: bit 6 is the EAR input, D5 is input only, and
---   bit 7 is not driven by this block.
+--   D5..D7 of the port read: bit 6 is the EAR input, D5 is input only (its
+--   peripheral cell 31 is the analogue cassette interface -- see "The D-pin
+--   pads" above), and bit 7 is not driven by this block.
 --
 -- ── Ports ────────────────────────────────────────────────────────────
 --   k0..k4     keyboard column lines, active low ('0' = key down)
