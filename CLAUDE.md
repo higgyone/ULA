@@ -196,6 +196,16 @@ connect to, with the direction **from the ULA's side**, as the book does
 - Vectors indexed `(7 downto 0)` with element *n* = D*n*: `pixel_data`,
   `attr_data` (read during video fetches).
 
+**The address pins A0–A6 are bidirectional too.** They are the multiplexed
+DRAM address bus. During a video fetch the ULA drives them
+(`video_address_generation` a0..a6, enabled by `ae_n`). Otherwise the PCB's
+'157 multiplexers drive them with the CPU address, selected by `ras_n`:
+`ras_n` high passes the B inputs (CPU A0–A6, the row), `ras_n` low passes the
+A inputs (CPU A7–A13, the column). The ULA reads **A0** from this bus:
+`io_port_decode_0xfe` uses it, relying on `ras_n` staying high through an I/O
+cycle (no /MREQ, so no RAS) so the pin carries CPU A0. At the top level these
+pins are `inout`, with `ae_n` deciding when the ULA drives.
+
 What makes it all line up is the **bit number**. At the top level all of these
 join one resolved `std_logic_vector(7 downto 0)` bus, bit *n* to every port
 numbered *n* (`do_N`, `di_N`, element *n*). D5 is input only (cell 31 is
