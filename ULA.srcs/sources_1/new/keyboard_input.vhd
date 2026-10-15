@@ -7,9 +7,16 @@
 -- ── The keyboard ─────────────────────────────────────────────────────
 --   The Spectrum's 40 keys form an 8 x 5 matrix. The eight half-row lines
 --   are driven by the Z80's upper address bits A8..A15 (a '0' selects that
---   half-row); the five column lines come back to the ULA as k0..k4, pulled
---   up on the PCB. A pressed key in a selected half-row pulls its column LOW.
---   So k0..k4 are ACTIVE LOW: '0' = a key is down.
+--   half-row); the five column lines come back to the ULA as k0..k4. A
+--   pressed key in a selected half-row pulls its column LOW. So k0..k4 are
+--   ACTIVE LOW: '0' = a key is down.
+--
+--   Each K pin enters the ULA through an EMITTER-FOLLOWER input buffer (a
+--   non-inverting level shift from TTL to the chip's internal CML levels)
+--   and has a WEAK ON-CHIP PULL-UP, which holds the column high while no key
+--   pulls it low. K0 also has an open-collector OUTPUT, used only in wafer
+--   test mode B to put v8_n on the pin (see test_modes); in normal operation
+--   it is released, so K0 reads exactly like K1..K4.
 --
 --     A8  CAPS SHIFT Z X C V       A12 0 9 8 7 6
 --     A9  A S D F G                A13 P O I U Y
@@ -66,10 +73,11 @@
 --   pads" above), and bit 7 is not driven by this block.
 --
 -- ── Ports ────────────────────────────────────────────────────────────
---   k0..k4     keyboard column lines, active low ('0' = key down)
---   port_rd_n  ULA port read, active low (an even-address I/O read; the
---              gate that makes it is not built yet)
---   do_0..do_4     data bus bits 0..4: '0' for a key down during a read,
+--   k0..k4     keyboard column lines, active low ('0' = key down; '1' is
+--              held by the weak on-chip pull-up)
+--   port_rd_n  ULA port read, active low (an even-address I/O read, from
+--              io_port_decode_0xfe)
+--   do_0..do_4 data bus bits 0..4: '0' for a key down during a read,
 --              otherwise 'H' (open collector released, weak on-chip pull-up)
 --
 -- Verified by keyboard_input_tb.
