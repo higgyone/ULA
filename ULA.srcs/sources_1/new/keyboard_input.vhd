@@ -13,8 +13,9 @@
 --
 --   Each K pin enters the ULA through an EMITTER-FOLLOWER input buffer (a
 --   non-inverting level shift from TTL to the chip's internal CML levels)
---   and has a WEAK ON-CHIP PULL-UP, which holds the column high while no key
---   pulls it low. K0 also has an open-collector OUTPUT, used only in wafer
+--   and has a WEAK ON-CHIP PULL-UP. The Spectrum PCB adds a 10k pull-up
+--   resistor on each line as well. Together they hold the column high while
+--   no key pulls it low. K0 also has an open-collector OUTPUT, used only in wafer
 --   test mode B to put v8_n on the pin (see test_modes); in normal operation
 --   it is released, so K0 reads exactly like K1..K4.
 --
@@ -74,7 +75,7 @@
 --
 -- ── Ports ────────────────────────────────────────────────────────────
 --   k0..k4     keyboard column lines, active low ('0' = key down; '1' is
---              held by the weak on-chip pull-up)
+--              held by the weak on-chip pull-up and the PCB's 10k)
 --   port_rd_n  ULA port read, active low (an even-address I/O read, from
 --              io_port_decode_0xfe)
 --   do_0..do_4 data bus bits 0..4: '0' for a key down during a read,
