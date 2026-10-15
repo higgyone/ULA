@@ -744,8 +744,6 @@ top level yet. **Next: test modes** (branch `phase6-test-modes`).
 - ✅ **`cassette_speaker_out`** (xsim, 31 checks) — port write: `di_3` → MIC,
   `di_4` → speaker, same latch pattern. Logic levels only; the analogue
   cassette stage is separate.
-- Note: the `border_reg` and `cassette_speaker_out` headers still say the
-  `port_wr_n` gate "is not built yet" — stale since `io_port_decode_0xfe`.
 
 *Interrupt*
 - ✅ **`interrupt`** (xsim, `interrupt_tb` 131 checks + 4 timed pulses; branch

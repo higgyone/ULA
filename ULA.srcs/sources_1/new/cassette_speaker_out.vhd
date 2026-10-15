@@ -33,8 +33,8 @@
 -- ── Ports ────────────────────────────────────────────────────────────
 --   di_3       data bus bit 3 (MIC), read by the ULA
 --   di_4       data bus bit 4 (speaker), read by the ULA
---   port_wr_n  ULA port write, active low (an even-address I/O write; the
---              gate that makes it is not built yet)
+--   port_wr_n  ULA port write, active low (an even-address I/O write, from
+--              io_port_decode_0xfe)
 --   mic        MIC output, held from the last port write
 --   speaker    speaker output, held from the last port write
 ----------------------------------------------------------------------------------
