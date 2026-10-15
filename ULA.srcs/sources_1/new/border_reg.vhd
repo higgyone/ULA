@@ -33,8 +33,8 @@
 --
 -- ── Ports ────────────────────────────────────────────────────────────
 --   di_0..di_2  data bus bits 0..2, from the D-pin input buffers
---   port_wr_n   ULA port write, active low (an even-address I/O write; the
---               gate that makes it is not built yet)
+--   port_wr_n   ULA port write, active low (an even-address I/O write, from
+--               io_port_decode_0xfe)
 --   b0, b1, b2  border colour: blue, red, green
 --
 -- Verified by border_reg_tb.
