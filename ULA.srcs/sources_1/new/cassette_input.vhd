@@ -9,7 +9,7 @@
 -- ── The gates ────────────────────────────────────────────────────────
 --   s_d6_n = NOR(port_rd_n, ear)   '1' only while reading the port AND EAR is
 --                                  low
---   do_6     = NOT s_d6_n            (gate array), then the D6 pin's output stage
+--   do_6   = NOT s_d6_n            (gate array), then the D6 pin's output stage
 --
 --     port_rd_n  ear | s_d6_n | do_6 pin
 --     ---------------+--------+-----------------------------------------
@@ -29,16 +29,18 @@
 -- ── What `ear` is ────────────────────────────────────────────────────
 --   The EAR input already turned into a logic level by the pin's input
 --   circuitry. On the real machine the EAR socket shares the ULA's pin with
---   the MIC and speaker outputs (port bits 3 and 4), so with no tape playing
---   the level read here depends on what was last written to those bits, and
---   issue 2 and issue 3 boards differ in exactly how. That analogue pin
---   sharing is outside this block: it only passes on the level it is given.
+--   the MIC and speaker outputs (port bits 3 and 4, latched by
+--   cassette_speaker_out), so with no tape playing the level read here
+--   depends on what was last written to those bits, and issue 2 and issue 3
+--   boards differ in exactly how. That analogue pin sharing is outside this
+--   block: it only passes on the level it is given.
 --
 -- ── Ports ────────────────────────────────────────────────────────────
 --   ear        tape input level ('1' high, '0' low)
---   port_rd_n  ULA port read, active low (an even-address I/O read; the
---              gate that makes it is not built yet)
---   do_6         data bus bit 6: '0' for EAR low during a read, otherwise 'H'
+--   port_rd_n  ULA port read, active low (an even-address I/O read, from
+--              io_port_decode_0xfe)
+--   do_6       data bus bit 6, driven OUT of the ULA ("do", as the book
+--              names it): '0' for EAR low during a read, otherwise 'H'
 --              (open collector released, weak on-chip pull-up)
 --
 -- Verified by cassette_input_tb.
