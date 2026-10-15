@@ -6,8 +6,13 @@
 -- strobe that is left free becomes a fast test clock:
 --   A  WR high, rd_n is the clock -> tclka_n = NOT rd_n (C6..C8 via tclk_a)
 --   B  RD high, wr_n is the clock -> tclkb_n = NOT wr_n (flash counter)
--- In test B, K0 shows v8 (while wr_n is low) for the wafer probe.
--- Outside a test mode all three outputs are '0'.
+-- In test B, the K0 pin carries v8_n (while wr_n is low) for the wafer probe.
+-- Outside a test mode tclka_n and tclkb_n are '0'.
+--
+-- K0 is open collector with a WEAK on-chip pull-up: the DUT pulls it LOW
+-- ('0') or releases it to 'H'. The TB adds NO pull-up of its own, so a
+-- released pin must read exactly 'H' from the DUT itself. key_k0 models a
+-- key on keyboard column 0 sharing the pin ('Z' = no key, '0' = key down).
 --
 -- flash_clock is instantiated on tclkb_n, so the TB also proves the test
 -- clock reaches the flash counter with the right polarity.
@@ -17,18 +22,22 @@
 --      mreq_n and v8_n match the model above.
 --   2. NORMAL Z80 CYCLES: idle, memory read / write, refresh, I/O read /
 --      write and interrupt acknowledge (IORQ without MREQ) never enter a
---      test mode: all outputs '0', with v8_n either way.
+--      test mode: test clocks '0' and K0 released ('H'), with v8_n either way.
 --   3. TEST A CLOCK: rd_n toggled at 20 MHz; tclka_n follows it inverted on
---      every half cycle, tclkb_n and k0 stay '0'.
+--      every half cycle, tclkb_n stays '0', K0 stays released.
 --   4. TEST B CLOCK: wr_n toggled at 20 MHz; tclkb_n follows it inverted,
---      tclka_n stays '0', k0 = v8 while wr_n is low.
+--      tclka_n stays '0', K0 = v8_n ('0' / 'H') while wr_n is low.
 --   5. FLASH, NORMAL: with the bus idle, 64 frames of v8 give exactly 4
 --      flash_clk edges (one every 16 frames). This fails if tclkb_n is '1'
 --      outside test mode, which blocks v8 at flash_clock's NOR.
 --   6. FLASH, TEST B: v8_n low, 64 wr_n cycles at 20 MHz give exactly 4
 --      flash_clk edges, 800 ns apart: 625 kHz instead of 1.5625 Hz.
 --   7. FLASH, TEST B BLOCKED: v8_n high, the same 64 wr_n cycles give no
---      flash_clk edges and k0 stays '0'.
+--      flash_clk edges and K0 stays released ('H').
+--   8. SHARED K0 PIN: outside test B, a key on column 0 pulls K0 low and
+--      releasing it returns the pin to 'H', in every normal Z80 cycle and in
+--      test A, with no 'X'. In test B, a key and the DUT pulling low together
+--      read '0' (wired-OR), not 'X'.
 --
 -- Any mismatch is fatal; a clean run prints "ALL TESTS PASSED".
 ----------------------------------------------------------------------------------
@@ -56,6 +65,7 @@ architecture behavioral of test_modes_tb is
     signal v8_n    : std_logic := '1';
 
     signal k0      : std_logic;
+    signal key_k0  : std_logic := 'Z'; -- a key on column 0 ('0' = down)
     signal tclka_n : std_logic;
     signal tclkb_n : std_logic;
 
@@ -67,6 +77,10 @@ architecture behavioral of test_modes_tb is
     signal t_prev_edge : time    := 0 ns;
 
 begin
+
+    -- the keyboard matrix on the same pin (no pull-up here: the ULA's own
+    -- weak pull-up must supply the 'H')
+    k0 <= key_k0;
 
     dut : entity work.test_modes(structural)
         port map (
@@ -147,10 +161,12 @@ begin
                 exp_b := '1';
             end if;
 
-            exp_k0 := '0';
+            -- K0 pin: pulled low in test B while wr_n is low and v8 is high
+            -- (pin = v8_n), otherwise released to the weak pull-up
+            exp_k0 := 'H';
 
             if (exp_b = '1' and v8_n = '0') then
-                exp_k0 := '1';
+                exp_k0 := '0';
             end if;
 
             assert tclka_n = exp_a
@@ -291,9 +307,9 @@ begin
                 v8_n     <= '1' when v = 1 else '0';
                 set_bus(cycles(c).mreq, cycles(c).ioreq, cycles(c).rd, cycles(c).wr);
                 wait for settle;
-                assert tclka_n = '0' and tclkb_n = '0' and k0 = '0'
+                assert tclka_n = '0' and tclkb_n = '0' and k0 = 'H'
                     report "FAIL normal cycle " & integer'image(c)
-                           & ": a test-mode output is not '0'"
+                           & ": a test clock is not '0' or K0 is not released"
                     severity failure;
                 checks_v := checks_v + 1;
 
@@ -301,7 +317,7 @@ begin
 
         end loop;
 
-        report "PASS: normal Z80 cycles never enter a test mode (all outputs '0')";
+        report "PASS: normal Z80 cycles never enter a test mode (test clocks '0', K0 released)";
 
         -- 3. test A: rd_n is the clock ------------------------------------
         v8_n <= '0';
@@ -336,7 +352,7 @@ begin
 
         end loop;
 
-        report "PASS: test B: tclkb_n follows wr_n (inverted), k0 = v8 while wr_n is low";
+        report "PASS: test B: tclkb_n follows wr_n (inverted), K0 = v8_n while wr_n is low";
 
         -- 5. flash counter in normal operation: clocked by v8 --------------
         set_bus('1', '1', '1', '1');
@@ -346,9 +362,10 @@ begin
 
         for f in 1 to 64 loop
 
-            v8_n <= '0';                                                                        -- v8 rises
+            -- v8 rises, then falls: the frame wrap, which clocks stage 0
+            v8_n <= '0';
             wait for t_frame / 2;
-            v8_n <= '1';                                                                        -- v8 falls: the frame wrap, clocks stage 0
+            v8_n <= '1';
             wait for t_frame / 2;
 
         end loop;
@@ -358,8 +375,9 @@ begin
         report "PASS: normal mode: 64 frames of v8 give 4 flash_clk edges (one per 16 frames)";
 
         -- 6. flash counter in test B: clocked by wr_n ----------------------
+        -- open the gate (the probe sees v8_n low on K0)
         set_bus('0', '0', '1', '1');
-        v8_n   <= '0';                                                                          -- open the gate (the probe sees v8 on K0)
+        v8_n   <= '0';
         wait for t_ripple;
         base_v := flash_edges;
 
@@ -396,8 +414,9 @@ begin
 
             wr_n     <= '0';
             wait for t_half;
-            assert k0 = '0'
-                report "FAIL test B, v8_n high: k0 = " & std_logic'image(k0)
+            assert k0 = 'H'
+                report "FAIL test B, v8_n high: K0 = " & std_logic'image(k0)
+                       & ", expected 'H' (released)"
                 severity failure;
             checks_v := checks_v + 1;
             wr_n     <= '1';
@@ -407,7 +426,64 @@ begin
 
         wait for t_ripple;
         expect_edges("test B, v8_n high, 64 wr_n cycles", 0);
-        report "PASS: test B with v8_n high: wr_n is blocked, no flash_clk edges, k0 = '0'";
+        report "PASS: test B with v8_n high: wr_n is blocked, no flash_clk edges, K0 released";
+
+        -- 8. K0 shared with the keyboard ------------------------------------
+        -- outside test B: normal cycles (v8_n either way) and test A
+        for c in cycles'range loop
+
+            for v in 0 to 1 loop
+
+                v8_n     <= '1' when v = 1 else '0';
+                set_bus(cycles(c).mreq, cycles(c).ioreq, cycles(c).rd, cycles(c).wr);
+                key_k0   <= '0';
+                wait for settle;
+                assert k0 = '0'
+                    report "FAIL normal cycle " & integer'image(c)
+                           & ", key down: K0 = " & std_logic'image(k0) & ", expected '0'"
+                    severity failure;
+                key_k0   <= 'Z';
+                wait for settle;
+                assert k0 = 'H'
+                    report "FAIL normal cycle " & integer'image(c)
+                           & ", key up: K0 = " & std_logic'image(k0) & ", expected 'H'"
+                    severity failure;
+                checks_v := checks_v + 2;
+
+            end loop;
+
+        end loop;
+
+        v8_n     <= '0';
+        set_bus('0', '0', '0', '1'); -- test A, rd_n low
+        key_k0   <= '0';
+        wait for settle;
+        assert k0 = '0'
+            report "FAIL test A, key down: K0 = " & std_logic'image(k0)
+            severity failure;
+        key_k0   <= 'Z';
+        wait for settle;
+        assert k0 = 'H'
+            report "FAIL test A, key up: K0 = " & std_logic'image(k0)
+            severity failure;
+        checks_v := checks_v + 2;
+
+        -- test B with the DUT pulling K0 low (v8 high, wr_n low) and a key
+        -- down at the same time: both pull low, so the pin reads '0'
+        set_bus('0', '0', '1', '0');
+        key_k0   <= '0';
+        wait for settle;
+        assert k0 = '0'
+            report "FAIL test B, DUT and key both low: K0 = " & std_logic'image(k0)
+            severity failure;
+        key_k0   <= 'Z';
+        wait for settle;
+        assert k0 = '0'
+            report "FAIL test B, DUT alone low: K0 = " & std_logic'image(k0)
+            severity failure;
+        checks_v := checks_v + 2;
+
+        report "PASS: K0 is shared with the keyboard: a key reads cleanly outside test B, no 'X'";
 
         report "ALL TESTS PASSED (" & integer'image(checks_v) & " checks)";
         finish;
