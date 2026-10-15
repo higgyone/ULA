@@ -710,8 +710,8 @@ Mentor mode: offer walk-through vs review-my-sketch before writing VHDL.
 
 **Phase 6 — CPU interface** — ✅ all blocks below built and xsim-verified
 (re-run together 2026-10-15). Merged via PRs #8 (memory/contention, with
-video), #9 (I/O devices) and the `phase6-interrupts` PR. None is wired into a
-top level yet. **Next: test modes** (branch `phase6-test-modes`).
+video), #9 (I/O devices), #10 (interrupts) and the `phase6-test-modes` PR.
+None is wired into a top level yet. **Phase 6 is complete.**
 
 *Memory and CPU clock*
 - ✅ **`cpu_memory_access`** (xsim, 1296 checks) — lower-16K decode
@@ -774,6 +774,38 @@ top level yet. **Next: test modes** (branch `phase6-test-modes`).
     transposed. Here the instances share no clock/reset nets (`interrupt` has
     neither), which is consistent with that bug needing shared clock/reset.
   - ⏳ GHDL run still pending (other PC). Not yet wired into a top level.
+
+*Wafer test modes*
+- ✅ **`test_modes`** (xsim, `test_modes_tb` 570 checks; branch
+  `phase6-test-modes`) — lets the wafer probe clock the slow counters from a
+  CPU strobe pin at up to 20 MHz instead of waiting 20 ms per frame / 0.64 s
+  per FLASH period. Entered with **MREQ and IORQ low together** (never
+  happens on a real Z80); the level of the other strobe picks the mode and
+  the free strobe is the test clock:
+  - **A** — WR high, `rd_n` clocks: `tclka_n = NOR(ioreq_n, mreq_n, rd_n,
+    s_wr)` = NOT `rd_n` → `master_horiz_counter`'s `tclk_a` (clocks C6..C8
+    via `clk_hc6 = NOR(tclk_a, c5_n)`, so only while c5 = 1). Line rate
+    20 MHz / 7 = 2.86 MHz instead of 15.625 kHz.
+  - **B** — RD high, `wr_n` clocks: `tclkb_n = NOR(s_rd, wr_n, ioreq_n,
+    mreq_n)` = NOT `wr_n` → `flash_clock`'s `tclkb_n` (`clock_in =
+    NOR(v8_n, tclkb_n)`, so only while v8 = 1). FLASH 20 MHz / 32 = 625 kHz
+    instead of 1.5625 Hz.
+  - **Both test clocks must be `'0'` outside their mode** — each feeds a NOR
+    that has to pass c5 / v8 through in normal operation. (A first draft sent
+    `tclkb` through an extra inverter, '1' normally, which froze FLASH; the
+    TB's normal-mode FLASH check now catches that.)
+  - **K0 pin = v8 monitor.** Book gate `k0_n = NOR(v8_n, tclkb)` is the
+    *complement* of the pin: an open-collector output pulls K0 low when
+    `k0_n = '1'`, otherwise releases it to the weak on-chip pull-up (`'0'` /
+    `'H'`). So K0 carries `v8_n` in test B (while `wr_n` is low) and is
+    released in normal operation, leaving it to the keyboard. K pins have
+    emitter-follower inputs, weak on-chip pull-ups **and** 10k PCB pull-ups —
+    model the PCB ones as `'H'` on K1..K4 at board level.
+  - TB also instantiates `flash_clock` on `tclkb_n` (normal: 64 frames → 4
+    edges; test B: 64 `wr_n` cycles → 4 edges ~800 ns apart, ±2 ns because
+    `d_ff_nor` rise/fall paths differ by one gate) and checks K0 shared with a
+    key (no `'X'`). Test A is checked at `tclka_n` only, not through
+    `master_horiz_counter`.
 
 **Phase 7 — Top level**
 - `ULA.vhd` — instantiates all sub-modules; full Z80 bus; wired to the Arty A7-35T XDC
