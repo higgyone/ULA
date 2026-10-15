@@ -209,9 +209,9 @@ pins are `inout`, with `ae_n` deciding when the ULA drives.
 What makes it all line up is the **bit number**. At the top level all of these
 join one resolved `std_logic_vector(7 downto 0)` bus, bit *n* to every port
 numbered *n* (`do_N`, `di_N`, element *n*). D5 is input only (cell 31 is
-the analogue cassette interface); nothing in the ULA drives D7. Still to build:
-the **`port_rd_n` / `port_wr_n` decode** (`IORQ_n`, `RD_n` / `WR_n`, `A0 = '0'`),
-which every I/O block takes as an input.
+the analogue cassette interface); nothing in the ULA drives D7. The
+**`port_rd_n` / `port_wr_n`** strobes every I/O block takes as an input come from
+`io_port_decode_0xfe` (see Phase 6).
 
 **⏳ TODO — reconcile active-low ("not") signal naming.** Inverted/active-low
 signals are currently spelled three different ways across the design: `n`-prefix
@@ -590,9 +590,9 @@ old "border_reg first" list. The pipeline, in the order the book presents it:
    70 checks) wires blocks 1–4 into one datapath. Note its output-latch enable
    is **active-low** (`attr_output_latch_n`), matching what the control-clock
    block emits.
-6. ⏳ **`border_reg.vhd`** — port `0xFE` write, capture bits 2:0 as border
-   colour. Comes **after** the blocks above; it just supplies the wrapper's
-   `border_colour_bgr` input. **This is the last small module of strand A.**
+6. ✅ **`border_reg`** (xsim, 82 checks) — port `0xFE` write, bits 2:0 latched
+   as the border colour; supplies the wrapper's `border_colour_bgr` input.
+   Built in Phase 6 alongside the other port-write blocks.
 
 Supporting logic — all ✅ done:
 - **`latch_and_shift_reg_control_clks`** (xsim, 133 checks) — decodes every
@@ -669,8 +669,8 @@ LM1889 encoder), so on the FPGA they are board-level work, not ULA work.
 
 ---
 
-**➡ IMMEDIATE next tasks.** Strand A needs only `border_reg.vhd`. Strand B's
-ULA blocks are done. Next is the **top-level assembly** wiring `video_sync` +
+**➡ Video next step.** Strands A and B are complete (`border_reg` is done).
+Still to do is the **top-level assembly** wiring `video_sync` +
 `ras_cas_generation` + `video_address_generation` +
 `latch_and_shift_reg_control_clks` + `flash_clock` +
 `attr_output_latch_border_select_mux` + `yuv_video` into one video generator.
@@ -708,10 +708,74 @@ elaborate.
 
 Mentor mode: offer walk-through vs review-my-sketch before writing VHDL.
 
-**Phase 6 — CPU interface**
-- `keyboard.vhd` — port 0xFE read; A8–A15 select one of 8 half-rows
-- `contention.vhd` — WAIT signal for 0x4000–0x7FFF; 5,5,4,4,3,3,2,2 pattern using C0–C2
-- `audio.vhd` — port 0xFE bit 4 write (speaker), bit 6 read (EAR)
+**Phase 6 — CPU interface** — ✅ all blocks below built and xsim-verified
+(re-run together 2026-10-15). Merged via PRs #8 (memory/contention, with
+video), #9 (I/O devices) and the `phase6-interrupts` PR. None is wired into a
+top level yet. **Next: test modes** (branch `phase6-test-modes`).
+
+*Memory and CPU clock*
+- ✅ **`cpu_memory_access`** (xsim, 1296 checks) — lower-16K decode
+  (`ram_16 = MREQ·a14·¬a15`), ROM chip select, and the CPU+video merge onto
+  DRAM `ras_n` / `cas_n` / `we_n` (the merge happens here only;
+  `ras_cas_generation` makes just the video strobes). Covers read, early write,
+  and RAS-only refresh (the "snow" cycle when I = 0x40..0x7F). The book's RAS→CAS
+  delay chains are kept for traceability but are 0 ns in sim.
+- ✅ **`contention_handler_3`** (xsim, 64 cycle checks + 1110 clock phases checked
+  for runts) — issue 3 (6C001) CPU clock from `c0`, **held** (not WAIT) on
+  contended memory (0x4000..0x7FFF) or ULA-port I/O inside the c2/c3 window.
+  `mreqt23` / `ioreqtw3` mask latches keep holds to the start of an access.
+  Outputs pin 32 `phicpu_n` (inverted; the PCB transistor inverts back). Its
+  gates carry `after tg` — the hold is a feedback loop that hits the delta limit
+  in zero delay. Also supplies `ioreqtw3_n` to the port decode.
+
+*I/O port (any even address, 0xFE by convention)*
+- ✅ **`io_port_decode_0xfe`** (xsim, 86 checks) — `port_rd_n` / `port_wr_n` =
+  NOT NOR(a0, ioreq_n, ioreqtw3_n, rd_n / wr_n). `a0` uninverted (inverting it
+  would decode odd ports). `ioreq_n` is a ULA pin made off-chip (/IORQ OR A0).
+  Interrupt acknowledge (/IORQ with no /RD or /WR) fires neither strobe.
+- ✅ **`keyboard_input`** (xsim, 116 checks) — port read: half-row columns
+  `k0..k4` (active low) onto `do_0..do_4`, open collector `'0'` / `'H'`. The
+  8×5 matrix and A8..A15 half-row select are on the PCB, not in the ULA.
+- ✅ **`cassette_input`** (xsim, 110 checks) — port read: EAR level onto `do_6`
+  (not inverted), same open-collector pad.
+- ✅ **`border_reg`** (xsim, 82 checks) — port write: `di_0..di_2` → border
+  colour `b0..b2` (blue, red, green), three `data_latch_1_bit`s enabled by
+  `port_wr_n`. Black at power-on.
+- ✅ **`cassette_speaker_out`** (xsim, 31 checks) — port write: `di_3` → MIC,
+  `di_4` → speaker, same latch pattern. Logic levels only; the analogue
+  cassette stage is separate.
+- Note: the `border_reg` and `cassette_speaker_out` headers still say the
+  `port_wr_n` gate "is not built yet" — stale since `io_port_decode_0xfe`.
+
+*Interrupt*
+- ✅ **`interrupt`** (xsim, `interrupt_tb` 131 checks + 4 timed pulses; branch
+  `phase6-interrupts`) — the Z80's once-a-frame maskable `/INT`.
+  `s_int = NOR(not v_sync, c6, c7, c8, v0, v1, v2)` = **line 248 (first vsync
+  line), pixels 0..63** = 32 T-states (1 T-state = 2 pixels). The `v2` term is
+  redundant (vsync already implies `v2='0'`) but is in the book's gate, so it
+  stays. Inputs: `v0..v2`, `c6..c8`, `v_sync` (all from `video_sync` /
+  counters); output `int_n`.
+  - **Open-collector pin:** `int_n` is `'0'` or `'H'` (the strong on-chip
+    pull-up), so other devices can also pull the shared `/INT` low
+    (wired-OR). Same `'0'`/`'H'` modelling as the `do_N` data pins.
+  - **`t_int_lag` generic (default 100 ns, SIM ONLY)** — one lumped delay on
+    `int_n` modelling measured silicon: the real ULA's propagation + ripple
+    lag left only ~42 ns of /INT setup before the Z80's rising edge (spec
+    80 ns; an instant `int_n` would give 143 ns). Synthesis ignores `after`, so
+    on the FPGA `int_n` arrives at the pixel-0 edge (143 ns setup, in spec)
+    and is still **sampled at the same Z80 edge (pixel 1)** — software can't
+    tell the difference. Don't add a deliberate hardware delay. The only rule:
+    `int_n` must not arrive before the previous rising edge (pixel −1), or the
+    interrupt would be taken a T-state early.
+  - `interrupt_tb` runs **two instances of the same entity** side by side
+    (`dut_real` lag 100 ns, `dut_fpga` lag 0 ns) and checks: exhaustive
+    128-combination decode; one 64-pixel pulse per frame at line 248 over the
+    real 448 × 312 raster; setup times (REAL 43 ns, FPGA 143 ns); same Z80 edge
+    for both; and the shared-line wired-OR. **This two-instance TB binds fine
+    in xsim 2025.2** — unlike `bit3_counter_tb`, whose `clk`/`reset` ports got
+    transposed. Here the instances share no clock/reset nets (`interrupt` has
+    neither), which is consistent with that bug needing shared clock/reset.
+  - ⏳ GHDL run still pending (other PC). Not yet wired into a top level.
 
 **Phase 7 — Top level**
 - `ULA.vhd` — instantiates all sub-modules; full Z80 bus; wired to the Arty A7-35T XDC
