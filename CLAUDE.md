@@ -720,6 +720,55 @@ None is wired into a top level yet. **Phase 6 is complete.**
   `ras_cas_generation` makes just the video strobes). Covers read, early write,
   and RAS-only refresh (the "snow" cycle when I = 0x40..0x7F). The book's RAS→CAS
   delay chains are kept for traceability but are 0 ns in sim.
+  - ✅ **`rasen_n` tri-state on the RAS pin (branch `phase6-ras-tristate`, user
+    wrote it).** A 6C001 circuit: `rasen_n = NOR(a14, a15, mreq_n, border_n)`
+    — note **A14 uninverted**, so it fires on MREQ in **0x0000..0x3FFF while
+    in the border** (`border_n` = `nborder`, '0' in the border). That catches
+    the Z80's refresh cycles (address `I:R` = 0x3Fxx with the ROM's I = 0x3F)
+    and harmless ROM reads. While `rasen_n = '1'` the ULA releases RAS:
+    `ras_n <= NOR(ram_16, vid_ras) when rasen_n = '0' else 'Z'`.
+    - **Pad: tri-state TOTEM-POLE** — drives strong '0' AND '1' when enabled,
+      'Z' when not. Different from the open-collector pins (`do_N`, `int_n`,
+      K0: '0' / 'H'). On the FPGA 'Z' needs a real pin (IOBUF), so `ras_n`
+      must stay a top-level pin.
+    - **Why: DRAM refresh in the border.** The 4116 needs all 128 rows every
+      2 ms. Video fetches refresh it in the display, but the border has no
+      fetches for 120 lines = **7.68 ms**. On **issue 1/2** boards the Z80's
+      `/RFSH` drove the far end of the RAS line while the ULA let go, so Z80
+      refresh cycles refreshed the lower 16K. **Issue 3 removed that link**:
+      only video fetches refresh, the 7.68 ms gap breaks the 2 ms spec on
+      paper, but real 4116s retain data far longer, so it works. With nothing
+      on the far end, RAS floats ('Z') in those cycles on issue 3+.
+    - **Far end of RAS:** issue 1/2 boards connect the Z80's `/RFSH` to the
+      RAS line through a **330 Ω resistor**, so the ULA's totem pole wins
+      whenever it drives (`cpu_memory_access_tb` models `/RFSH` as a weak
+      'L' / 'H'); issue 3+ → nothing, the line floats ('Z').
+    - ✅ `cpu_memory_access_tb` now 2591 checks: exhaustive 512 combinations
+      incl. `border_n`, border cycles (issue 3+), the `/RFSH` far end
+      (issue 1/2). Verified it fails on an `a14_n` slip in the `rasen_n` gate.
+    - Open: check no tri-state while `vid_ras` is active (`nborder` includes
+      the side borders via c8, so a ROM access at the display edge could
+      coincide with a video fetch).
+
+**ULA chip versions (6C001) and the DRAM interface.** Issue 3 boards used the
+**6C001E-6**; issue 4 (the book's schematic) the **6C001E-7**.
+- **-7:** the '157 row/column mux select is taken from the DRAM `ras_n`, which
+  switches to the column address as soon as RAS falls and so removes the row
+  address early, risking tRAH. The issue-4 PCB adds **two NAND gates on the
+  `ras_n` line** to delay RAS at the DRAM and hold the row address longer. That
+  can leave the column address unsettled at CAS, so the -7 **delays CAS**
+  (between `com_cas_n` and `cas_n`).
+- **CAS timing:** CPU `rd_n` → CAS↓ = **94 ns (-7)** vs 61 ns (-6); video RAS↓ →
+  CAS↓ = **78 ns (-7)** vs 50 ns (-6).
+- **Compatibility:** a -7 works on every board issue; an earlier ULA can't be
+  used on later boards (the NAND delay eats its RAS→CAS margin).
+- **Project target: the -7** (the drop-in that works everywhere; our
+  `ras_n`-switched '157 assumption is already the -7 scheme). Current figures:
+  video RAS→CAS **71 ns** (one `clk_14` tick in `ras_cas_generation`) — fine for
+  the DRAM itself and in sim, but if the FPGA ever drives a REAL issue-4+ board's
+  DRAM, the PCB NANDs shrink the effective gap towards the -6's 50 ns. Revisit
+  then (two ticks = 143 ns may not fit the 4-pixel DRAM cycle). Irrelevant if
+  the FPGA uses its own block RAM.
 - ✅ **`contention_handler_3`** (xsim, 64 cycle checks + 1110 clock phases checked
   for runts) — issue 3 (6C001) CPU clock from `c0`, **held** (not WAIT) on
   contended memory (0x4000..0x7FFF) or ULA-port I/O inside the c2/c3 window.
