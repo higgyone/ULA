@@ -40,8 +40,10 @@
 --   POLARITY NOTE: with fl inverted but flash_clk not, the swap occurs
 --   on the flash_clk='0' half. Because FLASH is a symmetric 50/50
 --   alternation, the absolute phase is not visible on screen — swapping
---   on '0' vs '1' only shifts which flash period starts swapped. Confirm
---   the V-counter flash_clk sense matches this when it is wired up.
+--   on '0' vs '1' only shifts which flash period starts swapped. This
+--   matches the book's gates (inverted fl, uninverted flash_clk into the
+--   NOR; checked 2026-10-16), so the flash_clk = '0' swap half is the real
+--   chip's phase. flash_clk comes from flash_clock (/32 off v8).
 ----------------------------------------------------------------------
 
 library ieee;
