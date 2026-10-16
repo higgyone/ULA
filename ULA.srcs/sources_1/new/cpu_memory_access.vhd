@@ -12,6 +12,7 @@
 --                (as in the book: not qualified by MREQ)
 --   we_n       = NOT(ram_16 AND write)             lower-16K writes only
 --   mux_select = ram_16 AND (read OR write)        the CPU-CAS condition
+--   rasen_n    = NOR(a14, a15, mreq_n, border_n)   RAS release (see below)
 --
 --   mux_select is INTERNAL ONLY, despite its name. The external 74LS157
 --   address multiplexers are switched by ras_n itself, because the ULA has no
@@ -26,10 +27,11 @@
 --   REFRESH  MREQ alone. With I = 0x40..0x7F the refresh address lands in the
 --            lower 16K -> RAS WITHOUT CAS, a RAS-only refresh. This is the
 --            cycle behind the Spectrum's "snow" effect. With I = 0x3F (the
---            ROM default) nothing happens.
+--            ROM default) the ULA makes no strobes; in the border it releases
+--            RAS instead (see "The RAS pin" below).
 --
 -- ── Merge with the video strobes ─────────────────────────────────────
---   ras_n     = NOR(ram_16, vid_ras)
+--   s_ras_n   = NOR(ram_16, vid_ras)              (book: cpu_ras = ram_16)
 --   com_cas_n = NOR(mux_select, vid_cas_ac, vid_cas_bd)
 --   cas_n     = com_cas_n through a 2-inverter output buffer
 --   All inputs here are ACTIVE HIGH. These are the same three gates as the
@@ -37,6 +39,30 @@
 --   ras_cas_generation); the book draws them in both places. The merge is
 --   done ONCE, here (option B): ras_cas_generation makes the video strobes
 --   only and hands vid_ras / vid_cas_ac / vid_cas_bd to this block.
+--
+-- ── The RAS pin: tri-state for refresh in the border ─────────────────
+--   rasen_n = NOR(a14, a15, mreq_n, border_n)
+--   ras_n   = s_ras_n when rasen_n = '0', else 'Z'
+--
+--   A14 goes in UNINVERTED (ram_16 uses a14_n), so rasen_n = '1' for MREQ in
+--   0x0000..0x3FFF while in the border (border_n = nborder, '0' there). That
+--   catches the Z80's refresh cycles, whose address is I:R = 0x3Fxx with the
+--   ROM's I = 0x3F, plus ROM reads. ram_16 needs A14 = '1', so the ULA never
+--   releases RAS during a CPU access to the lower 16K.
+--
+--   Why: the 4116 needs all 128 rows refreshed every 2 ms. Video fetches do
+--   that in the display, but the border has none for 120 lines = 7.68 ms.
+--   On issue 1/2 boards the Z80's /RFSH is connected to the RAS line through
+--   a 330 ohm resistor. The ULA's totem pole overrides it while driving;
+--   while the ULA lets go, /RFSH sets the line, so the Z80's refresh cycles
+--   refresh the lower 16K.
+--   Issue 3 removed that link: only video fetches refresh, and the 7.68 ms
+--   gap, though outside the 2 ms spec, works in practice. On issue 3+
+--   boards nothing drives RAS while the ULA lets go: it floats.
+--
+--   The pad is a tri-state TOTEM POLE: it drives a strong '0' AND a strong
+--   '1' while enabled, and is high impedance ('Z') otherwise. Unlike the
+--   open-collector pins (int_n, the D pins: '0' / 'H'), there is no pull-up.
 --
 -- ── The delay chains (book form, ~10 ns per gate) ────────────────────
 --   mreq_n -> ras_n      2 gates   ~20 ns
@@ -65,9 +91,11 @@
 --   vid_ras      video RAS, active HIGH
 --   vid_cas_ac   video CAS, first byte of each pair (A, C), active HIGH
 --   vid_cas_bd   video CAS, second byte of each pair (B, D), active HIGH
+--   border_n     '0' in the border (nborder from video_sync)
 --   ram_16       lower-16K memory request, active HIGH (for contention)
 --   rom_cs_n     ROM chip select, active low
---   ras_n        DRAM RAS, active low (also switches the external '157s)
+--   ras_n        DRAM RAS, active low (also switches the external '157s);
+--                tri-state totem pole, 'Z' while rasen_n = '1'
 --   cas_n        DRAM CAS, active low
 --   we_n         DRAM write enable, active low
 --
@@ -87,9 +115,10 @@ entity cpu_memory_access is
         vid_ras    : in    std_logic; -- video RAS, active high
         vid_cas_ac : in    std_logic; -- video CAS, bytes A and C, active high
         vid_cas_bd : in    std_logic; -- video CAS, bytes B and D, active high
+        border_n   : in    std_logic; -- '0' in the border (nborder from video_sync)
         ram_16     : out   std_logic; -- lower-16K memory request, active high
         rom_cs_n   : out   std_logic; -- ROM chip select
-        ras_n      : out   std_logic; -- DRAM RAS (also selects the '157 muxes)
+        ras_n      : out   std_logic; -- DRAM RAS (also selects the '157 muxes), tri-state
         cas_n      : out   std_logic; -- DRAM CAS
         we_n       : out   std_logic  -- DRAM write enable
     );
@@ -107,6 +136,8 @@ architecture structural of cpu_memory_access is
     signal a_out      : std_logic;
     signal mux_select : std_logic;
     signal com_cas_n  : std_logic;
+    signal s_ras_n    : std_logic;
+    signal rasen_n    : std_logic;
 
 begin
 
@@ -132,9 +163,22 @@ begin
     a_out      <= not(wr or rd);
     mux_select <= not(a_out or ram_16_n);
 
-    -- merge with video. The 2-inverter chain on mux_select and the
+    -- RAS: merge the CPU (book: cpu_ras = ram_16) with video
+    s_ras_n <= not(s_ram_16 or vid_ras);
+
+    -- RAS release: MREQ in 0x0000..0x3FFF during the border. A14 is
+    -- UNINVERTED on purpose (ram_16 uses a14_n): this catches the Z80's
+    -- refresh cycles (I = 0x3F) so its /RFSH can refresh the DRAM on issue
+    -- 1/2 boards, and can never fire during a lower-16K access.
+    rasen_n <= not(a14 or a15 or mreq_n or border_n);
+
+    -- tri-state totem-pole pad: drive '0' / '1' while enabled, otherwise
+    -- release the pin ('Z', no pull-up)
+    ras_n <= s_ras_n when rasen_n = '0' else
+             'Z';
+
+    -- CAS: merge with video. The 2-inverter chain on mux_select and the
     -- 2-inverter output buffer are book delays (part of RAS -> CAS).
-    ras_n     <= not(s_ram_16 or vid_ras);
     com_cas_n <= not(not(not(mux_select)) or vid_cas_ac or vid_cas_bd);
     cas_n     <= not(not(com_cas_n));
 

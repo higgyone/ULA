@@ -109,6 +109,7 @@ begin
             vid_ras    => vid_ras,
             vid_cas_ac => vid_cas_ac,
             vid_cas_bd => vid_cas_bd,
+            border_n   => '1',
             ram_16     => ram_16,
             rom_cs_n   => rom_cs_n,
             ras_n      => ras_n,
