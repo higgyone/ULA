@@ -746,13 +746,17 @@ Still to do is the **top-level assembly** wiring `video_sync` +
 `latch_and_shift_reg_control_clks` + `flash_clock` +
 `attr_output_latch_border_select_mux` + `yuv_video` into one video generator.
 
-**⚠ OPEN DESIGN QUESTION — settle before the top-level wiring.** The `c0`/`c1`
-taps come off a **ripple** counter but `ras_cas_generation` samples them on
-`clk_14`; its own header flags that a resync into the `clk_14` domain may be
-needed. Decide whether that resync lives **inside** `ras_cas_generation` or at
-the **integration point** — it determines whether the top level needs resync
-registers of its own, and `video_address_generation` now consumes `vid_ras_n`,
-so it is downstream of the answer.
+**✅ DECIDED (2026-10-19) — no resync register for `ras_cas_generation`.**
+`clk_7` must be made by **dividing `clk_14` with a flip-flop** (`clk_div_2`),
+never as a second MMCM output. Then `clk_7` changes just after each `clk_14`
+edge like any register output, so using it as the half-pixel phase bit is an
+ordinary synchronous path; and `c0` / `c1` (ripple off `clk_7_n`) settle a few
+ns after that edge, ~60 ns before the next `clk_14` sample. So the block reads
+`c1 & c0 & clk_7` directly, with no extra register, no 1-tick shift and no
+look-ahead on `vid_c3_n`. The XDC must declare `create_generated_clock` for
+`clk_7` and the counter's ripple clocks so Vivado proves the margin.
+**Revisit if `clk_7` is ever taken from the MMCM** — then a resync stage (and
+a one-tick-rotated decode with a look-ahead window gate) would be needed.
 
 **Testbench convention (learned the hard way).** Any NEW self-checking TB with a
 free-running clock process **must** call `finish` (`library std; use std.env.all;`)

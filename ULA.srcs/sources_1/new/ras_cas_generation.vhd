@@ -72,10 +72,12 @@
 --   vid_ras_n  video RAS, active-LOW tap         -> video_address_generation
 --              (row/column phase select)
 --
--- Integration note: c0/c1 come from a ripple counter and clk_7 is derived from
--- clk_14 by division, so when this block is wired to the real counter (rather
--- than TB stimulus) those taps may need resyncing into the clk_14 domain to
--- avoid sampling them mid-transition.
+-- Integration note (decided 2026-10-19): no resync is needed, PROVIDED clk_7 is
+-- made by dividing clk_14 with a flip-flop (clk_div_2), not by the MMCM. Then
+-- clk_7 changes just after each clk_14 edge like any register output, and the
+-- ripple taps c0/c1 settle a few ns later, long before the next clk_14 sample
+-- 71 ns on. The XDC must declare generated clocks so Vivado checks this margin.
+-- If clk_7 ever comes from the MMCM, add a resync stage here (see CLAUDE.md).
 ----------------------------------------------------------------------------------
 
 library ieee;
