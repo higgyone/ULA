@@ -171,8 +171,9 @@ Cross-cutting cleanup. **Conventions chosen (2026-06-27):** lowercase
 model (plus `Structural` / `T_Structure` / `Reference` where multiple archs
 exist); port order `clk, reset, enable, other inputs, then outputs` (applied to
 both declarations *and* port maps); `s_*` / `*_n` / `*_c` internal-signal
-prefixes. The active-low `n`-prefix names (`nBorder`, `nHblank`, `nHSync*`) are
-a deliberate ULA convention and are **kept** as-is.
+prefixes. ~~The active-low `n`-prefix names (`nBorder`, `nHblank`, `nHSync*`)
+are kept as-is.~~ **Superseded 2026-10-19:** active-low is always a `_n`
+suffix — see "Active-low and net naming rules" below.
 
 **Book-schematic port names are an intentional exception to `snake_case`.**
 Where a port maps directly to a named net on Chris Smith's schematic, the book's
@@ -213,13 +214,77 @@ the analogue cassette interface); nothing in the ULA drives D7. The
 **`port_rd_n` / `port_wr_n`** strobes every I/O block takes as an input come from
 `io_port_decode_0xfe` (see Phase 6).
 
-**⏳ TODO — reconcile active-low ("not") signal naming.** Inverted/active-low
-signals are currently spelled three different ways across the design: `n`-prefix
-(`nBorder`, `nHblank`), `_n`-suffix (`data_n`, `data_1_n`), and `_bar`-suffix
-(`q_bar`). Decide a single rule (or document exactly when each applies) and apply
-it consistently as new Phase 5 modules land — don't let the shift-register /
-pixel-latch block add a fourth variant. Low priority, but settle it before the
-naming spreads further.
+### Active-low and net naming rules (decided 2026-10-19)
+
+**Rule 1 — active low is always a `_n` suffix.** The book writes an active-low
+net as `/NAME` (or with a bar over it). `/` is not legal in a VHDL identifier
+(extended identifiers like `\/border\` compile but are case-sensitive and
+badly supported — don't use them), so the mapping is mechanical:
+**book `/name` → `name_n`**. `/BORDER` → `border_n`, `/MREQ` → `mreq_n`.
+No `n` prefix (`nborder`, `n_vid_ras`), no `_bar`, no `qbar` — flip-flop
+complements are `q_n`. `_n` means active low / logical complement and
+nothing else.
+
+**Rule 2 — one net, one name.** A port is named after the net it carries at
+the top level, so `ULA.vhd` port maps read `name => name`. A line that doesn't
+is a signal that something differs (polarity, width) and must be checked. Two
+polarities of the same signal are two nets (`border` and `border_n`, `c3` and
+`c3_n`), each with its own name; the block that has the inverter exports both,
+like `vert_line_counter` does with `v*` / `v*_n`.
+
+**Rule 3 — `s_` is for internal signals only, never on a port.**
+
+**Exceptions (book names, kept on purpose):**
+- `yuv_control_signals` / `yuv` / `pal_v_burst`: the `_n` taps (`green_star_n`,
+  `red_ii_n`, `burst_ii_n`, ...) are the raw NOR outputs, so they ARE the
+  logical complement and satisfy Rule 1. Their extra meaning (the sign of the
+  colour coefficient) is documented in those headers. Leave them.
+- `shift8`'s `sin` / `sload` (book's Sin / SLoad, no slash in the book).
+- Generic primitives (`d_ff`, `d_ff_nor`, `trc_ff`, `shift8`, latches,
+  `clk_div_2`) keep generic port names (`clk`, `d`, `q`, `e`, `enable`); the
+  net names apply where they are instantiated.
+
+#### ⏳ Port rename table (to do — Ryan)
+
+Each rename must update the entity, every port map that uses it and every TB
+in the **same commit**, then re-run that block's TB. Internal `s_` signal
+clean-up is separate and not listed here.
+
+| Net (new name) | Entity | Old port | Notes |
+|---|---|---|---|
+| `border_n` | `video_sync` | `nborder` (out) | |
+| `border_n` | `latch_and_shift_reg_control_clks` | `nborder` (in) | |
+| `border` | `video_sync` | — (new out) | `not border_n`; feeds `contention_handler_3` / `video_address_generation`, which already use `border` |
+| `hblank_n` | `video_sync`, `horiz_timing` | `nhblank` (out) | |
+| `hblank_n` | `attr_output_latch_border_select_mux`, `attr_output_latch_colour_mux` | `h_blank_n` (in) | |
+| `vsync` | `interrupt`, `attr_output_latch_border_select_mux`, `attr_output_latch_colour_mux` | `v_sync` (in) | `video_sync` already outputs `vsync` |
+| `sync_5c_n` / `sync_6c_n` | `video_sync` | `n_sync_5c` / `n_sync_6c` (out) | consumers keep `sync_n`; the top level picks 5c or 6c |
+| `vid_ras_n` | `ras_cas_generation` | `n_vid_ras` (out) | `video_address_generation` already takes `vid_ras_n` |
+| `vid_c3_n` | `ras_cas_generation` | `n_vid_c3` (in) | `latch_and_shift_reg_control_clks` already takes `vid_c3_n` |
+| `video_en` | `attr_data_latch_paper_border_mux` | `vid_en` (in) | |
+| `sload` | `latch_and_shift_reg_control_clks` (out), `attr_output_latch_border_select_mux` (in) | `s_load` | breaks Rule 3; internal `s_s_load` → `s_sload` |
+| `border_colour(2 downto 0)` | `attr_output_latch_border_select_mux` | `border_colour_bgr` | bits are (0) blue, (1) red, (2) green, so `_bgr` misleads |
+| `tclk_a` | `test_modes` | `tclka_n` (out) | active-high pulse (= NOT `rd_n`); `master_horiz_counter` already takes `tclk_a` |
+| `tclk_b` | `test_modes` (out), `flash_clock` (in) | `tclkb_n` | active-high pulse (= NOT `wr_n`) |
+| `q_n` | `d_ff`, `data_latch_1_bit`, `shift8`, `single_bit_shift_register` | `q_bar` | primitives |
+| `q_n` | `d_ff_nor`, `trc_ff`, `tce_ff`, `trce_ff` | `qbar` | primitives |
+
+**Related open items (not renames):**
+- `video_sync` exports no `c*` / `v*` counter taps, but `interrupt`,
+  `pal_v_burst`, `video_address_generation`, `flash_clock`,
+  `latch_and_shift_reg_control_clks` and `ras_cas_generation` need them. Decide:
+  export the taps from `video_sync` (both polarities), or instantiate the
+  counters at the top level.
+- `master_horiz_counter` outputs only true `c0..c8`; consumers need `c0_n`,
+  `c1_n`, `c2_n`, `c3_n`, `c7_n`, `c8_n`.
+- `video_sync.tclk_a` is unused (`horiz_timing` ties it to '0'), so test mode A
+  can't reach C6..C8 through `video_sync` yet.
+- `latch_and_shift_reg_control_clks.vid_cas_pulse` has no consumer
+  (`cpu_memory_access` takes `vid_cas_ac` / `vid_cas_bd` from
+  `ras_cas_generation`): decide whether it is still needed or maps to `open`.
+- Architecture names: `yuv` uses `behavioural` (others `behavioral`);
+  `single_bit_shift_register` uses `structure` (others `structural`), and its
+  file is `single_bit_shift_reg.vhd`.
 
 **✅ Done on the non-Vivado PC (plain source edits):**
 - Architecture typo `Behavourial`→`Behavioral` (`D_FF.vhd` + its consumer
