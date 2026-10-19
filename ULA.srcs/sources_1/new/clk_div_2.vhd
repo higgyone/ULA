@@ -2,7 +2,7 @@
 -- clk_div_2 — divide-by-2 toggle flip-flop (structural)
 --
 -- Divides clk_in by 2 by wiring a d_ff_nor as a T-flip-flop:
--- d = qbar, so q toggles on every falling edge of clk_in.
+-- d = q_n, so q toggles on every falling edge of clk_in.
 --
 -- Used as the C0..C5 cells in master_horiz_counter (the lower 6 bits
 -- of the 9-bit horizontal counter), each chained by NOR-gated clocks
@@ -23,7 +23,7 @@
 --     X    no edge   |  q       (hold)
 --
 --   clk_out   = q     (divided clock)
---   clk_out_n = qbar  (inverse)
+--   clk_out_n = q_n  (inverse)
 ----------------------------------------------------------------------
 
 library ieee;
@@ -46,16 +46,16 @@ architecture behavioral of clk_div_2 is
 
 begin
 
-    -- T-FF via D-FF: d = qbar (toggle) unless reset clears it.
+    -- T-FF via D-FF: d = q_n (toggle) unless reset clears it.
     d_in <= '0' when reset = '1' else
             qbar_int;
 
     ff : entity work.d_ff_nor(Behavioral)
         port map (
-            clk  => clk_in,
-            d    => d_in,
-            q    => q_int,
-            qbar => qbar_int
+            clk => clk_in,
+            d   => d_in,
+            q   => q_int,
+            q_n => qbar_int
         );
 
     clk_out   <= q_int;

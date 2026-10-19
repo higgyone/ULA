@@ -16,29 +16,29 @@
 --   data_select_n = XNOR(serial_pixel, fl AND NOT flash_clk)
 --     '0' -> INK leg        '1' -> PAPER/BORDER leg
 --
--- ── Pixel colour table (not blanked: v_sync='0', h_blank_n='1') ──────
---   vid_en = 1  (display area):
+-- ── Pixel colour table (not blanked: vsync='0', hblank_n='1') ──────
+--   video_en = 1  (display area):
 --       serial | flash off | flash on (fl=1, flash_clk=0)
 --       -------+-----------+----------------------------
 --         1    |  INK      |  PAPER
 --         0    |  PAPER    |  INK
 --     INK = attr D0-2, PAPER = attr D3-5, BRIGHT = attr D6, FLASH = attr D7.
 --
---   vid_en = 0  (border region): fl forced 0 (no flash), bright forced 0:
+--   video_en = 0  (border region): fl forced 0 (no flash), bright forced 0:
 --       serial | output
 --       -------+--------------------------------------
---         0    |  BORDER (border_colour_bgr)   <- expected off-screen state
+--         0    |  BORDER (border_colour)   <- expected off-screen state
 --         1    |  INK (don't-care; pixel stream held 0 in the border)
 --
---   Blanked (v_sync='1' OR h_blank_n='0'): blue=red=green='0' (black), always.
+--   Blanked (vsync='1' OR hblank_n='0'): blue=red=green='0' (black), always.
 --
--- ── Display window where vid_en = 1 (central 256 x 192) ──────────────
+-- ── Display window where video_en = 1 (central 256 x 192) ──────────────
 --   horizontal  pixel columns 0..255   (H-counter c8=0; 256..447 = right border+blank)
 --   vertical    lines         0..191   (192..255 and 256..311 = vertical border)
---   Outside this window vid_en='0' and the frame shows border_colour.
+--   Outside this window video_en='0' and the frame shows border_colour.
 --
 -- No border flash/bright input: the book's block diagram ties the border's
--- FLASH/BRIGHT to "00", but that is not a wire — it falls out of vid_en
+-- FLASH/BRIGHT to "00", but that is not a wire — it falls out of video_en
 -- gating al6_hl/al7_fl to '0' in the border region (see attr_data_latch_
 -- paper_border_mux), so there is nothing to drive here.
 ----------------------------------------------------------------------------------
@@ -50,16 +50,16 @@ entity attr_output_latch_border_select_mux is
     port (
         clk_7               : in    std_logic;                    -- 7MHz clock
         flash_clk           : in    std_logic;
-        s_load              : in    std_logic;                    -- serial pixel load
+        sload               : in    std_logic;                    -- serial pixel load
         pixel_data_latch_n  : in    std_logic;                    -- latch pixel data
         pixel_data          : in    std_logic_vector(7 downto 0); -- pixel data
         attr_data_latch_n   : in    std_logic;                    -- when to latch the attribute data
         attr_data           : in    std_logic_vector(7 downto 0); -- D0-2 ink, D3-5 paper, D6 hl, D7 fl
-        border_colour_bgr   : in    std_logic_vector(2 downto 0); -- border_reg: (0) blue, (1) red, (2) green
+        border_colour       : in    std_logic_vector(2 downto 0); -- border_reg: (0) blue, (1) red, (2) green
         video_en            : in    std_logic;                    -- enable video; dont display on blank
         attr_output_latch_n : in    std_logic;                    -- ACTIVE-LOW output-latch enable ('0' transparent, '1' hold)
-        v_sync              : in    std_logic;
-        h_blank_n           : in    std_logic;
+        vsync               : in    std_logic;
+        hblank_n            : in    std_logic;
         blue                : out   std_logic;                    -- output blue bit
         green               : out   std_logic;                    -- output green bit
         red                 : out   std_logic;                    -- output red bit
@@ -79,8 +79,8 @@ architecture structural of attr_output_latch_border_select_mux is
     signal pb0_b               : std_logic; -- PAPER/BORDER Blue
     signal pb1_r               : std_logic; -- PAPER/BORDER Red
     signal pb2_g               : std_logic; -- PAPER/BORDER Green
-    signal al_6                : std_logic; -- BRIGHT before output latch (attr D6, gated by vid_en)
-    signal al_7                : std_logic; -- FLASH  before output latch (attr D7, gated by vid_en)
+    signal al_6                : std_logic; -- BRIGHT before output latch (attr D6, gated by video_en)
+    signal al_7                : std_logic; -- FLASH  before output latch (attr D7, gated by video_en)
     signal fl_i                : std_logic; -- LATCHED flash: colour mux out -> pixel_flash in AND top fl
 
 begin
@@ -92,7 +92,7 @@ begin
     pix_serial : entity work.pixel_serialiser
         port map (
             clk          => clk_7,
-            sload        => s_load,
+            sload        => sload,
             data_latch_n => pixel_data_latch_n,
             data         => pixel_data,
             serial_data  => serial_pixel_stream
@@ -109,13 +109,13 @@ begin
         );
 
     -- 3) attribute INPUT latch + paper/border mux: unpacks the attribute byte
-    --    into ink / paper-or-border / bright / flash (border via vid_en)
+    --    into ink / paper-or-border / bright / flash (border via video_en)
     attr_paper_border_mux : entity work.attr_data_latch_paper_border_mux
         port map (
             attr_data       => attr_data,
             attr_latch_n    => attr_data_latch_n,
-            border_colour   => border_colour_bgr,
-            vid_en          => video_en,
+            border_colour   => border_colour,
+            video_en        => video_en,
             ink(2)          => i2_g,
             ink(1)          => i1_r,
             ink(0)          => i0_b,
@@ -131,8 +131,8 @@ begin
     --    forces black on sync/blank -> blue/red/green
     attr_col_mux : entity work.attr_output_latch_colour_mux
         port map (
-            v_sync        => v_sync,
-            h_blank_n     => h_blank_n,
+            vsync         => vsync,
+            hblank_n      => hblank_n,
             data_select_n => data_select_n,
             i0_b          => i0_b,
             pb0_b         => pb0_b,

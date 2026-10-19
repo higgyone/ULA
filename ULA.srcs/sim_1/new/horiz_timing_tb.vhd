@@ -45,7 +45,7 @@ architecture behavioral of horiz_timing_tb is
 
     signal hsync_5c : std_logic;
     signal hsync_6c : std_logic;
-    signal nhblank  : std_logic;
+    signal hblank_n : std_logic;
 
 begin
 
@@ -73,7 +73,7 @@ begin
             reset    => reset,
             hsync_5c => hsync_5c,
             hsync_6c => hsync_6c,
-            nhblank  => nhblank
+            hblank_n => hblank_n
         );
 
     process is

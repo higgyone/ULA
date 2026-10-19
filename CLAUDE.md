@@ -232,7 +232,11 @@ polarities of the same signal are two nets (`border` and `border_n`, `c3` and
 `c3_n`), each with its own name; the block that has the inverter exports both,
 like `vert_line_counter` does with `v*` / `v*_n`.
 
-**Rule 3 — `s_` is for internal signals only, never on a port.**
+**Rule 3 — `s_` is for internal signals only, never on a port.** Every
+`signal` declared in a design source starts with `s_`; anonymous gate outputs
+are `s_a_out`, `s_b_out`, ... (formerly `a_o` / `a_out` / `a_0`). Testbench
+signals are the exception: they keep the DUT's port names so TB port maps also
+read `name => name`.
 
 **Exceptions (book names, kept on purpose):**
 - `yuv_control_signals` / `yuv` / `pal_v_burst`: the `_n` taps (`green_star_n`,
@@ -244,11 +248,13 @@ like `vert_line_counter` does with `v*` / `v*_n`.
   `clk_div_2`) keep generic port names (`clk`, `d`, `q`, `e`, `enable`); the
   net names apply where they are instantiated.
 
-#### ⏳ Port rename table (to do — Ryan)
+#### ✅ Port rename table (done 2026-10-19, branch `naming-rules`)
 
-Each rename must update the entity, every port map that uses it and every TB
-in the **same commit**, then re-run that block's TB. Internal `s_` signal
-clean-up is separate and not listed here.
+Applied in one commit with every port map and TB, all TBs re-run in GHDL.
+`video_sync` gained the `border` output (`not border_n`), and `video_sync_tb`
+checks it is the complement of `border_n`. The `border_n` equation itself is
+unchanged (only its target is now `s_border_n`). For future renames, keep the
+same discipline: entity + every port map + every TB in one commit.
 
 | Net (new name) | Entity | Old port | Notes |
 |---|---|---|---|

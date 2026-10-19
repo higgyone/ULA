@@ -10,7 +10,7 @@
 --
 -- Inputs:
 --   fl          — flash ENABLE for this pixel = the attribute FLASH tap
---                 (attr bit 7 AND vid_en, i.e. al7_fl). '1' => this pixel
+--                 (attr bit 7 AND video_en, i.e. al7_fl). '1' => this pixel
 --                 may flash; '0' => never flashes.
 --   flash_clk   — slow flash toggle (from the V counter). Selects which
 --                 half of the flash period we are in. See polarity note.
@@ -51,7 +51,7 @@ library ieee;
 
 entity pixel_flash is
     port (
-        fl            : in    std_logic; -- flash enable (attr7 AND vid_en = al7_fl)
+        fl            : in    std_logic; -- flash enable (attr7 AND video_en = al7_fl)
         flash_clk     : in    std_logic; -- slow flash toggle from the V counter
         serial_data   : in    std_logic; -- raw pixel select bit (from pixel_serialiser)
         data_select_n : out   std_logic  -- active-low ink/paper select: '0'=ink, '1'=paper

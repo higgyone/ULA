@@ -25,7 +25,7 @@
 --        timing='1' -> x_3_out =     x   (colour passed straight through)
 --        timing='0' -> x_3_out = NOT x   (colour sense INVERTED)
 --
---   `timing` comes from pal_v_burst (its `timing` output = q_bar, the
+--   `timing` comes from pal_v_burst (its `timing` output = q_n, the
 --   complement of the per-line latched v0 parity). It therefore alternates
 --   every line, and this XNOR is the PAL **V-switch**: Phase Alternating Line.
 --   Because pal_v_burst freezes the parity during sync, the phase cannot move

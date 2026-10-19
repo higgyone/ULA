@@ -45,7 +45,7 @@
 --   ras_n   = s_ras_n when rasen_n = '0', else 'Z'
 --
 --   A14 goes in UNINVERTED (ram_16 uses a14_n), so rasen_n = '1' for MREQ in
---   0x0000..0x3FFF while in the border (border_n = nborder, '0' there). That
+--   0x0000..0x3FFF while in the border (border_n from video_sync, '0' there). That
 --   catches the Z80's refresh cycles, whose address is I:R = 0x3Fxx with the
 --   ROM's I = 0x3F, plus ROM reads. ram_16 needs A14 = '1', so the ULA never
 --   releases RAS during a CPU access to the lower 16K.
@@ -91,7 +91,7 @@
 --   vid_ras      video RAS, active HIGH
 --   vid_cas_ac   video CAS, first byte of each pair (A, C), active HIGH
 --   vid_cas_bd   video CAS, second byte of each pair (B, D), active HIGH
---   border_n     '0' in the border (nborder from video_sync)
+--   border_n     '0' in the border (border_n from video_sync)
 --   ram_16       lower-16K memory request, active HIGH (for contention)
 --   rom_cs_n     ROM chip select, active low
 --   ras_n        DRAM RAS, active low (also switches the external '157s);
@@ -115,7 +115,7 @@ entity cpu_memory_access is
         vid_ras    : in    std_logic; -- video RAS, active high
         vid_cas_ac : in    std_logic; -- video CAS, bytes A and C, active high
         vid_cas_bd : in    std_logic; -- video CAS, bytes B and D, active high
-        border_n   : in    std_logic; -- '0' in the border (nborder from video_sync)
+        border_n   : in    std_logic; -- '0' in the border (border_n from video_sync)
         ram_16     : out   std_logic; -- lower-16K memory request, active high
         rom_cs_n   : out   std_logic; -- ROM chip select
         ras_n      : out   std_logic; -- DRAM RAS (also selects the '157 muxes), tri-state

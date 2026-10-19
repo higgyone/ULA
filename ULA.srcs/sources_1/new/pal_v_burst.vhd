@@ -49,7 +49,7 @@
 --   then frozen, which keeps the burst phase stable for the whole line
 --   rather than following any movement on v0 mid-line.
 --
---   timing = q_bar = NOT(latched parity).
+--   timing = q_n = NOT(latched parity).
 --
 -- ── Ports ────────────────────────────────────────────────────────────
 --   c4, c5, c6, c7_n, c8_n  horizontal counter taps decoding the window
@@ -58,7 +58,7 @@
 --   burst_ii_n              burst window, active low
 --   burst_star_n            burst gated by parity q      (ACTIVE LOW)
 --   burst_star              burst gated by parity NOT q  (active HIGH)
---   timing                  q_bar, the complemented latched parity
+--   timing                  q_n, the complemented latched parity
 ----------------------------------------------------------------------
 
 library ieee;
@@ -84,7 +84,7 @@ architecture structural of pal_v_burst is
 
     signal burst : std_logic; -- burst window, active high (pixels 384..399)
     signal q     : std_logic; -- latched line parity
-    signal q_bar : std_logic; -- complemented latched parity
+    signal q_n   : std_logic; -- complemented latched parity
     signal a_0   : std_logic;
 
 begin
@@ -93,10 +93,10 @@ begin
     -- the line, so the burst phase cannot move mid-line
     latch_0 : entity work.data_latch_1_bit
         port map (
-            e     => sync_n,
-            d     => v0,
-            q     => q,
-            q_bar => q_bar
+            e   => sync_n,
+            d   => v0,
+            q   => q,
+            q_n => q_n
         );
 
     -- burst window: c8='1', c7='1', c6='0', c5='0', c4='0' -> pixels 384..399
@@ -105,10 +105,10 @@ begin
 
     -- gate the window into the two alternating phases. Only one is ever
     -- asserted; note the opposite polarities (see the table in the header).
-    a_0          <= not(burst_ii_n or q_bar); -- = burst AND q
-    burst_star_n <= not(a_0);                 -- active LOW  when burst AND q
-    burst_star   <= not(q or burst_ii_n);     -- active HIGH when burst AND NOT q
+    a_0          <= not(burst_ii_n or q_n); -- = burst AND q
+    burst_star_n <= not(a_0);               -- active LOW  when burst AND q
+    burst_star   <= not(q or burst_ii_n);   -- active HIGH when burst AND NOT q
 
-    timing <= q_bar;
+    timing <= q_n;
 
 end architecture structural;

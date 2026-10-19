@@ -32,20 +32,20 @@
 --      d_o = NOR(b_o, c_o)
 --
 --      q     = d_o
---      q_bar = c_o
+--      q_n = c_o
 --
 --   With e='1' both a_o and b_o are 0, so the SR latch sees no set/reset
 --   and holds. With e='0', a_o=d and b_o=not d drive it to q=d.
 --
 -- Characteristic table:
 --
---   e    d   |  q(next)   q_bar(next)
+--   e    d   |  q(next)   q_n(next)
 --   ---  --  |  -------   -----------
 --    0   0   |    0           1       transparent: q = d
 --    0   1   |    1           0
 --    1   X   |    q         not q     hold (latched)
 --
--- Output use: q_bar is the active-low tap that feeds the pixel shift
+-- Output use: q_n is the active-low tap that feeds the pixel shift
 -- register's data_n load input — the two active-low conventions cancel,
 -- so the shift register loads the TRUE pixel value. q (true polarity)
 -- heads toward the attribute / colour path. Both are brought out.
@@ -65,10 +65,10 @@ library ieee;
 
 entity data_latch_1_bit is
     port (
-        e     : in    std_logic; -- active-low enable (= not datalatch): '0' transparent, '1' hold
-        d     : in    std_logic; -- data bit in (from display RAM byte)
-        q     : out   std_logic; -- latched data (true)
-        q_bar : out   std_logic  -- latched data (active-low) -> shift-reg data_n
+        e   : in    std_logic; -- active-low enable (= not datalatch): '0' transparent, '1' hold
+        d   : in    std_logic; -- data bit in (from display RAM byte)
+        q   : out   std_logic; -- latched data (true)
+        q_n : out   std_logic  -- latched data (active-low) -> shift-reg data_n
     );
 end entity data_latch_1_bit;
 
@@ -77,7 +77,7 @@ architecture structural of data_latch_1_bit is
     -- Seeded to the "transparent, holding 0" state (e='0', d='0', q='0'):
     --   b_o = NOR(e, d)    = NOR(0,0) = 1
     --   a_o = NOR(e, b_o)  = NOR(0,1) = 0
-    --   c_o = NOR(a_o,d_o) = NOR(0,0) = 1   => q_bar = 1
+    --   c_o = NOR(a_o,d_o) = NOR(0,0) = 1   => q_n = 1
     --   d_o = NOR(b_o,c_o) = NOR(1,1) = 0   => q     = 0
     signal a_o : std_logic := '0';
     signal b_o : std_logic := '1';
@@ -96,7 +96,7 @@ begin
     c_o <= not (a_o or d_o)   after tg;
     d_o <= not (b_o or c_o)   after tg;
 
-    q_bar <= c_o;
-    q     <= d_o;
+    q_n <= c_o;
+    q   <= d_o;
 
 end architecture structural;

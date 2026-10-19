@@ -7,7 +7,7 @@
 --      attribute byte fetched from display RAM, and
 --   2. a per-colour-bit 2:1 multiplexer that outputs either the PAPER
 --      colour (inside the display area) or the BORDER colour (outside it),
---      selected by vid_en.
+--      selected by video_en.
 --
 -- ── The three colours (ZX Spectrum colour model) ─────────────────────
 --   INK    — the FOREGROUND colour: shown where a pixel bit = 1 (the lit
@@ -31,23 +31,23 @@
 --   Each 3-bit colour is GRB; the same b0=Blue / b1=Red / b2=Green order
 --   is used on border_colour, ink and paper_border.
 --
--- ── vid_en (video enable) ────────────────────────────────────────────
---   vid_en = '1'  -> inside the display area: paper_border = PAPER, and
+-- ── video_en (video enable) ────────────────────────────────────────────
+--   video_en = '1'  -> inside the display area: paper_border = PAPER, and
 --                    bright/flash pass through.
---   vid_en = '0'  -> border region: paper_border = BORDER, and
+--   video_en = '0'  -> border region: paper_border = BORDER, and
 --                    bright/flash are forced to 0 (the border is flat).
 --   `vid_en_n` is the single shared inverter used by every mux/gate that
 --   needs the complement (mirrors the one inverter on the schematic).
 --
 -- ── Per-bit 2:1 mux, gate-accurate NOR-NOR form (bit 0 shown) ─────────
---   a_o = NOR(border_colour(0), vid_en)    -- border leg (live when vid_en=0)
---   b_o = NOR(paper_bit(3),     vid_en_n)  -- paper  leg (live when vid_en=1)
---   paper_border(0) = NOR(a_o, b_o)        -- => paper when vid_en=1, else border
+--   a_o = NOR(border_colour(0), video_en)    -- border leg (live when video_en=0)
+--   b_o = NOR(paper_bit(3),     vid_en_n)  -- paper  leg (live when video_en=1)
+--   paper_border(0) = NOR(a_o, b_o)        -- => paper when video_en=1, else border
 --
---   al6_hl = NOR(NOT bright, vid_en_n) = bright AND vid_en   (0 in border)
---   al7_fl = NOR(NOT flash,  vid_en_n) = flash  AND vid_en   (0 in border)
+--   al6_hl = NOR(NOT bright, vid_en_n) = bright AND video_en   (0 in border)
+--   al7_fl = NOR(NOT flash,  vid_en_n) = flash  AND video_en   (0 in border)
 --
--- INK is NOT gated by vid_en here: during the border the final mux selects
+-- INK is NOT gated by video_en here: during the border the final mux selects
 -- the paper_border leg (the pixel bit is forced to paper upstream), so the
 -- ungated ink line is a don't-care off-screen.
 ----------------------------------------------------------------------
@@ -60,11 +60,11 @@ entity attr_data_latch_paper_border_mux is
         attr_data     : in    std_logic_vector(7 downto 0); -- attribute byte from display RAM
         attr_latch_n  : in    std_logic;                    -- active-low latch enable: '0' transparent, '1' hold
         border_colour : in    std_logic_vector(2 downto 0); -- border reg (port 0xFE); b0-Blue, b1-Red, b2-Green
-        vid_en        : in    std_logic;                    -- '1' display area (paper), '0' border region
+        video_en      : in    std_logic;                    -- '1' display area (paper), '0' border region
         ink           : out   std_logic_vector(2 downto 0); -- foreground colour; b0-Blue, b1-Red, b2-Green
         paper_border  : out   std_logic_vector(2 downto 0); -- background: paper (display) or border (off-screen)
-        al6_hl        : out   std_logic;                    -- BRIGHT (attr bit 6), gated by vid_en
-        al7_fl        : out   std_logic                     -- FLASH  (attr bit 7), gated by vid_en
+        al6_hl        : out   std_logic;                    -- BRIGHT (attr bit 6), gated by video_en
+        al7_fl        : out   std_logic                     -- FLASH  (attr bit 7), gated by video_en
     );
 end entity attr_data_latch_paper_border_mux;
 
@@ -72,7 +72,7 @@ architecture structural of attr_data_latch_paper_border_mux is
 
     signal data_latch_out : std_logic_vector(7 downto 0); -- latched attribute byte
 
-    signal vid_en_n : std_logic; -- shared inverter: not vid_en
+    signal vid_en_n : std_logic; -- shared inverter: not video_en
 
     -- per-colour-bit mux intermediates (a/c/e = border legs, b/d/f = paper legs)
     signal a_o : std_logic;
@@ -85,18 +85,18 @@ architecture structural of attr_data_latch_paper_border_mux is
 begin
 
     -- single shared inverter for the video-enable select line
-    vid_en_n <= not vid_en;
+    vid_en_n <= not video_en;
 
     -- INK: foreground colour straight from the latched attribute byte
     ink <= data_latch_out(2 downto 0);
 
     -- PAPER/BORDER 2:1 mux per colour bit:
-    --   border leg live when vid_en='0', paper leg live when vid_en='1'
-    a_o <= not(border_colour(0) or vid_en);    -- Blue  border
+    --   border leg live when video_en='0', paper leg live when video_en='1'
+    a_o <= not(border_colour(0) or video_en);  -- Blue  border
     b_o <= not(data_latch_out(3) or vid_en_n); -- Blue  paper
-    c_o <= not(border_colour(1) or vid_en);    -- Red   border
+    c_o <= not(border_colour(1) or video_en);  -- Red   border
     d_o <= not(data_latch_out(4) or vid_en_n); -- Red   paper
-    e_o <= not(border_colour(2) or vid_en);    -- Green border
+    e_o <= not(border_colour(2) or video_en);  -- Green border
     f_o <= not(data_latch_out(5) or vid_en_n); -- Green paper
 
     paper_border(0) <= not(a_o or b_o); -- Blue  out

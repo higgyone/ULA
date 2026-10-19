@@ -64,7 +64,7 @@ begin
             sin    => sload,
             data_n => latch_data_out_n,
             q      => serial_data,
-            q_bar  => open
+            q_n    => open
         );
 
 end architecture structural;

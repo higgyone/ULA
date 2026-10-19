@@ -183,10 +183,10 @@ begin
     -- races RAS, and tRAH is satisfied by construction.
     row_a0_latch : entity work.data_latch_1_bit
         port map (
-            e     => rsel_n,
-            d     => c2,
-            q     => c2_latched,
-            q_bar => open
+            e   => rsel_n,
+            d   => c2,
+            q   => c2_latched,
+            q_n => open
         );
 
     a_out <= not(c2_latched or rsel_n);

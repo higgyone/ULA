@@ -28,7 +28,7 @@
 --
 -- Outputs:
 --   v0..v8     — the nine counter bits, tapped for downstream decode
---   v0_n..v8_n — complemented taps (qbar), used directly by NOR gates
+--   v0_n..v8_n — complemented taps (q_n), used directly by NOR gates
 --                in video_sync to avoid extra inverters
 --   vrst       — frame-wrap indicator. T_Structure: combinational, high
 --                while count = 311 with hcrst asserted (fires at end of
@@ -97,7 +97,7 @@ end entity vert_line_counter;
 
 architecture t_structure of vert_line_counter is
 
-    -- Per-stage q, qbar, and carry signals
+    -- Per-stage q, q_n, and carry signals
     signal s_v0   : std_logic;
     signal s_v0_n : std_logic;
     signal s_v0_c : std_logic;
@@ -158,7 +158,7 @@ begin
             clk    => clk_hc6,
             enable => hcrst,
             q      => s_v0,
-            qbar   => s_v0_n,
+            q_n    => s_v0_n,
             carry  => s_v0_c
         );
 
@@ -167,7 +167,7 @@ begin
             clk    => clk_hc6,
             enable => s_v0_c,
             q      => s_v1,
-            qbar   => s_v1_n,
+            q_n    => s_v1_n,
             carry  => s_v1_c
         );
 
@@ -176,7 +176,7 @@ begin
             clk    => clk_hc6,
             enable => s_v1_c,
             q      => s_v2,
-            qbar   => s_v2_n,
+            q_n    => s_v2_n,
             carry  => s_v2_c
         );
 
@@ -187,7 +187,7 @@ begin
             reset  => v3_8_reset,
             enable => s_v2_c,
             q      => s_v3,
-            qbar   => s_v3_n,
+            q_n    => s_v3_n,
             carry  => s_v3_c
         );
 
@@ -197,7 +197,7 @@ begin
             reset  => v3_8_reset,
             enable => s_v3_c,
             q      => s_v4,
-            qbar   => s_v4_n,
+            q_n    => s_v4_n,
             carry  => s_v4_c
         );
 
@@ -207,7 +207,7 @@ begin
             reset  => v3_8_reset,
             enable => s_v4_c,
             q      => s_v5,
-            qbar   => s_v5_n,
+            q_n    => s_v5_n,
             carry  => s_v5_c
         );
 
@@ -217,7 +217,7 @@ begin
             reset  => v3_8_reset,
             enable => s_v5_c,
             q      => s_v6,
-            qbar   => s_v6_n,
+            q_n    => s_v6_n,
             carry  => s_v6_c
         );
 
@@ -227,7 +227,7 @@ begin
             reset  => v3_8_reset,
             enable => s_v6_c,
             q      => s_v7,
-            qbar   => s_v7_n,
+            q_n    => s_v7_n,
             carry  => s_v7_c
         );
 
@@ -237,7 +237,7 @@ begin
             reset  => v3_8_reset,
             enable => s_v7_c,
             q      => s_v8,
-            qbar   => s_v8_n,
+            q_n    => s_v8_n,
             carry  => open
         );
 

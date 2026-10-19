@@ -25,7 +25,7 @@
 --   the TRUE pixel value. (See data_latch_1_bit.vhd, "Output use".)
 --
 -- Bit map: slice i wires data(i) -> cell.d, cell.q -> data_out(i),
---   cell.q_bar -> data_out_n(i). Enable is common across all eight.
+--   cell.q_n -> data_out_n(i). Enable is common across all eight.
 --
 -- Note: no gate delays / init values appear here — they live inside
 -- data_latch_1_bit (the cross-coupled NORs that need them). This wrapper
@@ -87,66 +87,66 @@ begin
     -- eight latch bit-slices, all sharing the common active-low enable
     latch_0 : entity work.data_latch_1_bit
         port map (
-            e     => enable,
-            d     => data(0),
-            q     => q_0,
-            q_bar => q_bar_0
+            e   => enable,
+            d   => data(0),
+            q   => q_0,
+            q_n => q_bar_0
         );
 
     latch_1 : entity work.data_latch_1_bit
         port map (
-            e     => enable,
-            d     => data(1),
-            q     => q_1,
-            q_bar => q_bar_1
+            e   => enable,
+            d   => data(1),
+            q   => q_1,
+            q_n => q_bar_1
         );
 
     latch_2 : entity work.data_latch_1_bit
         port map (
-            e     => enable,
-            d     => data(2),
-            q     => q_2,
-            q_bar => q_bar_2
+            e   => enable,
+            d   => data(2),
+            q   => q_2,
+            q_n => q_bar_2
         );
 
     latch_3 : entity work.data_latch_1_bit
         port map (
-            e     => enable,
-            d     => data(3),
-            q     => q_3,
-            q_bar => q_bar_3
+            e   => enable,
+            d   => data(3),
+            q   => q_3,
+            q_n => q_bar_3
         );
 
     latch_4 : entity work.data_latch_1_bit
         port map (
-            e     => enable,
-            d     => data(4),
-            q     => q_4,
-            q_bar => q_bar_4
+            e   => enable,
+            d   => data(4),
+            q   => q_4,
+            q_n => q_bar_4
         );
 
     latch_5 : entity work.data_latch_1_bit
         port map (
-            e     => enable,
-            d     => data(5),
-            q     => q_5,
-            q_bar => q_bar_5
+            e   => enable,
+            d   => data(5),
+            q   => q_5,
+            q_n => q_bar_5
         );
 
     latch_6 : entity work.data_latch_1_bit
         port map (
-            e     => enable,
-            d     => data(6),
-            q     => q_6,
-            q_bar => q_bar_6
+            e   => enable,
+            d   => data(6),
+            q   => q_6,
+            q_n => q_bar_6
         );
 
     latch_7 : entity work.data_latch_1_bit
         port map (
-            e     => enable,
-            d     => data(7),
-            q     => q_7,
-            q_bar => q_bar_7
+            e   => enable,
+            d   => data(7),
+            q   => q_7,
+            q_n => q_bar_7
         );
 
 end architecture structural;

@@ -7,9 +7,9 @@
 -- What it proves, in plain words:
 --   Load an attribute byte into the latch, then check the four colour
 --   outputs in BOTH regions:
---     * vid_en='1' (display): paper_border = PAPER (attr bits 5:3),
+--     * video_en='1' (display): paper_border = PAPER (attr bits 5:3),
 --       bright/flash pass through (attr bits 6/7), ink = attr bits 2:0.
---     * vid_en='0' (border):  paper_border = BORDER colour, bright/flash
+--     * video_en='0' (border):  paper_border = BORDER colour, bright/flash
 --       forced to 0. (ink is a don't-care off-screen, so not checked.)
 --   It also proves the latch HOLDS: after latching a byte, the attr_data
 --   input is scribbled with garbage and the outputs must not move.
@@ -47,7 +47,7 @@ architecture behavioral of attr_data_latch_paper_border_mux_tb is
     signal attr_data     : std_logic_vector(7 downto 0) := (others => '0');
     signal attr_latch_n  : std_logic                    := '0'; -- active-low: start transparent
     signal border_colour : std_logic_vector(2 downto 0) := (others => '0');
-    signal vid_en        : std_logic                    := '1'; -- start in display area
+    signal video_en      : std_logic                    := '1'; -- start in display area
     signal ink           : std_logic_vector(2 downto 0);
     signal paper_border  : std_logic_vector(2 downto 0);
     signal al6_hl        : std_logic;
@@ -91,7 +91,7 @@ begin
             attr_data     => attr_data,
             attr_latch_n  => attr_latch_n,
             border_colour => border_colour,
-            vid_en        => vid_en,
+            video_en      => video_en,
             ink           => ink,
             paper_border  => paper_border,
             al6_hl        => al6_hl,
@@ -107,7 +107,7 @@ begin
         attr_data     <= attr1;
         border_colour <= border1;
         attr_latch_n  <= '0';                                                                         -- transparent: latch follows attr_data
-        vid_en        <= '1';                                                                         -- display area
+        video_en      <= '1';                                                                         -- display area
         wait for settle;
         check_slv(ink,          ATTR1(2 downto 0), "ATTR1 display: ink = attr(2:0)");
         check_slv(paper_border, ATTR1(5 downto 3), "ATTR1 display: paper_border = PAPER (attr 5:3)");
@@ -115,7 +115,7 @@ begin
         check_sl (al7_fl,       ATTR1(7),          "ATTR1 display: flash = attr(7)");
 
         -- same byte, now the border region
-        vid_en <= '0';
+        video_en <= '0';
         wait for settle;
         check_slv(paper_border, BORDER1, "ATTR1 border: paper_border = BORDER colour");
         check_sl (al6_hl,       '0',     "ATTR1 border: bright forced 0");
@@ -129,7 +129,7 @@ begin
         attr_latch_n <= '1';                                                                          -- hold
         wait for settle;
         attr_data    <= (others => '1');                                                              -- garbage under the held latch
-        vid_en       <= '1';                                                                          -- back to display area
+        video_en     <= '1';                                                                          -- back to display area
         wait for settle;
         check_slv(ink,          ATTR1(2 downto 0), "hold: ink still ATTR1 despite garbage in");
         check_slv(paper_border, ATTR1(5 downto 3), "hold: paper still ATTR1 despite garbage in");
@@ -142,14 +142,14 @@ begin
         attr_latch_n  <= '0';                                                                         -- transparent
         attr_data     <= attr2;
         border_colour <= border2;
-        vid_en        <= '1';
+        video_en      <= '1';
         wait for settle;
         check_slv(ink,          ATTR2(2 downto 0), "ATTR2 display: ink = attr(2:0)");
         check_slv(paper_border, ATTR2(5 downto 3), "ATTR2 display: paper_border = PAPER (attr 5:3)");
         check_sl (al6_hl,       ATTR2(6),          "ATTR2 display: bright = attr(6)");
         check_sl (al7_fl,       ATTR2(7),          "ATTR2 display: flash = attr(7)");
 
-        vid_en <= '0';
+        video_en <= '0';
         wait for settle;
         check_slv(paper_border, BORDER2, "ATTR2 border: paper_border = BORDER colour");
         check_sl (al6_hl,       '0',     "ATTR2 border: bright forced 0");

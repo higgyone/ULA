@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------
 -- trc_ff — Toggle FF with Reset and Carry (structural)
 --
--- T-flip-flop built from d_ff_nor by tying d to qbar. Falling-edge
+-- T-flip-flop built from d_ff_nor by tying d to q_n. Falling-edge
 -- triggered. Reset is SYNCHRONOUS — d is forced to '0' while reset is
 -- asserted, so q clears on the next falling edge of clk.
 --
@@ -12,15 +12,15 @@
 -- NOTE: `carry` is the stage carry-out. trc_ff has no enable (it always
 -- toggles), so carry = q. It feeds the `enable` of the next counter stage.
 -- Consumed by bit3_counter(T_Structure) as C6's carry into C7's enable.
--- (Formerly aliased to qbar; redefined to a real carry-out.)
+-- (Formerly aliased to q_n; redefined to a real carry-out.)
 --
--- Characteristic table (q/qbar are edge-driven; carry = q is combinational):
+-- Characteristic table (q/q_n are edge-driven; carry = q is combinational):
 --
---   reset  clk       |  q(next)   qbar(next)
+--   reset  clk       |  q(next)   q_n(next)
 --   -----  --------  |  -------   ----------
 --     1    ↓       |  0         1
---     0    ↓       |  not q     not qbar
---     X    no edge   |  q         qbar
+--     0    ↓       |  not q     not q_n
+--     X    no edge   |  q         q_n
 ----------------------------------------------------------------------
 
 library ieee;
@@ -31,7 +31,7 @@ entity trc_ff is
         clk   : in    std_logic;
         reset : in    std_logic;
         q     : out   std_logic;
-        qbar  : out   std_logic;
+        q_n   : out   std_logic;
         carry : out   std_logic
     );
 end entity trc_ff;
@@ -44,20 +44,20 @@ architecture behavioral of trc_ff is
 
 begin
 
-    -- T with sync reset: d = '0' on reset; otherwise d = qbar (toggle).
+    -- T with sync reset: d = '0' on reset; otherwise d = q_n (toggle).
     d_in <= '0' when reset = '1' else
             qbar_int;
 
     ff : entity work.d_ff_nor(Behavioral)
         port map (
-            clk  => clk,
-            d    => d_in,
-            q    => q_int,
-            qbar => qbar_int
+            clk => clk,
+            d   => d_in,
+            q   => q_int,
+            q_n => qbar_int
         );
 
     q     <= q_int;
-    qbar  <= qbar_int;
+    q_n   <= qbar_int;
     carry <= q_int; -- enable hardwired '1', so carry-out = q
 
 end architecture behavioral;

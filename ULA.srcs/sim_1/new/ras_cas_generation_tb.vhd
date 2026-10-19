@@ -3,7 +3,7 @@
 -- generator, and for its merge with the CPU side in cpu_memory_access.
 --
 -- ras_cas_generation makes the VIDEO strobes only (active high: vid_ras,
--- vid_cas_ac, vid_cas_bd, plus the active-low n_vid_ras tap). The merge with the
+-- vid_cas_ac, vid_cas_bd, plus the active-low vid_ras_n tap). The merge with the
 -- CPU onto the DRAM pins is done once, in cpu_memory_access (option B). This TB
 -- wires the two together, as the top level will, so it also proves the DRAM pins
 -- come out exactly as before the merge moved.
@@ -14,7 +14,7 @@
 --      pattern from the block's header table on all four outputs: one RAS
 --      spanning the cycle, the FIRST CAS on vid_cas_ac, the SECOND on vid_cas_bd,
 --      a precharge gap between them, and RAS releasing one tick before the last
---      CAS. n_vid_ras is the complement of vid_ras at every tick.
+--      CAS. vid_ras_n is the complement of vid_ras at every tick.
 --   2. The two CAS legs never overlap, and together give exactly TWO separate
 --      CAS pulses per cycle, so a full c3-high burst (two cycles) fetches the
 --      four bytes A/B/C/D.
@@ -22,10 +22,10 @@
 --      original merged waveform (RAS 0 0 0 0 0 0 1 1, CAS 1 0 0 1 0 0 0 1).
 --   4. DRAM AC minimums — the tick positions give RAS→CAS, CAS-high gap, CAS-low
 --      width and RAS-hold that clear the datasheet limits.
---   5. Fetch-window gating — with n_vid_c3 = '1' all video strobes stay
+--   5. Fetch-window gating — with vid_c3_n = '1' all video strobes stay
 --      de-asserted at every tick (border/blank, and the c3-low CPU gap).
 --   6. CPU through the merge — with video idle, a Z80 read of 0x4000 pulls the
---      DRAM ras_n / cas_n low, while n_vid_ras stays high (video tap only).
+--      DRAM ras_n / cas_n low, while vid_ras_n stays high (video tap only).
 --
 -- The DUT registers its strobes on clk_14, so the drive pattern is: set the tick
 -- on a FALLING clk_14 edge (clean setup), let the next RISING edge capture it,
@@ -50,12 +50,12 @@ architecture behavioral of ras_cas_generation_tb is
     signal clk_7    : std_logic := '0';
     signal c0       : std_logic := '0';
     signal c1       : std_logic := '0';
-    signal n_vid_c3 : std_logic := '1';
+    signal vid_c3_n : std_logic := '1';
 
     signal vid_ras    : std_logic;
     signal vid_cas_ac : std_logic;
     signal vid_cas_bd : std_logic;
-    signal n_vid_ras  : std_logic;
+    signal vid_ras_n  : std_logic;
 
     -- CPU side of cpu_memory_access (idle unless a test drives it)
     signal a14    : std_logic := '0';
@@ -92,11 +92,11 @@ begin
             clk_7      => clk_7,
             c0         => c0,
             c1         => c1,
-            n_vid_c3   => n_vid_c3,
+            vid_c3_n   => vid_c3_n,
             vid_ras    => vid_ras,
             vid_cas_ac => vid_cas_ac,
             vid_cas_bd => vid_cas_bd,
-            n_vid_ras  => n_vid_ras
+            vid_ras_n  => vid_ras_n
         );
 
     merge : entity work.cpu_memory_access(structural)
@@ -171,7 +171,7 @@ begin
         -- 1) + 3) one full 4-pixel DRAM cycle, fetch active, CPU idle:
         --    the video strobes AND the merged DRAM pins at every tick
         ------------------------------------------------------------------
-        n_vid_c3 <= '0';
+        vid_c3_n <= '0';
 
         for k in 0 to 7 loop
 
@@ -192,9 +192,9 @@ begin
                        & std_logic'image(exp_cas_bd(k)) & " got " & std_logic'image(vid_cas_bd)
                 severity failure;
 
-            assert n_vid_ras = not exp_ras(k)
-                report "FAIL tick " & integer'image(k) & ": n_vid_ras expected "
-                       & std_logic'image(not exp_ras(k)) & " got " & std_logic'image(n_vid_ras)
+            assert vid_ras_n = not exp_ras(k)
+                report "FAIL tick " & integer'image(k) & ": vid_ras_n expected "
+                       & std_logic'image(not exp_ras(k)) & " got " & std_logic'image(vid_ras_n)
                 severity failure;
 
             assert ras_n = exp_ras_n(k)
@@ -273,20 +273,20 @@ begin
         checks := checks + 4;
 
         ------------------------------------------------------------------
-        -- 5) fetch-window gating: n_vid_c3 = '1' holds all strobes off
+        -- 5) fetch-window gating: vid_c3_n = '1' holds all strobes off
         --    (border/blank, and the c3-low CPU contention gap)
         ------------------------------------------------------------------
-        n_vid_c3 <= '1';
+        vid_c3_n <= '1';
 
         for k in 0 to 7 loop
 
             step(k);
 
             assert vid_ras = '0' and vid_cas_ac = '0' and vid_cas_bd = '0'
-                   and n_vid_ras = '1' and ras_n = '1' and cas_n = '1'
+                   and vid_ras_n = '1' and ras_n = '1' and cas_n = '1'
                 report "FAIL gating tick " & integer'image(k) & ": a strobe is asserted ("
                        & std_logic'image(vid_ras) & std_logic'image(vid_cas_ac)
-                       & std_logic'image(vid_cas_bd) & std_logic'image(n_vid_ras)
+                       & std_logic'image(vid_cas_bd) & std_logic'image(vid_ras_n)
                        & std_logic'image(ras_n) & std_logic'image(cas_n) & ")"
                 severity failure;
             checks := checks + 1;
@@ -299,7 +299,7 @@ begin
 
         ------------------------------------------------------------------
         -- 6) CPU through the merge: with video idle, a Z80 read of 0x4000
-        --    pulls the DRAM ras_n / cas_n low; n_vid_ras stays high
+        --    pulls the DRAM ras_n / cas_n low; vid_ras_n stays high
         ------------------------------------------------------------------
         wait until falling_edge(clk_14);
         a15    <= '0';
@@ -314,9 +314,9 @@ begin
                    & std_logic'image(ras_n) & std_logic'image(cas_n) & ")"
             severity failure;
 
-        assert n_vid_ras = '1'
-            report "FAIL cpu merge: n_vid_ras disturbed by CPU ("
-                   & std_logic'image(n_vid_ras) & ")"
+        assert vid_ras_n = '1'
+            report "FAIL cpu merge: vid_ras_n disturbed by CPU ("
+                   & std_logic'image(vid_ras_n) & ")"
             severity failure;
         checks := checks + 2;
 

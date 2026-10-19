@@ -41,7 +41,7 @@ architecture behavioral of tce_ff_tb is
     signal   enable : std_logic;
     signal   carry  : std_logic;
     signal   q      : std_logic;
-    signal   qbar   : std_logic;
+    signal   q_n    : std_logic;
 
 begin
 
@@ -50,7 +50,7 @@ begin
             clk    => clk,
             enable => enable,
             q      => q,
-            qbar   => qbar,
+            q_n    => q_n,
             carry  => carry
         );
 

@@ -16,7 +16,7 @@
 --        data_select_n='1' -> colour = PAPER
 --      data_select_n is NOT latched (it changes every pixel), so it is
 --      swept while the latch holds and the mux must still track it.
---   3. BLANKING: v_sync='1' OR h_blank='1' (h_blank_n='0') forces the
+--   3. BLANKING: vsync='1' OR h_blank='1' (hblank_n='0') forces the
 --      colour output to black (0,0,0), regardless of the mux result.
 --   4. BRIGHT / FLASH pass-through: hl = latched al6_hl, fl = latched
 --      al7_fl (both taken straight off the latch, ungated).
@@ -62,8 +62,8 @@ architecture behavioral of attr_output_latch_colour_mux_tb is
     constant a_flash  : std_logic := '1';
 
     -- DUT inputs
-    signal v_sync        : std_logic := '0'; -- '1' = blank (colour forced black)
-    signal h_blank_n     : std_logic := '1'; -- active-low blank: '0' = blank
+    signal vsync         : std_logic := '0'; -- '1' = blank (colour forced black)
+    signal hblank_n      : std_logic := '1'; -- active-low blank: '0' = blank
     signal data_select_n : std_logic := '0'; -- per-pixel select: '0'=ink, '1'=paper
     signal i0_b          : std_logic := '0';
     signal pb0_b         : std_logic := '0';
@@ -129,8 +129,8 @@ begin
 
     dut : entity work.attr_output_latch_colour_mux(Structural)
         port map (
-            v_sync        => v_sync,
-            h_blank_n     => h_blank_n,
+            vsync         => vsync,
+            hblank_n      => hblank_n,
             data_select_n => data_select_n,
             i0_b          => i0_b,
             pb0_b         => pb0_b,
@@ -155,8 +155,8 @@ begin
         -- Load attribute cell #1 (transparent), no blanking, select INK.
         --------------------------------------------------------------
         a_o_latch_n   <= '0';                                                                                   -- transparent: latch follows inputs
-        v_sync        <= '0';                                                                                   -- not blanking
-        h_blank_n     <= '1';                                                                                   -- not blanking
+        vsync         <= '0';                                                                                   -- not blanking
+        hblank_n      <= '1';                                                                                   -- not blanking
         data_select_n <= '0';                                                                                   -- select INK
         i0_b          <= ink_b;
         pb0_b         <= pap_b;
@@ -179,16 +179,16 @@ begin
         --------------------------------------------------------------
         -- Blanking overrides the mux -> black, either source.
         --------------------------------------------------------------
-        v_sync <= '1';                                                                                          -- vertical sync blanks
+        vsync <= '1';                                                                                           -- vertical sync blanks
         wait for settle;
-        check_colour(blue, red, green, '0', '0', '0', "v_sync: colour forced black");
+        check_colour(blue, red, green, '0', '0', '0', "vsync: colour forced black");
 
-        v_sync    <= '0';
-        h_blank_n <= '0';                                                                                       -- horizontal blank blanks
+        vsync    <= '0';
+        hblank_n <= '0';                                                                                        -- horizontal blank blanks
         wait for settle;
         check_colour(blue, red, green, '0', '0', '0', "h_blank: colour forced black");
 
-        h_blank_n <= '1';                                                                                       -- back to visible
+        hblank_n <= '1';                                                                                        -- back to visible
         wait for settle;
 
         --------------------------------------------------------------

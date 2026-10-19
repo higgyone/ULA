@@ -79,8 +79,8 @@
 --               low only for an I/O cycle to an even address. Nothing inside
 --               the ULA generates it (the testbench models the PCB gate).
 --   mreq_n      Z80 /MREQ, active low
---   border      ACTIVE HIGH: '1' in the border (only nborder exists so far,
---               so the wiring stage needs an inverter)
+--   border      ACTIVE HIGH: '1' in the border (video_sync's border output,
+--               the complement of border_n)
 --   cpuclk      internal CPU clock: c0 when running, held '1' during a hold
 --   phicpu_n    pin 32: cpuclk through the inverting peripheral transistor.
 --               The PCB transistor inverts it back for the Z80.
@@ -165,19 +165,19 @@ begin
     -- ioreqtw3: ULA-port I/O access under way (T2 onwards)
     latch_0 : entity work.data_latch_1_bit
         port map (
-            e     => g_out_n,
-            d     => ioreq_n,
-            q     => ioreqtw3_n,
-            q_bar => s_ioreqtw3
+            e   => g_out_n,
+            d   => ioreq_n,
+            q   => ioreqtw3_n,
+            q_n => s_ioreqtw3
         );
 
     -- mreqt23: memory access under way (T2, T3)
     latch_1 : entity work.data_latch_1_bit
         port map (
-            e     => g_out_n,
-            d     => mreq_n,
-            q     => open,
-            q_bar => s_mreqt23
+            e   => g_out_n,
+            d   => mreq_n,
+            q   => open,
+            q_n => s_mreqt23
         );
 
 end architecture structural;

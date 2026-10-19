@@ -74,8 +74,8 @@
 --   Sync during the burst is fatal for a related reason: a HAZARD in the
 --   gate-level parity latch (data_latch_1_bit). When its enable (sync_n)
 --   falls while holding q = '0', the two input NORs both act on the old b_o,
---   and for one tg (1 ns) q and q_bar are BOTH '0', with d unchanged. timing
---   (= q_bar) blips, the V-switch passes through wrong colour patterns, and
+--   and for one tg (1 ns) q and q_n are BOTH '0', with d unchanged. timing
+--   (= q_n) blips, the V-switch passes through wrong colour patterns, and
 --   with the burst sinks on the V sum dips below zero. Harmless in the real
 --   ULA, since sync and burst never overlap, and outside the burst window the
 --   worst V sum is 496 mV, so a blip during sync cannot go negative.

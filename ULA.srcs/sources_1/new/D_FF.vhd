@@ -2,7 +2,7 @@
 -- d_ff — D flip-flop, negative-edge triggered (behavioural)
 --
 -- Behavioural model of a falling-edge D flip-flop. Captures d on
--- every falling edge of clk; q drives the latched value, q_bar its
+-- every falling edge of clk; q drives the latched value, q_n its
 -- inverse.
 --
 -- For the gate-accurate ULA recreation the structural equivalent is
@@ -13,7 +13,7 @@
 --
 -- Characteristic table:
 --
---   clk          d  |  q(next)   q_bar(next)
+--   clk          d  |  q(next)   q_n(next)
 --   --------     -- |  -------   -----------
 --   no edge      X  |  q         not q  (hold)
 --   ↓ (fall)   0  |  0         1
@@ -25,10 +25,10 @@ library ieee;
 
 entity d_ff is
     port (
-        clk   : in    std_logic;
-        d     : in    std_logic;
-        q     : out   std_logic;
-        q_bar : out   std_logic
+        clk : in    std_logic;
+        d   : in    std_logic;
+        q   : out   std_logic;
+        q_n : out   std_logic
     );
 end entity d_ff;
 
@@ -47,7 +47,7 @@ begin
 
     end process;
 
-    q     <= d_sig;
-    q_bar <= not d_sig;
+    q   <= d_sig;
+    q_n <= not d_sig;
 
 end architecture behavioral;

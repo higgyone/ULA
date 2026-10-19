@@ -3,11 +3,11 @@
 --
 -- Instantiates horiz_timing (which owns the master horizontal counter)
 -- and Vert_Line_counter, then derives:
---   * border (H + V)        (nBorder)        — Chris Smith pg 92
+--   * border (H + V)        (border_n, and its complement border)  — Chris Smith pg 92
 --   * vertical sync pulse   (vsync)          — Chris Smith pg 92
---   * composite sync        (n_sync_5c/n_sync_6c)
+--   * composite sync        (sync_5c_n/sync_6c_n)
 --
--- The horizontal sync and blanking signals (hsync_5c/hsync_6c/nHblank)
+-- The horizontal sync and blanking signals (hsync_5c/hsync_6c/hblank_n)
 -- come directly from horiz_timing and are passed through.
 --
 -- All combinational logic uses NORs with inverted inputs (the Ferranti
@@ -25,11 +25,12 @@ entity video_sync is
         tclk_a    : in    std_logic; -- retained for back-compat; unused (horiz_timing ties it to '0')
         hsync_5c  : out   std_logic;
         hsync_6c  : out   std_logic;
-        nhblank   : out   std_logic;
+        hblank_n  : out   std_logic;
         vsync     : out   std_logic;
-        nborder   : out   std_logic;
-        n_sync_5c : out   std_logic; -- composite active-low sync = NOR(vsync, hsync), issue-5 hsync timing
-        n_sync_6c : out   std_logic  -- composite active-low sync = NOR(vsync, hsync), issue-6 hsync timing
+        border_n  : out   std_logic; -- '0' in the border (book /BORDER)
+        border    : out   std_logic; -- '1' in the border, for contention_handler_3 and video_address_generation
+        sync_5c_n : out   std_logic; -- composite active-low sync = NOR(vsync, hsync), issue-5 hsync timing
+        sync_6c_n : out   std_logic  -- composite active-low sync = NOR(vsync, hsync), issue-6 hsync timing
     );
 end entity video_sync;
 
@@ -52,9 +53,10 @@ architecture behavioral of video_sync is
 
     -- vertical border intermediates
     signal v_border_lower, v_border_upper : std_logic;
+    signal s_border_n                     : std_logic;
 
-    -- complemented V taps (qbar) from the counter, used by the
-    -- nBorder and vsync NORs
+    -- complemented V taps (q_n) from the counter, used by the
+    -- border_n and vsync NORs
     signal v3_n : std_logic;
     signal v4_n : std_logic;
     signal v5_n : std_logic;
@@ -75,7 +77,7 @@ begin
             reset    => reset,
             hsync_5c => h_5c,
             hsync_6c => h_6c,
-            nhblank  => h_blank,
+            hblank_n => h_blank,
             c8       => c8,
             clk_hc6  => hc6,
             hc_rst   => hcrst
@@ -83,7 +85,7 @@ begin
 
     hsync_5c <= h_5c;
     hsync_6c <= h_6c;
-    nhblank  <= h_blank;
+    hblank_n <= h_blank;
 
     ----------------------------------------------------------------
     -- Vertical line counter (clocked by clk_hc6, advanced by hc_rst)
@@ -96,7 +98,7 @@ begin
             -- the rest default to open (the counter still counts them).
             v2 => v2,
             v8 => v8,
-            -- complemented taps straight from the counter's qbar outputs
+            -- complemented taps straight from the counter's q_n outputs
             -- (no extra inverters in video_sync)
             v3_n => v3_n,
             v4_n => v4_n,
@@ -109,10 +111,10 @@ begin
     ----------------------------------------------------------------
     -- Border decode (Chris Smith pg 92)
     --
-    --   nBorder = NOR(c8, v8, v6·v7)        (book equation)
+    --   border_n = NOR(c8, v8, v6·v7)        (book equation)
     --
     -- The border is the frame AROUND the central 256x192 display, so it
-    -- must be gated BOTH horizontally and vertically. nBorder is HIGH
+    -- must be gated BOTH horizontally and vertically. border_n is HIGH
     -- (display, border off) only when all three terms are 0:
     --
     --   c8        H-counter MSB. 0 for pixels 0..255 (display columns),
@@ -122,16 +124,16 @@ begin
     --   v6·v7     bits 7(128)+6(64): V lines 192..255 -> vertical border.
     --
     -- The two vertical pieces are OR'd because no single AND of V bits
-    -- selects the whole 192..311 range. Written as NORs of qbar taps to
+    -- selects the whole 192..311 range. Written as NORs of q_n taps to
     -- match the ULA's NOR-gate silicon: v6 AND v7 = NOR(v6_n, v7_n).
     --
-    -- Net effect: nBorder is HIGH only inside the central display window
+    -- Net effect: border_n is HIGH only inside the central display window
     -- (c8=0 AND V line 0..191); it goes LOW across the whole horizontal
     -- border on every line, and across all of V lines 192..311.
     ----------------------------------------------------------------
     v_border_lower <= not(v6_n or v7_n);                           -- v6 AND v7 -> V lines 192..255
     v_border_upper <= v8;                                          --           -> V lines 256..311
-    nborder        <= not(c8 or v_border_lower or v_border_upper); -- + c8 = horizontal border gate
+    s_border_n     <= not(c8 or v_border_lower or v_border_upper); -- + c8 = horizontal border gate
 
     ----------------------------------------------------------------
     -- Vertical sync pulse — 4 lines wide, lines 248..251
@@ -151,7 +153,7 @@ begin
     --
     -- The v2 = 0 term is what limits it to 4 lines: drop it and the
     -- condition becomes "bits 7..3 set, bits 2/1/0 anything" = lines
-    -- 248..255 (8 lines). v3_n..v7_n are the counter's qbar taps (wired
+    -- 248..255 (8 lines). v3_n..v7_n are the counter's q_n taps (wired
     -- in the port map), so no local inverters are needed here.
     ----------------------------------------------------------------
     s_vsync <= not(v7_n or v6_n or v5_n or v4_n or v3_n or v2);
@@ -167,8 +169,10 @@ begin
     -- (issue-5 vs issue-6 ULA); they differ ONLY in which hsync is folded
     -- in here.
     ----------------------------------------------------------------
-    n_sync_5c <= h_5c nor s_vsync; -- NOR(vsync, hsync_5c)
-    n_sync_6c <= h_6c nor s_vsync; -- NOR(vsync, hsync_6c)
+    sync_5c_n <= h_5c nor s_vsync; -- NOR(vsync, hsync_5c)
+    sync_6c_n <= h_6c nor s_vsync; -- NOR(vsync, hsync_6c)
     vsync     <= s_vsync;
+    border_n  <= s_border_n;
+    border    <= not(s_border_n);
 
 end architecture behavioral;

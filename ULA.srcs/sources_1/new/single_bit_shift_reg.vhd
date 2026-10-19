@@ -27,7 +27,7 @@
 --      g_out = NOR(b_out, h_out)
 --
 --      q     = g_out
---      q_bar = h_out
+--      q_n = h_out
 --
 -- Mux / load-vs-shift semantics:
 --   set='1' : e_out=0 => d_out = data (from data_n), f_out = 0.
@@ -43,7 +43,7 @@
 --   => q updates on the falling edge of clk. In a chain sharing one clk,
 --      every cell samples its neighbour's stable held output while clk is
 --      high, then all slaves update together on the edge — no shift race.
---   q and q_bar are complementary in both phases.
+--   q and q_n are complementary in both phases.
 --
 -- Gate delay `TG` (simulation only). Each NOR assignment carries an
 -- `after TG` inertial delay. Without it the cross-coupled pairs
@@ -81,7 +81,7 @@ library ieee;
 --
 --   clk is only the timing: nothing changes until clk falls 1->0. While clk is
 --   high the cell samples the chosen input; on the falling edge it stores that
---   bit and then holds it steady on q (and its inverse on q_bar) until the next
+--   bit and then holds it steady on q (and its inverse on q_n) until the next
 --   falling edge.
 
 entity single_bit_shift_register is
@@ -91,7 +91,7 @@ entity single_bit_shift_register is
         data_1_n : in    std_logic; -- active-low shift-in bit from neighbour (SHIFT, set='0')
         set      : in    std_logic; -- '1' = LOAD from data_n, '0' = SHIFT from data_1_n
         q        : out   std_logic;
-        q_bar    : out   std_logic
+        q_n      : out   std_logic
     );
 end entity single_bit_shift_register;
 
@@ -99,7 +99,7 @@ architecture structure of single_bit_shift_register is
 
     -- Seeded to the "holding 0" state (clk='0', set='0', q='0'):
     --   a_out=0 b_out=1 c_out=0  master holding 0
-    --   g_out=0 h_out=1          slave  holding 0  => q=0, q_bar=1
+    --   g_out=0 h_out=1          slave  holding 0  => q=0, q_n=1
     --   e_out=1 d_out=0 f_out=0 i_out=1  mux/fold nets consistent
     signal a_out : std_logic := '0';
     signal b_out : std_logic := '1';
@@ -130,7 +130,7 @@ begin
     h_out <= not(c_out or g_out)          after tg;
     g_out <= not(b_out or h_out)          after tg;
 
-    q     <= g_out;
-    q_bar <= h_out;
+    q   <= g_out;
+    q_n <= h_out;
 
 end architecture structure;

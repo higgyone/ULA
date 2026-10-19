@@ -58,7 +58,7 @@
 --   5. EDGE CASE (reported, not failed): with vid_ras active during a border
 --      ROM-area MREQ the ULA still releases RAS, so a video RAS would be lost.
 --      Whether video RAS can coincide with border_n = '0' is a question for
---      the integration (video fetch timing vs nborder), not this block.
+--      the integration (video fetch timing vs border_n), not this block.
 --
 -- The block has no modelled delays, so `settle` only covers the delta chain.
 -- Any mismatch is fatal; a clean run prints "ALL TESTS PASSED".

@@ -76,26 +76,26 @@ begin
     -- three d_ff_nor instances — one per bit
     ff0 : entity work.d_ff_nor
         port map (
-            clk  => clk,
-            d    => d(0),
-            q    => q(0),
-            qbar => open
+            clk => clk,
+            d   => d(0),
+            q   => q(0),
+            q_n => open
         );
 
     ff1 : entity work.d_ff_nor
         port map (
-            clk  => clk,
-            d    => d(1),
-            q    => q(1),
-            qbar => open
+            clk => clk,
+            d   => d(1),
+            q   => q(1),
+            q_n => open
         );
 
     ff2 : entity work.d_ff_nor
         port map (
-            clk  => clk,
-            d    => d(2),
-            q    => q(2),
-            qbar => open
+            clk => clk,
+            d   => d(2),
+            q   => q(2),
+            q_n => open
         );
 
     output   <= q;
@@ -122,7 +122,7 @@ begin
             clk   => clk,
             reset => s_ff_rst,
             q     => count_6_q_out,
-            qbar  => open,
+            q_n   => open,
             carry => carry_count_6
         );
 
@@ -132,7 +132,7 @@ begin
             reset  => s_ff_rst,
             enable => carry_count_6,
             q      => count_7_q_out,
-            qbar   => count_7_qbar_out,
+            q_n    => count_7_qbar_out,
             carry  => carry_count_7
         );
 
@@ -142,7 +142,7 @@ begin
             reset  => s_ff_rst,
             enable => carry_count_7,
             q      => count_8_q_out,
-            qbar   => count_8_qbar_out,
+            q_n    => count_8_qbar_out,
             carry  => open
         );
 

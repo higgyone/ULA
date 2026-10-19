@@ -4,7 +4,7 @@
 -- Owns the master horizontal counter (modulo-448) and derives:
 --   hsync_5c — active-HIGH hsync for issue 5 ULAs (pixels 336..367)
 --   hsync_6c — active-HIGH hsync for issue 6 ULAs (pixels 344..375)
---   nHblank  — active-low horizontal blanking      (pixels 320..415)
+--   hblank_n  — active-low horizontal blanking      (pixels 320..415)
 --
 -- Also exposes MHC outputs needed by the vertical counter:
 --   clk_hc6 — clock for the bit3_counter chain (= C5)
@@ -28,7 +28,7 @@
 -- Horizontal line structure (PAL composite, sync in blanking):
 --   active video → front porch → sync pulse → back porch → next line
 --
---   * Blanking (nHblank LOW) — the off-time window during which
+--   * Blanking (hblank_n LOW) — the off-time window during which
 --     the beam flies back to the start of the next line. Holds
 --     the signal at black level so retrace leaves no streak.
 --   * Front porch — flat black-level region BEFORE the sync pulse.
@@ -65,7 +65,7 @@ entity horiz_timing is
         reset    : in    std_logic;
         hsync_5c : out   std_logic;
         hsync_6c : out   std_logic;
-        nhblank  : out   std_logic;
+        hblank_n : out   std_logic;
         c8       : out   std_logic;   -- H-counter MSB (HIGH for pixels 256..447); exposed so video_sync can gate the horizontal border
         clk_hc6  : out   std_logic;
         hc_rst   : out   std_logic
@@ -126,8 +126,8 @@ begin
     -- Start of blanking: C8=1, C7=0, C6=1 -> pixel 320
     blank1 <= not((not s_c8) or c7 or (not c6));
     -- End of blanking:   C8=1, C7=1, C5=0 -> through pixel 415
-    blank2  <= not((not s_c8) or (not c7) or c5);
-    nhblank <= not(blank1 or blank2);
+    blank2   <= not((not s_c8) or (not c7) or c5);
+    hblank_n <= not(blank1 or blank2);
 
     --------------------------------------------------------------
     -- hsync 5c — pulse pixels 336..367

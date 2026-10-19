@@ -59,19 +59,19 @@ begin
     -- MIC: data bit 3, transparent while port_wr_n is low, held otherwise
     latch_mic : entity work.data_latch_1_bit
         port map (
-            e     => port_wr_n,
-            d     => di_3,
-            q     => mic,
-            q_bar => open
+            e   => port_wr_n,
+            d   => di_3,
+            q   => mic,
+            q_n => open
         );
 
     -- speaker: data bit 4, same strobe
     latch_speaker : entity work.data_latch_1_bit
         port map (
-            e     => port_wr_n,
-            d     => di_4,
-            q     => speaker,
-            q_bar => open
+            e   => port_wr_n,
+            d   => di_4,
+            q   => speaker,
+            q_n => open
         );
 
 end architecture structural;

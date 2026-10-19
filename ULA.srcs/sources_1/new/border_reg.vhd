@@ -14,7 +14,7 @@
 --   giving the Spectrum's 8 colours: 0 black, 1 blue, 2 red, 3 magenta,
 --   4 green, 5 cyan, 6 yellow, 7 white. There is no BRIGHT for the border.
 --
---   b2..b0 feed attr_output_latch_border_select_mux's border_colour_bgr(2:0)
+--   b2..b0 feed attr_output_latch_border_select_mux's border_colour(2:0)
 --   directly: bit 0 blue, bit 1 red, bit 2 green, the same order.
 --
 --   Bits 3 (MIC) and 4 (speaker) of the same write are not handled here.
@@ -62,28 +62,28 @@ begin
     -- blue
     latch_0 : entity work.data_latch_1_bit
         port map (
-            e     => port_wr_n,
-            d     => di_0,
-            q     => b0,
-            q_bar => open
+            e   => port_wr_n,
+            d   => di_0,
+            q   => b0,
+            q_n => open
         );
 
     -- red
     latch_1 : entity work.data_latch_1_bit
         port map (
-            e     => port_wr_n,
-            d     => di_1,
-            q     => b1,
-            q_bar => open
+            e   => port_wr_n,
+            d   => di_1,
+            q   => b1,
+            q_n => open
         );
 
     -- green
     latch_2 : entity work.data_latch_1_bit
         port map (
-            e     => port_wr_n,
-            d     => di_2,
-            q     => b2,
-            q_bar => open
+            e   => port_wr_n,
+            d   => di_2,
+            q   => b2,
+            q_n => open
         );
 
 end architecture structural;

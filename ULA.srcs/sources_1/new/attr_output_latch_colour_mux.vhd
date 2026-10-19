@@ -35,15 +35,15 @@
 -- ── Per-bit 2:1 mux, gate-accurate NOR-NOR form (blue shown) ─────────
 --   a_o  = NOR(q0 INK-blue,   data_select_n)   -- ink leg   (live when sel='0')
 --   b_o  = NOR(q1 PAPER-blue, data_select)     -- paper leg (live when sel='1')
---   blue = NOR(v_sync, a_o, h_blank, b_o)      -- mux result, unless blanked
+--   blue = NOR(vsync, a_o, h_blank, b_o)      -- mux result, unless blanked
 --   => data_select_n='0' -> blue=INK-blue; ='1' -> blue=PAPER-blue.
 --
--- ── Blanking (v_sync, h_blank) ───────────────────────────────────────
+-- ── Blanking (vsync, h_blank) ───────────────────────────────────────
 --   The two blank terms are OR'd into every colour NOR, so either one high
 --   forces the colour to '0' (black):
---     v_sync    active-HIGH : '1' during vertical sync.
---     h_blank_n active-LOW  : inverted to h_blank ('1' = blank) so the
---                             active-low nHblank line blanks the output.
+--     vsync    active-HIGH : '1' during vertical sync.
+--     hblank_n active-LOW  : inverted to h_blank ('1' = blank) so the
+--                             active-low hblank_n line blanks the output.
 --   Border colour is NOT blanked here — the border shows its own colour via
 --   paper_border upstream; only true sync/retrace goes black.
 --
@@ -63,8 +63,8 @@ library ieee;
 
 entity attr_output_latch_colour_mux is
     port (
-        v_sync        : in    std_logic;
-        h_blank_n     : in    std_logic;
+        vsync         : in    std_logic;
+        hblank_n      : in    std_logic;
         data_select_n : in    std_logic;
         i0_b          : in    std_logic;
         pb0_b         : in    std_logic;
@@ -114,7 +114,7 @@ begin
     latch_data_in(7) <= al7_fl;
 
     -- shared inverters: active-high blank, and the paper-leg select
-    h_blank     <= not(h_blank_n) after tg;
+    h_blank     <= not(hblank_n) after tg;
     data_select <= not(data_select_n) after tg;
 
     -- attribute OUTPUT latch (double-buffer): holds the current cell while
@@ -136,10 +136,10 @@ begin
     e_o <= not(q(4) or data_select_n) after tg; -- Green ink
     f_o <= not(q(5) or data_select) after tg;   -- Green paper
 
-    -- mux result OR'd with the blank terms: v_sync or h_blank forces black
-    blue  <= not(v_sync or a_o or h_blank or b_o) after tg;
-    red   <= not(v_sync or c_o or h_blank or d_o) after tg;
-    green <= not(v_sync or e_o or h_blank or f_o) after tg;
+    -- mux result OR'd with the blank terms: vsync or h_blank forces black
+    blue  <= not(vsync or a_o or h_blank or b_o) after tg;
+    red   <= not(vsync or c_o or h_blank or d_o) after tg;
+    green <= not(vsync or e_o or h_blank or f_o) after tg;
 
     -- bright / flash pass straight through from the latch (fl -> pixel_flash)
     hl <= q(6);

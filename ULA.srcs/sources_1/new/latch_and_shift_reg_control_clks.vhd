@@ -9,7 +9,7 @@
 -- ── The sequence it implements (per character cell) ──────────────────
 --   1. pixel_data_latch_n  captures the DISPLAY (bitmap) byte
 --   2. attr_data_latch_n   captures the ATTRIBUTE byte
---   3. s_load + attr_output_latch_n transfer that pair to the pixel shift
+--   3. sload + attr_output_latch_n transfer that pair to the pixel shift
 --      register and the attribute output latch at "output load"
 --   4. while those 8 pixels are displayed, the NEXT byte pair is fetched into
 --      the now-empty input latches and held, until the next output load
@@ -20,7 +20,7 @@
 --   ----+-------------------------------------------+---------------
 --    1  | pixel_data_latch_n  (display byte A)      | vid_cas_ac
 --    3  | attr_data_latch_n   (attribute byte B)    | vid_cas_bd
---    4  | s_load              (shift reg load)      |
+--    4  | sload              (shift reg load)      |
 --    5  | attr_output_latch_n (output load) + display byte C | vid_cas_ac
 --    7  | attr_data_latch_n   (attribute byte D)    | vid_cas_bd
 --   Two display bytes (pixels 1, 5) and two attribute bytes (pixels 3, 7) per
@@ -44,20 +44,20 @@
 --   clk_7_n     inverted 7 MHz clock — the clock the logic runs on (book name)
 --   c0/c0_n, c1/c1_n, c2_n, c3_n
 --               horizontal counter taps (true and complement as needed)
---   nborder     active-low border flag from video_sync
+--   border_n     active-low border flag from video_sync
 --   vid_c3_n    active-low display-qualified c3. DEFERRED input.
 --   clk_7_pixel pixel clock = not(clk_7_n)
 --   vid_cas_pulse         video CAS pulse (also used internally)
 --   pixel_data_latch_n    -> integration cell (active-low)
 --   attr_data_latch_n     -> integration cell (active-low)
 --   video_en              -> integration cell (border-latched display enable)
---   s_load                -> integration cell (active-high)
+--   sload                -> integration cell (active-high)
 --   attr_output_latch_n   -> integration cell (active-low: '0' transparent)
 --
 -- NOTE: the display leg qualifies itself with a locally decoded vid_c3
--- (a_out = nborder AND c3) while the attribute leg uses the vid_c3_n input
+-- (a_out = border_n AND c3) while the attribute leg uses the vid_c3_n input
 -- port. The two are equivalent when the input is driven consistently; kept as
--- the book draws it. s_load (pixel 4) leads attr_output_latch_n (pixel 5) by
+-- the book draws it. sload (pixel 4) leads attr_output_latch_n (pixel 5) by
 -- one pixel rather than firing together.
 ----------------------------------------------------------------------------------
 
@@ -73,14 +73,14 @@ entity latch_and_shift_reg_control_clks is
         c1                  : in    std_logic; -- horizontal counter bit 1
         c1_n                : in    std_logic; -- horizontal counter bit 1, complement
         c2_n                : in    std_logic; -- horizontal counter bit 2, complement
-        nborder             : in    std_logic; -- border region flag from video_sync (active-low)
+        border_n            : in    std_logic; -- border region flag from video_sync (active-low)
         vid_c3_n            : in    std_logic; -- active-low display-qualified c3; deferred input
         clk_7_pixel         : out   std_logic; -- pixel clock = not(clk_7_n)
         vid_cas_pulse       : out   std_logic; -- video CAS pulse
         pixel_data_latch_n  : out   std_logic; -- -> integration cell pixel_data_latch_n (active-low)
         attr_data_latch_n   : out   std_logic; -- -> integration cell attr_data_latch_n  (active-low)
         video_en            : out   std_logic; -- -> integration cell video_en
-        s_load              : out   std_logic; -- -> integration cell s_load
+        sload               : out   std_logic; -- -> integration cell sload
         attr_output_latch_n : out   std_logic  -- -> integration cell attr_output_latch_n (ACTIVE-LOW)
     );
 end entity latch_and_shift_reg_control_clks;
@@ -97,17 +97,17 @@ architecture structural of latch_and_shift_reg_control_clks is
     signal c_out_n         : std_logic;
     signal s_vid_en        : std_logic;
     signal s_vid_en_n      : std_logic;
-    signal s_s_load        : std_logic;
+    signal s_sload         : std_logic;
     signal s_a_latch       : std_logic;
 
 begin
 
     gd_latch : entity work.data_latch_1_bit
         port map (
-            e     => c3_n,
-            d     => nborder,
-            q     => s_vid_en,
-            q_bar => s_vid_en_n
+            e   => c3_n,
+            d   => border_n,
+            q   => s_vid_en,
+            q_n => s_vid_en_n
         );
 
     pix_clk     <= not(clk_7_n);
@@ -126,7 +126,7 @@ begin
     s_vid_cas_pulse <= not(clk_7_n or c0_n);
     vid_cas_pulse   <= s_vid_cas_pulse;
 
-    s_border <= not(nborder);
+    s_border <= not(border_n);
     a_out    <= not(s_border or c3_n);
     a_out_n  <= not(a_out);
 
@@ -148,8 +148,8 @@ begin
 
     video_en <= s_vid_en;
 
-    s_s_load <= not(s_vid_en_n or c1 or c0 or c2_n);
-    s_load   <= s_s_load;
+    s_sload <= not(s_vid_en_n or c1 or c0 or c2_n);
+    sload   <= s_sload;
 
     s_a_latch           <= not(c2_n or c0_n or c1);
     attr_output_latch_n <= not(s_a_latch);
