@@ -38,26 +38,26 @@ end entity trc_ff;
 
 architecture behavioral of trc_ff is
 
-    signal d_in     : std_logic;
-    signal q_int    : std_logic;
-    signal qbar_int : std_logic;
+    signal s_d   : std_logic;
+    signal s_q   : std_logic;
+    signal s_q_n : std_logic;
 
 begin
 
     -- T with sync reset: d = '0' on reset; otherwise d = q_n (toggle).
-    d_in <= '0' when reset = '1' else
-            qbar_int;
+    s_d <= '0' when reset = '1' else
+           s_q_n;
 
     ff : entity work.d_ff_nor(Behavioral)
         port map (
             clk => clk,
-            d   => d_in,
-            q   => q_int,
-            q_n => qbar_int
+            d   => s_d,
+            q   => s_q,
+            q_n => s_q_n
         );
 
-    q     <= q_int;
-    q_n   <= qbar_int;
-    carry <= q_int; -- enable hardwired '1', so carry-out = q
+    q     <= s_q;
+    q_n   <= s_q_n;
+    carry <= s_q; -- enable hardwired '1', so carry-out = q
 
 end architecture behavioral;

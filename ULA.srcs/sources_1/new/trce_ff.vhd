@@ -45,27 +45,27 @@ end entity trce_ff;
 
 architecture behavioral of trce_ff is
 
-    signal d_in     : std_logic;
-    signal q_int    : std_logic;
-    signal qbar_int : std_logic;
+    signal s_d   : std_logic;
+    signal s_q   : std_logic;
+    signal s_q_n : std_logic;
 
 begin
 
     -- Priority: reset > enable.
-    d_in <= '0' when reset = '1' else
-            qbar_int when enable = '1' else
-            q_int;
+    s_d <= '0' when reset = '1' else
+           s_q_n when enable = '1' else
+           s_q;
 
     ff : entity work.d_ff_nor(Behavioral)
         port map (
             clk => clk,
-            d   => d_in,
-            q   => q_int,
-            q_n => qbar_int
+            d   => s_d,
+            q   => s_q,
+            q_n => s_q_n
         );
 
-    q     <= q_int;
-    q_n   <= qbar_int;
-    carry <= not ((not enable) or qbar_int); -- = enable and q : stage carry-out
+    q     <= s_q;
+    q_n   <= s_q_n;
+    carry <= not ((not enable) or s_q_n); -- = enable and q : stage carry-out
 
 end architecture behavioral;

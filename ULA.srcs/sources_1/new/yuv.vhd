@@ -63,7 +63,7 @@
 --   to select, so black is 2449 mV with BRIGHT set or clear.
 --   SATURATION: the output transistor can drop at most 4041 mV across R, so
 --   y_n cannot fall below 4300 - 4041 = 259 mV. Only BRIGHT WHITE reaches it
---   (it would otherwise be -59 mV); hence the clamp and the signed y_raw_y.
+--   (it would otherwise be -59 mV); hence the clamp and the signed s_y_raw_y.
 --
 -- ── U: R = 1550 ohm ──────────────────────────────────────────────────
 --   Sinks: fixed black-level 0.235 mA (ALWAYS on), red_ii_n 0.216 mA,
@@ -197,12 +197,12 @@ architecture behavioural of yuv is
 
     -- Unclamped sum. MUST allow negative values
     -- bright white reaches -59 mV before clamping, so this cannot be millivolts_t.
-    signal y_raw_y : integer range -100 to V_TOP;
+    signal s_y_raw_y : integer range -100 to V_TOP;
     -- ── Per-signal contributions selected by the colour inputs ──────
-    signal v_sync_c_y  : millivolts_t;
-    signal v_red_c_y   : millivolts_t;
-    signal v_green_c_y : millivolts_t;
-    signal v_blue_c_y  : millivolts_t;
+    signal s_v_sync_c_y  : millivolts_t;
+    signal s_v_red_c_y   : millivolts_t;
+    signal s_v_green_c_y : millivolts_t;
+    signal s_v_blue_c_y  : millivolts_t;
 
     -- U channel
     constant v_black_u : integer := 364;  -- 0.235 mA x 1.55k =  364.3 mV  (always on)
@@ -211,10 +211,10 @@ architecture behavioural of yuv is
     constant v_blue_u  : integer := 1011; -- 0.652 mA x 1.55k = 1010.6 mV
     constant v_burst_u : integer := 910;  -- 0.587 mA x 1.55k =  909.9 mV
 
-    signal v_red_c_u   : millivolts_t;
-    signal v_green_c_u : millivolts_t;
-    signal v_blue_c_u  : millivolts_t;
-    signal v_burst_c_u : millivolts_t;
+    signal s_v_red_c_u   : millivolts_t;
+    signal s_v_green_c_u : millivolts_t;
+    signal s_v_blue_c_u  : millivolts_t;
+    signal s_v_burst_c_u : millivolts_t;
 
     -- V channel
 
@@ -224,58 +224,58 @@ architecture behavioural of yuv is
     constant v_burst_v   : integer := 958;  -- 0.309 mA x 3.1k =  957.9 mV (burst_star sink)
     constant v_burst_n_v : integer := 958;  -- 0.309 mA x 3.1k =  957.9 mV (burst_star_n sink)
 
-    signal v_red_c_v     : millivolts_t;
-    signal v_green_c_v   : millivolts_t;
-    signal v_blue_c_v    : millivolts_t;
-    signal v_burst_c_v   : millivolts_t;
-    signal v_burst_n_c_v : millivolts_t;
+    signal s_v_red_c_v     : millivolts_t;
+    signal s_v_green_c_v   : millivolts_t;
+    signal s_v_blue_c_v    : millivolts_t;
+    signal s_v_burst_c_v   : millivolts_t;
+    signal s_v_burst_n_c_v : millivolts_t;
 
 begin
 
     -- Y channel
-    v_blue_c_y <= 0 when blue_i = '0' else
-                  v_blue_br_y when hl_n = '0' else
-                  v_blue_y;
+    s_v_blue_c_y <= 0 when blue_i = '0' else
+                    v_blue_br_y when hl_n = '0' else
+                    v_blue_y;
 
-    v_red_c_y <= 0 when red_i = '0' else
-                 v_red_br_y when hl_n = '0' else
-                 v_red_y;
+    s_v_red_c_y <= 0 when red_i = '0' else
+                   v_red_br_y when hl_n = '0' else
+                   v_red_y;
 
-    v_green_c_y <= 0 when green_i = '0' else
-                   v_green_br_y when hl_n = '0' else
-                   v_green_y;
+    s_v_green_c_y <= 0 when green_i = '0' else
+                     v_green_br_y when hl_n = '0' else
+                     v_green_y;
 
-    v_sync_c_y <= 0 when sync_n = '0' else
-                  v_sync_y;
+    s_v_sync_c_y <= 0 when sync_n = '0' else
+                    v_sync_y;
 
-    y_raw_y <= V_TOP - v_sync_c_y - v_blue_c_y - v_red_c_y - v_green_c_y;
-    y_n     <= v_min_y when y_raw_y < v_min_y else
-               y_raw_y; -- clamp the bright white output above 0 volts
+    s_y_raw_y <= V_TOP - s_v_sync_c_y - s_v_blue_c_y - s_v_red_c_y - s_v_green_c_y;
+    y_n       <= v_min_y when s_y_raw_y < v_min_y else
+                 s_y_raw_y; -- clamp the bright white output above 0 volts
 
     -- U channel
-    v_red_c_u   <= v_red_u when red_ii_n = '1' else
-                   0;
-    v_green_c_u <= v_green_u when green_ii_n = '1' else
-                   0;
-    v_blue_c_u  <= v_blue_u when blue_ii = '1' else
-                   0;
-    v_burst_c_u <= v_burst_u when burst_ii_n = '1' else
-                   0;
+    s_v_red_c_u   <= v_red_u when red_ii_n = '1' else
+                     0;
+    s_v_green_c_u <= v_green_u when green_ii_n = '1' else
+                     0;
+    s_v_blue_c_u  <= v_blue_u when blue_ii = '1' else
+                     0;
+    s_v_burst_c_u <= v_burst_u when burst_ii_n = '1' else
+                     0;
 
-    u <= V_TOP - v_red_c_u - v_green_c_u - v_blue_c_u - v_burst_c_u - v_black_u;
+    u <= V_TOP - s_v_red_c_u - s_v_green_c_u - s_v_blue_c_u - s_v_burst_c_u - v_black_u;
 
     -- V channel
-    v_red_c_v     <= v_red_v when red_star = '1' else
-                     0;
-    v_green_c_v   <= v_green_v when green_star_n = '1' else
-                     0;
-    v_blue_c_v    <= v_blue_v when blue_star_n = '1' else
-                     0;
-    v_burst_c_v   <= v_burst_v when burst_star = '1' else
-                     0;
-    v_burst_n_c_v <= v_burst_n_v when burst_star_n = '1' else
-                     0;
+    s_v_red_c_v     <= v_red_v when red_star = '1' else
+                       0;
+    s_v_green_c_v   <= v_green_v when green_star_n = '1' else
+                       0;
+    s_v_blue_c_v    <= v_blue_v when blue_star_n = '1' else
+                       0;
+    s_v_burst_c_v   <= v_burst_v when burst_star = '1' else
+                       0;
+    s_v_burst_n_c_v <= v_burst_n_v when burst_star_n = '1' else
+                       0;
 
-    v <= V_TOP - v_red_c_v - v_green_c_v - v_blue_c_v - v_burst_c_v - v_burst_n_c_v;
+    v <= V_TOP - s_v_red_c_v - s_v_green_c_v - s_v_blue_c_v - s_v_burst_c_v - s_v_burst_n_c_v;
 
 end architecture behavioural;

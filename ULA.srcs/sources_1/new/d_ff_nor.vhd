@@ -9,21 +9,21 @@
 --
 -- Topology:
 --
---      a_o = NOR(d_o, b_o)               -.
---      b_o = NOR(a_o, clk)                | master latch
---      c_o = NOR(b_o, clk, d_o)           | (4 NORs, gated by clk)
---      d_o = NOR(d,   c_o)               -'
+--      s_a_out = NOR(s_d_out, s_b_out)               -.
+--      s_b_out = NOR(s_a_out, clk)                | master latch
+--      s_c_out = NOR(s_b_out, clk, s_d_out)           | (4 NORs, gated by clk)
+--      s_d_out = NOR(d,   s_c_out)               -'
 --
---      e_o = NOR(b_o, f_o)               -. slave SR latch
---      f_o = NOR(c_o, e_o)               -' (2 cross-coupled NORs)
+--      s_e_out = NOR(s_b_out, s_f_out)               -. slave SR latch
+--      s_f_out = NOR(s_c_out, s_e_out)               -' (2 cross-coupled NORs)
 --
---      q    = e_o
---      q_n = f_o
+--      q    = s_e_out
+--      q_n = s_f_out
 --
 -- Behaviour by clk phase:
---   clk='1'  : b_o = c_o = 0, slave is in HOLD. Master is transparent
---              to d (a_o = d, d_o = not d).
---   clk='0'  : master is locked; whichever of b_o/c_o went high at
+--   clk='1'  : s_b_out = s_c_out = 0, slave is in HOLD. Master is transparent
+--              to d (s_a_out = d, s_d_out = not d).
+--   clk='0'  : master is locked; whichever of s_b_out/s_c_out went high at
 --              the falling edge resets the corresponding side of the
 --              slave SR latch, setting q to the value of d sampled
 --              just before the edge.
@@ -42,7 +42,7 @@
 --
 -- Gate delay `TG` (simulation only). Each of the six NOR assignments
 -- carries an `after TG` inertial delay. Without it the cross-coupled
--- pairs (a_o↔b_o, c_o↔d_o, e_o↔f_o) re-evaluate within the same
+-- pairs (s_a_out↔s_b_out, s_c_out↔s_d_out, s_e_out↔s_f_out) re-evaluate within the same
 -- simulation instant: a change to one re-triggers its partner in the
 -- next delta cycle, which re-triggers the first, and so on. An
 -- unsettled latch then spins delta cycles at a fixed `t` until xsim
@@ -75,37 +75,37 @@ architecture behavioral of d_ff_nor is
     -- All six internal NOR-network signals are initialised to the
     -- "Case A" stable state:  d=0 captured, clk='0' phase, q='0'.
     --
-    -- Check: a_o = NOR(d_o, b_o) = NOR(1, 1) = 0 ✓
-    --        b_o = NOR(a_o, clk) = NOR(0, 0) = 1 ✓
-    --        c_o = NOR(b_o, clk, d_o) = NOR(1, 0, 1) = 0 ✓
-    --        d_o = NOR(d, c_o) = NOR(0, 0) = 1 ✓     (d=0 from reset)
-    --        e_o = NOR(b_o, f_o) = NOR(1, 1) = 0 ✓ => q=0
-    --        f_o = NOR(c_o, e_o) = NOR(0, 0) = 1 ✓ => q_n=1
+    -- Check: s_a_out = NOR(s_d_out, s_b_out) = NOR(1, 1) = 0 ✓
+    --        s_b_out = NOR(s_a_out, clk) = NOR(0, 0) = 1 ✓
+    --        s_c_out = NOR(s_b_out, clk, s_d_out) = NOR(1, 0, 1) = 0 ✓
+    --        s_d_out = NOR(d, s_c_out) = NOR(0, 0) = 1 ✓     (d=0 from reset)
+    --        s_e_out = NOR(s_b_out, s_f_out) = NOR(1, 1) = 0 ✓ => q=0
+    --        s_f_out = NOR(s_c_out, s_e_out) = NOR(0, 0) = 1 ✓ => q_n=1
     --
     -- Synthesis ignores these — real silicon power-up state is whatever
     -- the layout produces. The init values exist solely to give xsim a
     -- consistent starting point and avoid a known U-propagation quirk
     -- where cross-coupled NORs with one input still 'U' would never
     -- trigger their partner's re-evaluation.
-    signal a_o : std_logic := '0';
-    signal b_o : std_logic := '1';
-    signal c_o : std_logic := '0';
-    signal d_o : std_logic := '1';
-    signal e_o : std_logic := '0';
-    signal f_o : std_logic := '1';
+    signal s_a_out : std_logic := '0';
+    signal s_b_out : std_logic := '1';
+    signal s_c_out : std_logic := '0';
+    signal s_d_out : std_logic := '1';
+    signal s_e_out : std_logic := '0';
+    signal s_f_out : std_logic := '1';
 
     constant tg : time := 1 ns;   -- modelled NOR propagation delay (sim only)
 
 begin
 
-    a_o <= not (d_o or b_o)        after tg;
-    b_o <= not (a_o or clk)        after tg;
-    c_o <= not (b_o or clk or d_o) after tg;
-    d_o <= not (d   or c_o)        after tg;
-    e_o <= not (b_o or f_o)        after tg;
-    f_o <= not (c_o or e_o)        after tg;
+    s_a_out <= not (s_d_out or s_b_out)        after tg;
+    s_b_out <= not (s_a_out or clk)        after tg;
+    s_c_out <= not (s_b_out or clk or s_d_out) after tg;
+    s_d_out <= not (d   or s_c_out)        after tg;
+    s_e_out <= not (s_b_out or s_f_out)        after tg;
+    s_f_out <= not (s_c_out or s_e_out)        after tg;
 
-    q   <= e_o;
-    q_n <= f_o;
+    q   <= s_e_out;
+    q_n <= s_f_out;
 
 end architecture behavioral;

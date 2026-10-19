@@ -82,10 +82,10 @@ end entity pal_v_burst;
 
 architecture structural of pal_v_burst is
 
-    signal burst : std_logic; -- burst window, active high (pixels 384..399)
-    signal q     : std_logic; -- latched line parity
-    signal q_n   : std_logic; -- complemented latched parity
-    signal a_0   : std_logic;
+    signal s_burst : std_logic; -- burst window, active high (pixels 384..399)
+    signal s_q     : std_logic; -- latched line parity
+    signal s_q_n   : std_logic; -- complemented latched parity
+    signal s_a_out : std_logic;
 
 begin
 
@@ -95,20 +95,20 @@ begin
         port map (
             e   => sync_n,
             d   => v0,
-            q   => q,
-            q_n => q_n
+            q   => s_q,
+            q_n => s_q_n
         );
 
     -- burst window: c8='1', c7='1', c6='0', c5='0', c4='0' -> pixels 384..399
-    burst      <= not(c4 or c5 or c6 or c7_n or c8_n);
-    burst_ii_n <= not burst;
+    s_burst    <= not(c4 or c5 or c6 or c7_n or c8_n);
+    burst_ii_n <= not s_burst;
 
     -- gate the window into the two alternating phases. Only one is ever
     -- asserted; note the opposite polarities (see the table in the header).
-    a_0          <= not(burst_ii_n or q_n); -- = burst AND q
-    burst_star_n <= not(a_0);               -- active LOW  when burst AND q
-    burst_star   <= not(q or burst_ii_n);   -- active HIGH when burst AND NOT q
+    s_a_out      <= not(burst_ii_n or s_q_n); -- = burst AND q
+    burst_star_n <= not(s_a_out);             -- active LOW  when burst AND q
+    burst_star   <= not(s_q or burst_ii_n);   -- active HIGH when burst AND NOT q
 
-    timing <= q_n;
+    timing <= s_q_n;
 
 end architecture structural;

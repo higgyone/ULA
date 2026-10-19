@@ -8,11 +8,11 @@
 -- so the swap happens while flash_clk is LOW.
 --
 -- ── Clock source ─────────────────────────────────────────────────────
---   clock_in = NOR(v8_n, tclk_b)
+--   s_clock_in = NOR(v8_n, tclk_b)
 --   tclk_b is a test-clock input that is tied LOW in normal operation
 --   (same convention as tclk_a on master_horiz_counter, which horiz_timing
 --   ties off with tclk_a => '0'). With tclk_b='0' the NOR reduces to
---   clock_in = not(v8_n) = v8, the vertical counter's MSB.
+--   s_clock_in = not(v8_n) = v8, the vertical counter's MSB.
 --
 --   The 9-bit vertical counter runs 0..311, so v8 is HIGH for lines
 --   256..311 and LOW for lines 0..255 — exactly ONE falling edge per
@@ -66,71 +66,71 @@ end entity flash_clock;
 
 architecture structural of flash_clock is
 
-    signal clock_in : std_logic; -- = NOR(v8_n, tclk_b) = v8 when tclk_b='0'
+    signal s_clock_in : std_logic; -- = NOR(v8_n, tclk_b) = v8 when tclk_b='0'
 
     -- ripple chain: q drives the next stage's clock, q_n feeds back to d
-    signal ripple0_q     : std_logic;
-    signal ripple0_q_bar : std_logic;
-    signal ripple1_q     : std_logic;
-    signal ripple1_q_bar : std_logic;
-    signal ripple2_q     : std_logic;
-    signal ripple2_q_bar : std_logic;
-    signal ripple3_q     : std_logic;
-    signal ripple3_q_bar : std_logic;
-    signal ripple4_q     : std_logic;
-    signal ripple4_q_bar : std_logic;
+    signal s_ripple0_q   : std_logic;
+    signal s_ripple0_q_n : std_logic;
+    signal s_ripple1_q   : std_logic;
+    signal s_ripple1_q_n : std_logic;
+    signal s_ripple2_q   : std_logic;
+    signal s_ripple2_q_n : std_logic;
+    signal s_ripple3_q   : std_logic;
+    signal s_ripple3_q_n : std_logic;
+    signal s_ripple4_q   : std_logic;
+    signal s_ripple4_q_n : std_logic;
 
 begin
 
     -- tclk_b is low in normal use, so this is simply v8; the chain then
     -- advances on v8's falling edge = the 311->0 frame wrap
-    clock_in <= not(v8_n or tclk_b);
+    s_clock_in <= not(v8_n or tclk_b);
 
     -- stage 0 (/2) — clocked once per frame
     ripple0 : entity work.d_ff_nor
         port map (
-            clk => clock_in,
-            d   => ripple0_q_bar,
-            q   => ripple0_q,
-            q_n => ripple0_q_bar
+            clk => s_clock_in,
+            d   => s_ripple0_q_n,
+            q   => s_ripple0_q,
+            q_n => s_ripple0_q_n
         );
 
     -- stage 1 (/4)
     ripple1 : entity work.d_ff_nor
         port map (
-            clk => ripple0_q,
-            d   => ripple1_q_bar,
-            q   => ripple1_q,
-            q_n => ripple1_q_bar
+            clk => s_ripple0_q,
+            d   => s_ripple1_q_n,
+            q   => s_ripple1_q,
+            q_n => s_ripple1_q_n
         );
 
     -- stage 2 (/8)
     ripple2 : entity work.d_ff_nor
         port map (
-            clk => ripple1_q,
-            d   => ripple2_q_bar,
-            q   => ripple2_q,
-            q_n => ripple2_q_bar
+            clk => s_ripple1_q,
+            d   => s_ripple2_q_n,
+            q   => s_ripple2_q,
+            q_n => s_ripple2_q_n
         );
 
     -- stage 3 (/16)
     ripple3 : entity work.d_ff_nor
         port map (
-            clk => ripple2_q,
-            d   => ripple3_q_bar,
-            q   => ripple3_q,
-            q_n => ripple3_q_bar
+            clk => s_ripple2_q,
+            d   => s_ripple3_q_n,
+            q   => s_ripple3_q,
+            q_n => s_ripple3_q_n
         );
 
     -- stage 4 (/32) — toggles every 16 frames -> 32-frame period, 1.56 Hz
     ripple4 : entity work.d_ff_nor
         port map (
-            clk => ripple3_q,
-            d   => ripple4_q_bar,
-            q   => ripple4_q,
-            q_n => ripple4_q_bar
+            clk => s_ripple3_q,
+            d   => s_ripple4_q_n,
+            q   => s_ripple4_q,
+            q_n => s_ripple4_q_n
         );
 
-    flash_clk <= ripple4_q;
+    flash_clk <= s_ripple4_q;
 
 end architecture structural;

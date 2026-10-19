@@ -98,16 +98,16 @@ end entity ras_cas_generation;
 architecture synchronous of ras_cas_generation is
 
     -- position within the 4-pixel DRAM cycle: {c1, c0, half-pixel phase} = 0..7
-    signal tick : std_logic_vector(2 downto 0);
+    signal s_tick : std_logic_vector(2 downto 0);
 
     -- registered video strobes (active high)
-    signal ras_r    : std_logic := '0';
-    signal cas_ac_r : std_logic := '0';
-    signal cas_bd_r : std_logic := '0';
+    signal s_ras_r    : std_logic := '0';
+    signal s_cas_ac_r : std_logic := '0';
+    signal s_cas_bd_r : std_logic := '0';
 
 begin
 
-    tick <= c1 & c0 & clk_7;
+    s_tick <= c1 & c0 & clk_7;
 
     ------------------------------------------------------------------
     -- Decode the 8-tick waveform (see table in header) and REGISTER it
@@ -120,61 +120,61 @@ begin
     begin
 
         if rising_edge(clk_14) then
-            if (vid_c3_n = '0') then          -- inside the display fetch window
+            if (vid_c3_n = '0') then            -- inside the display fetch window
 
-                case tick is
+                case s_tick is
 
                     when "000" =>
 
-                        ras_r    <= '1';      -- RAS, cycle starts
-                        cas_ac_r <= '0';
-                        cas_bd_r <= '0';
+                        s_ras_r    <= '1';      -- RAS, cycle starts
+                        s_cas_ac_r <= '0';
+                        s_cas_bd_r <= '0';
 
                     when "001" | "010" =>
 
-                        ras_r    <= '1';      -- first CAS: byte A / C
-                        cas_ac_r <= '1';
-                        cas_bd_r <= '0';
+                        s_ras_r    <= '1';      -- first CAS: byte A / C
+                        s_cas_ac_r <= '1';
+                        s_cas_bd_r <= '0';
 
                     when "011" =>
 
-                        ras_r    <= '1';      -- CAS precharge gap
-                        cas_ac_r <= '0';
-                        cas_bd_r <= '0';
+                        s_ras_r    <= '1';      -- CAS precharge gap
+                        s_cas_ac_r <= '0';
+                        s_cas_bd_r <= '0';
 
                     when "100" | "101" =>
 
-                        ras_r    <= '1';      -- second CAS: byte B / D
-                        cas_ac_r <= '0';
-                        cas_bd_r <= '1';
+                        s_ras_r    <= '1';      -- second CAS: byte B / D
+                        s_cas_ac_r <= '0';
+                        s_cas_bd_r <= '1';
 
                     when "110" =>
 
-                        ras_r    <= '0';      -- RAS released, CAS still on
-                        cas_ac_r <= '0';
-                        cas_bd_r <= '1';
+                        s_ras_r    <= '0';      -- RAS released, CAS still on
+                        s_cas_ac_r <= '0';
+                        s_cas_bd_r <= '1';
 
                     when others =>
 
-                        ras_r    <= '0';      -- tick 7: cycle done
-                        cas_ac_r <= '0';
-                        cas_bd_r <= '0';
+                        s_ras_r    <= '0';      -- tick 7: cycle done
+                        s_cas_ac_r <= '0';
+                        s_cas_bd_r <= '0';
 
                 end case;
 
             else
-                ras_r    <= '0';              -- outside the fetch window: idle
-                cas_ac_r <= '0';
-                cas_bd_r <= '0';
+                s_ras_r    <= '0';              -- outside the fetch window: idle
+                s_cas_ac_r <= '0';
+                s_cas_bd_r <= '0';
             end if;
         end if;
 
     end process strobe_reg;
 
-    vid_ras    <= ras_r;
-    vid_cas_ac <= cas_ac_r;
-    vid_cas_bd <= cas_bd_r;
-    vid_ras_n  <= not ras_r;
+    vid_ras    <= s_ras_r;
+    vid_cas_ac <= s_cas_ac_r;
+    vid_cas_bd <= s_cas_bd_r;
+    vid_ras_n  <= not s_ras_r;
 
 end architecture synchronous;
 

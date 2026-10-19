@@ -59,61 +59,61 @@ end entity bit3_counter;
 
 architecture structural of bit3_counter is
 
-    signal q    : std_logic_vector(2 downto 0); -- current state
-    signal d    : std_logic_vector(2 downto 0); -- next state into FFs
-    signal wrap : std_logic;                    -- 1 when at "110"
+    signal s_q    : std_logic_vector(2 downto 0); -- current state
+    signal s_d    : std_logic_vector(2 downto 0); -- next state into FFs
+    signal s_wrap : std_logic;                    -- 1 when at "110"
 
 begin
 
     -- detect we're at the wrap state
-    wrap <= q(2) and q(1) and (not q(0)); -- "110"
+    s_wrap <= s_q(2) and s_q(1) and (not s_q(0)); -- "110"
 
     -- next-state combinational logic per bit (binary +1, forced to 0 at wrap, forced to 0 at reset)
-    d(0) <= (not reset) and (not wrap) and (not q(0));
-    d(1) <= (not reset) and (not wrap) and (q(1) xor q(0));
-    d(2) <= (not reset) and (not wrap) and (q(2) xor (q(1) and q(0)));
+    s_d(0) <= (not reset) and (not s_wrap) and (not s_q(0));
+    s_d(1) <= (not reset) and (not s_wrap) and (s_q(1) xor s_q(0));
+    s_d(2) <= (not reset) and (not s_wrap) and (s_q(2) xor (s_q(1) and s_q(0)));
 
     -- three d_ff_nor instances — one per bit
     ff0 : entity work.d_ff_nor
         port map (
             clk => clk,
-            d   => d(0),
-            q   => q(0),
+            d   => s_d(0),
+            q   => s_q(0),
             q_n => open
         );
 
     ff1 : entity work.d_ff_nor
         port map (
             clk => clk,
-            d   => d(1),
-            q   => q(1),
+            d   => s_d(1),
+            q   => s_q(1),
             q_n => open
         );
 
     ff2 : entity work.d_ff_nor
         port map (
             clk => clk,
-            d   => d(2),
-            q   => q(2),
+            d   => s_d(2),
+            q   => s_q(2),
             q_n => open
         );
 
-    output   <= q;
-    overflow <= wrap;
+    output   <= s_q;
+    overflow <= s_wrap;
 
 end architecture structural;
 
 architecture t_structure of bit3_counter is
 
-    signal carry_count_6    : std_logic;
-    signal count_6_q_out    : std_logic;
-    signal carry_count_7    : std_logic;
-    signal count_7_q_out    : std_logic;
-    signal count_7_qbar_out : std_logic;
-    signal count_8_q_out    : std_logic;
-    signal count_8_qbar_out : std_logic;
-    signal s_ff_rst         : std_logic;
-    signal s_hcrst          : std_logic;
+    signal s_carry_count_6 : std_logic;
+    signal s_count_6_q_out : std_logic;
+    signal s_carry_count_7 : std_logic;
+    signal s_count_7_q_out : std_logic;
+    signal s_count_7_q_n   : std_logic;
+    signal s_count_8_q_out : std_logic;
+    signal s_count_8_q_n   : std_logic;
+    signal s_ff_rst        : std_logic;
+    signal s_hcrst         : std_logic;
 
 begin
 
@@ -121,34 +121,34 @@ begin
         port map (
             clk   => clk,
             reset => s_ff_rst,
-            q     => count_6_q_out,
+            q     => s_count_6_q_out,
             q_n   => open,
-            carry => carry_count_6
+            carry => s_carry_count_6
         );
 
     count_7 : entity work.trce_ff
         port map (
             clk    => clk,
             reset  => s_ff_rst,
-            enable => carry_count_6,
-            q      => count_7_q_out,
-            q_n    => count_7_qbar_out,
-            carry  => carry_count_7
+            enable => s_carry_count_6,
+            q      => s_count_7_q_out,
+            q_n    => s_count_7_q_n,
+            carry  => s_carry_count_7
         );
 
     count_8 : entity work.trce_ff
         port map (
             clk    => clk,
             reset  => s_ff_rst,
-            enable => carry_count_7,
-            q      => count_8_q_out,
-            q_n    => count_8_qbar_out,
+            enable => s_carry_count_7,
+            q      => s_count_8_q_out,
+            q_n    => s_count_8_q_n,
             carry  => open
         );
 
-    s_hcrst  <= not (count_7_qbar_out or count_8_qbar_out);
+    s_hcrst  <= not (s_count_7_q_n or s_count_8_q_n);
     s_ff_rst <= reset or s_hcrst;
-    output   <= count_8_q_out & count_7_q_out & count_6_q_out;
+    output   <= s_count_8_q_out & s_count_7_q_out & s_count_6_q_out;
     overflow <= s_hcrst;
 
 end architecture t_structure;
@@ -164,7 +164,7 @@ end architecture t_structure;
 
 architecture reference of bit3_counter is
 
-    signal outputint : unsigned(2 downto 0) := "000";
+    signal s_output : unsigned(2 downto 0) := "000";
 
 begin
 
@@ -173,19 +173,19 @@ begin
 
         if falling_edge(clk) then
             if (reset = '1') then
-                outputint <= "000";
+                s_output <= "000";
             else
-                outputint <= outputint + 1;
-                if (outputint = "110") then
-                    outputint <= "000";
+                s_output <= s_output + 1;
+                if (s_output = "110") then
+                    s_output <= "000";
                 end if;
             end if;
         end if;
 
     end process;
 
-    output   <= std_logic_vector(outputint);
-    overflow <= '1' when outputint = "110" else
+    output   <= std_logic_vector(s_output);
+    overflow <= '1' when s_output = "110" else
                 '0';
 
 end architecture reference;

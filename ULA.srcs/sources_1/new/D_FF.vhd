@@ -34,7 +34,7 @@ end entity d_ff;
 
 architecture behavioral of d_ff is
 
-    signal d_sig : std_logic := '0';
+    signal s_d : std_logic := '0';
 
 begin
 
@@ -42,12 +42,12 @@ begin
     begin
 
         if falling_edge(clk) then
-            d_sig <= d;
+            s_d <= d;
         end if;
 
     end process;
 
-    q   <= d_sig;
-    q_n <= not d_sig;
+    q   <= s_d;
+    q_n <= not s_d;
 
 end architecture behavioral;

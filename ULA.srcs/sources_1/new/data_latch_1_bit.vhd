@@ -24,18 +24,18 @@
 -- Topology:
 --
 --   input stage (feed-forward, gated by e):
---      b_o = NOR(e, d)        -- = not d when e='0'; forced 0 when e='1'
---      a_o = NOR(e, b_o)      -- =     d when e='0'; forced 0 when e='1'
+--      s_b_out = NOR(e, d)        -- = not d when e='0'; forced 0 when e='1'
+--      s_a_out = NOR(e, s_b_out)      -- =     d when e='0'; forced 0 when e='1'
 --
 --   SR latch (2 cross-coupled NORs):
---      c_o = NOR(a_o, d_o)
---      d_o = NOR(b_o, c_o)
+--      s_c_out = NOR(s_a_out, s_d_out)
+--      s_d_out = NOR(s_b_out, s_c_out)
 --
---      q     = d_o
---      q_n = c_o
+--      q     = s_d_out
+--      q_n = s_c_out
 --
---   With e='1' both a_o and b_o are 0, so the SR latch sees no set/reset
---   and holds. With e='0', a_o=d and b_o=not d drive it to q=d.
+--   With e='1' both s_a_out and s_b_out are 0, so the SR latch sees no set/reset
+--   and holds. With e='0', s_a_out=d and s_b_out=not d drive it to q=d.
 --
 -- Characteristic table:
 --
@@ -50,7 +50,7 @@
 -- so the shift register loads the TRUE pixel value. q (true polarity)
 -- heads toward the attribute / colour path. Both are brought out.
 --
--- Gate delay `TG` and init values (simulation only). The c_o/d_o pair is
+-- Gate delay `TG` and init values (simulation only). The s_c_out/s_d_out pair is
 -- cross-coupled, so like d_ff_nor / single_bit_shift_register every NOR
 -- carries an `after TG` inertial delay; without it the loop re-evaluates
 -- within one simulation instant and xsim/GHDL delta-spin to their
@@ -75,28 +75,28 @@ end entity data_latch_1_bit;
 architecture structural of data_latch_1_bit is
 
     -- Seeded to the "transparent, holding 0" state (e='0', d='0', q='0'):
-    --   b_o = NOR(e, d)    = NOR(0,0) = 1
-    --   a_o = NOR(e, b_o)  = NOR(0,1) = 0
-    --   c_o = NOR(a_o,d_o) = NOR(0,0) = 1   => q_n = 1
-    --   d_o = NOR(b_o,c_o) = NOR(1,1) = 0   => q     = 0
-    signal a_o : std_logic := '0';
-    signal b_o : std_logic := '1';
-    signal c_o : std_logic := '1';
-    signal d_o : std_logic := '0';
+    --   s_b_out = NOR(e, d)    = NOR(0,0) = 1
+    --   s_a_out = NOR(e, s_b_out)  = NOR(0,1) = 0
+    --   s_c_out = NOR(s_a_out,s_d_out) = NOR(0,0) = 1   => q_n = 1
+    --   s_d_out = NOR(s_b_out,s_c_out) = NOR(1,1) = 0   => q     = 0
+    signal s_a_out : std_logic := '0';
+    signal s_b_out : std_logic := '1';
+    signal s_c_out : std_logic := '1';
+    signal s_d_out : std_logic := '0';
 
     constant tg : time := 1 ns;   -- modelled NOR propagation delay (sim only)
 
 begin
 
     -- input stage (gated by active-low enable e)
-    b_o <= not (e or d)       after tg;
-    a_o <= not (e or b_o)     after tg;
+    s_b_out <= not (e or d)       after tg;
+    s_a_out <= not (e or s_b_out)     after tg;
 
     -- cross-coupled SR latch
-    c_o <= not (a_o or d_o)   after tg;
-    d_o <= not (b_o or c_o)   after tg;
+    s_c_out <= not (s_a_out or s_d_out)   after tg;
+    s_d_out <= not (s_b_out or s_c_out)   after tg;
 
-    q_n <= c_o;
-    q   <= d_o;
+    q_n <= s_c_out;
+    q   <= s_d_out;
 
 end architecture structural;

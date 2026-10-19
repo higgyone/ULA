@@ -56,28 +56,28 @@ architecture structural of shift8 is
 
     -- Per-cell output taps. q_<i> is bit i; q_bar_<i> is its inverse and is what
     -- feeds the next cell up the chain (see header: the active-low trick).
-    signal q_0     : std_logic;
-    signal q_bar_0 : std_logic;
-    signal q_1     : std_logic;
-    signal q_bar_1 : std_logic;
-    signal q_2     : std_logic;
-    signal q_bar_2 : std_logic;
-    signal q_3     : std_logic;
-    signal q_bar_3 : std_logic;
-    signal q_4     : std_logic;
-    signal q_bar_4 : std_logic;
-    signal q_5     : std_logic;
-    signal q_bar_5 : std_logic;
-    signal q_6     : std_logic;
-    signal q_bar_6 : std_logic;
-    signal q_7     : std_logic;
-    signal q_bar_7 : std_logic;
+    signal s_q_0   : std_logic;
+    signal s_q_0_n : std_logic;
+    signal s_q_1   : std_logic;
+    signal s_q_1_n : std_logic;
+    signal s_q_2   : std_logic;
+    signal s_q_2_n : std_logic;
+    signal s_q_3   : std_logic;
+    signal s_q_3_n : std_logic;
+    signal s_q_4   : std_logic;
+    signal s_q_4_n : std_logic;
+    signal s_q_5   : std_logic;
+    signal s_q_5_n : std_logic;
+    signal s_q_6   : std_logic;
+    signal s_q_6_n : std_logic;
+    signal s_q_7   : std_logic;
+    signal s_q_7_n : std_logic;
 
 begin
 
     -- Serial output taps off the top (MSB) cell.
-    q   <= q_7;
-    q_n <= q_bar_7;
+    q   <= s_q_7;
+    q_n <= s_q_7_n;
 
     -- Cell 0 (LSB): shift-in comes from the external serial input Sin.
     shift_0 : entity work.single_bit_shift_register
@@ -86,8 +86,8 @@ begin
             data_n   => data_n(0),
             data_1_n => sin,
             set      => sload,
-            q        => q_0,
-            q_n      => q_bar_0
+            q        => s_q_0,
+            q_n      => s_q_0_n
         );
 
     -- Cells 1..7: shift-in comes from the neighbour below via its q_n,
@@ -96,60 +96,60 @@ begin
         port map (
             clk      => clk,
             data_n   => data_n(1),
-            data_1_n => q_bar_0,
+            data_1_n => s_q_0_n,
             set      => sload,
-            q        => q_1,
-            q_n      => q_bar_1
+            q        => s_q_1,
+            q_n      => s_q_1_n
         );
 
     shift_2 : entity work.single_bit_shift_register
         port map (
             clk      => clk,
             data_n   => data_n(2),
-            data_1_n => q_bar_1,
+            data_1_n => s_q_1_n,
             set      => sload,
-            q        => q_2,
-            q_n      => q_bar_2
+            q        => s_q_2,
+            q_n      => s_q_2_n
         );
 
     shift_3 : entity work.single_bit_shift_register
         port map (
             clk      => clk,
             data_n   => data_n(3),
-            data_1_n => q_bar_2,
+            data_1_n => s_q_2_n,
             set      => sload,
-            q        => q_3,
-            q_n      => q_bar_3
+            q        => s_q_3,
+            q_n      => s_q_3_n
         );
 
     shift_4 : entity work.single_bit_shift_register
         port map (
             clk      => clk,
             data_n   => data_n(4),
-            data_1_n => q_bar_3,
+            data_1_n => s_q_3_n,
             set      => sload,
-            q        => q_4,
-            q_n      => q_bar_4
+            q        => s_q_4,
+            q_n      => s_q_4_n
         );
 
     shift_5 : entity work.single_bit_shift_register
         port map (
             clk      => clk,
             data_n   => data_n(5),
-            data_1_n => q_bar_4,
+            data_1_n => s_q_4_n,
             set      => sload,
-            q        => q_5,
-            q_n      => q_bar_5
+            q        => s_q_5,
+            q_n      => s_q_5_n
         );
 
     shift_6 : entity work.single_bit_shift_register
         port map (
             clk      => clk,
             data_n   => data_n(6),
-            data_1_n => q_bar_5,
+            data_1_n => s_q_5_n,
             set      => sload,
-            q        => q_6,
-            q_n      => q_bar_6
+            q        => s_q_6,
+            q_n      => s_q_6_n
         );
 
     -- Cell 7 (MSB): its q / q_n are the register's serial output.
@@ -157,10 +157,10 @@ begin
         port map (
             clk      => clk,
             data_n   => data_n(7),
-            data_1_n => q_bar_6,
+            data_1_n => s_q_6_n,
             set      => sload,
-            q        => q_7,
-            q_n      => q_bar_7
+            q        => s_q_7,
+            q_n      => s_q_7_n
         );
 
 end architecture structural;

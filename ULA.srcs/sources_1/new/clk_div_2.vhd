@@ -40,25 +40,25 @@ end entity clk_div_2;
 
 architecture behavioral of clk_div_2 is
 
-    signal d_in     : std_logic;
-    signal q_int    : std_logic;
-    signal qbar_int : std_logic;
+    signal s_d   : std_logic;
+    signal s_q   : std_logic;
+    signal s_q_n : std_logic;
 
 begin
 
     -- T-FF via D-FF: d = q_n (toggle) unless reset clears it.
-    d_in <= '0' when reset = '1' else
-            qbar_int;
+    s_d <= '0' when reset = '1' else
+           s_q_n;
 
     ff : entity work.d_ff_nor(Behavioral)
         port map (
             clk => clk_in,
-            d   => d_in,
-            q   => q_int,
-            q_n => qbar_int
+            d   => s_d,
+            q   => s_q,
+            q_n => s_q_n
         );
 
-    clk_out   <= q_int;
-    clk_out_n <= qbar_int;
+    clk_out   <= s_q;
+    clk_out_n <= s_q_n;
 
 end architecture behavioral;

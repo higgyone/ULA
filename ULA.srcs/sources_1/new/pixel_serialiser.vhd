@@ -45,7 +45,7 @@ end entity pixel_serialiser;
 architecture structural of pixel_serialiser is
 
     -- latch's active-low output bus -> shift register's active-low load bus
-    signal latch_data_out_n : std_logic_vector(7 downto 0);
+    signal s_latch_data_out_n : std_logic_vector(7 downto 0);
 
 begin
 
@@ -54,7 +54,7 @@ begin
             enable     => data_latch_n,
             data       => data,
             data_out   => open,
-            data_out_n => latch_data_out_n
+            data_out_n => s_latch_data_out_n
         );
 
     shift_8 : entity work.shift8
@@ -62,7 +62,7 @@ begin
             clk    => clk,
             sload  => sload,
             sin    => sload,
-            data_n => latch_data_out_n,
+            data_n => s_latch_data_out_n,
             q      => serial_data,
             q_n    => open
         );

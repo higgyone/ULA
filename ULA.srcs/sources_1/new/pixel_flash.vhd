@@ -22,14 +22,14 @@
 --                 this is just NOT serial_data — a clean pass-through.)
 --
 -- Function (verified exhaustively):
---   b_o           = fl AND (NOT flash_clk)          -- "flash this half"
---   data_select_n = XNOR(b_o, serial_data)
+--   s_b_out           = fl AND (NOT flash_clk)          -- "flash this half"
+--   data_select_n = XNOR(s_b_out, serial_data)
 --                 = NOT( serial_data XOR (fl AND NOT flash_clk) )
 --   so the select is inverted only while fl='1' AND flash_clk='0',
 --   otherwise the pixel bit passes straight through (active-low).
 --
--- Topology: an inverter + a NOR (build the flash-gate b_o) feeding a
--- 4-NOR XNOR gate (c_o, d_o, e_o, data_select_n). No feedback loop, so
+-- Topology: an inverter + a NOR (build the flash-gate s_b_out) feeding a
+-- 4-NOR XNOR gate (s_c_out, s_d_out, s_e_out, data_select_n). No feedback loop, so
 -- unlike the cross-coupled latches this cell needs no seed values to
 -- simulate cleanly. Each gate still carries an `after TG` inertial delay
 -- for consistency with the rest of the FF/gate library and to model the
@@ -60,24 +60,24 @@ end entity pixel_flash;
 
 architecture structural of pixel_flash is
 
-    signal a_o : std_logic; -- NOT fl
-    signal b_o : std_logic; -- flash-gate: fl AND NOT flash_clk
-    signal c_o : std_logic; -- XNOR internal
-    signal d_o : std_logic; -- XNOR internal
-    signal e_o : std_logic; -- XNOR internal
+    signal s_a_out : std_logic; -- NOT fl
+    signal s_b_out : std_logic; -- flash-gate: fl AND NOT flash_clk
+    signal s_c_out : std_logic; -- XNOR internal
+    signal s_d_out : std_logic; -- XNOR internal
+    signal s_e_out : std_logic; -- XNOR internal
 
     constant tg : time := 1 ns; -- modelled gate propagation delay (sim only)
 
 begin
 
-    -- flash-gate: assert b_o only when flashing AND in the swap half-period
-    a_o <= not(fl)              after tg;
-    b_o <= not(a_o or flash_clk) after tg; -- = fl AND NOT flash_clk
+    -- flash-gate: assert s_b_out only when flashing AND in the swap half-period
+    s_a_out <= not(fl)              after tg;
+    s_b_out <= not(s_a_out or flash_clk) after tg; -- = fl AND NOT flash_clk
 
-    -- 4-NOR XNOR(b_o, serial_data): invert the pixel select when b_o='1'
-    c_o           <= not(b_o or serial_data) after tg;
-    d_o           <= not(b_o or c_o)      after tg;
-    e_o           <= not(c_o or serial_data) after tg;
-    data_select_n <= not(d_o or e_o) after tg; -- = XNOR(b_o, serial_data)
+    -- 4-NOR XNOR(s_b_out, serial_data): invert the pixel select when s_b_out='1'
+    s_c_out       <= not(s_b_out or serial_data) after tg;
+    s_d_out       <= not(s_b_out or s_c_out)      after tg;
+    s_e_out       <= not(s_c_out or serial_data) after tg;
+    data_select_n <= not(s_d_out or s_e_out) after tg; -- = XNOR(s_b_out, serial_data)
 
 end architecture structural;

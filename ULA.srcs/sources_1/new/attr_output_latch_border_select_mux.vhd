@@ -7,7 +7,7 @@
 --   attribute byte -> paper/border mux -> output latch -> colour mux -> RGB.
 --
 -- ── Sub-blocks (data flow) ───────────────────────────────────────────
---   pixel_serialiser                  pixel_data(7:0) -> serial_pixel_stream (MSB first)
+--   pixel_serialiser                  pixel_data(7:0) -> s_serial_pixel_stream (MSB first)
 --   pixel_flash                       serial + fl + flash_clk -> data_select_n
 --   attr_data_latch_paper_border_mux  attr_data -> ink / paper-or-border / hl / fl (input latch)
 --   attr_output_latch_colour_mux      output latch + ink/paper mux + blank -> blue/red/green
@@ -71,22 +71,22 @@ end entity attr_output_latch_border_select_mux;
 architecture structural of attr_output_latch_border_select_mux is
 
     -- internal datapath wires between the four sub-blocks
-    signal serial_pixel_stream : std_logic; -- serialiser -> flash: MSB-first pixel bit
-    signal data_select_n       : std_logic; -- flash -> colour mux: '0' ink, '1' paper/border
-    signal i0_b                : std_logic; -- INK   Blue  (attr D0): input mux -> output mux
-    signal i1_r                : std_logic; -- INK   Red   (attr D1)
-    signal i2_g                : std_logic; -- INK   Green (attr D2)
-    signal pb0_b               : std_logic; -- PAPER/BORDER Blue
-    signal pb1_r               : std_logic; -- PAPER/BORDER Red
-    signal pb2_g               : std_logic; -- PAPER/BORDER Green
-    signal al_6                : std_logic; -- BRIGHT before output latch (attr D6, gated by video_en)
-    signal al_7                : std_logic; -- FLASH  before output latch (attr D7, gated by video_en)
-    signal fl_i                : std_logic; -- LATCHED flash: colour mux out -> pixel_flash in AND top fl
+    signal s_serial_pixel_stream : std_logic; -- serialiser -> flash: MSB-first pixel bit
+    signal s_data_select_n       : std_logic; -- flash -> colour mux: '0' ink, '1' paper/border
+    signal s_i0_b                : std_logic; -- INK   Blue  (attr D0): input mux -> output mux
+    signal s_i1_r                : std_logic; -- INK   Red   (attr D1)
+    signal s_i2_g                : std_logic; -- INK   Green (attr D2)
+    signal s_pb0_b               : std_logic; -- PAPER/BORDER Blue
+    signal s_pb1_r               : std_logic; -- PAPER/BORDER Red
+    signal s_pb2_g               : std_logic; -- PAPER/BORDER Green
+    signal s_al_6                : std_logic; -- BRIGHT before output latch (attr D6, gated by video_en)
+    signal s_al_7                : std_logic; -- FLASH  before output latch (attr D7, gated by video_en)
+    signal s_fl_i                : std_logic; -- LATCHED flash: colour mux out -> pixel_flash in AND top fl
 
 begin
 
     -- expose the latched flash bit (also fed back into pixel_flash below)
-    fl <= fl_i;
+    fl <= s_fl_i;
 
     -- 1) serialise the display byte into an MSB-first pixel stream
     pix_serial : entity work.pixel_serialiser
@@ -95,17 +95,17 @@ begin
             sload        => sload,
             data_latch_n => pixel_data_latch_n,
             data         => pixel_data,
-            serial_data  => serial_pixel_stream
+            serial_data  => s_serial_pixel_stream
         );
 
     -- 2) flash select: XNOR the pixel bit with (fl AND NOT flash_clk) to
     --    produce the per-pixel ink/paper select
     pix_flash : entity work.pixel_flash
         port map (
-            fl            => fl_i,
+            fl            => s_fl_i,
             flash_clk     => flash_clk,
-            serial_data   => serial_pixel_stream,
-            data_select_n => data_select_n
+            serial_data   => s_serial_pixel_stream,
+            data_select_n => s_data_select_n
         );
 
     -- 3) attribute INPUT latch + paper/border mux: unpacks the attribute byte
@@ -116,14 +116,14 @@ begin
             attr_latch_n    => attr_data_latch_n,
             border_colour   => border_colour,
             video_en        => video_en,
-            ink(2)          => i2_g,
-            ink(1)          => i1_r,
-            ink(0)          => i0_b,
-            paper_border(2) => pb2_g,
-            paper_border(1) => pb1_r,
-            paper_border(0) => pb0_b,
-            al6_hl          => al_6,
-            al7_fl          => al_7
+            ink(2)          => s_i2_g,
+            ink(1)          => s_i1_r,
+            ink(0)          => s_i0_b,
+            paper_border(2) => s_pb2_g,
+            paper_border(1) => s_pb1_r,
+            paper_border(0) => s_pb0_b,
+            al6_hl          => s_al_6,
+            al7_fl          => s_al_7
         );
 
     -- 4) attribute OUTPUT latch + colour mux + blank: double-buffers the
@@ -133,21 +133,21 @@ begin
         port map (
             vsync         => vsync,
             hblank_n      => hblank_n,
-            data_select_n => data_select_n,
-            i0_b          => i0_b,
-            pb0_b         => pb0_b,
-            i1_r          => i1_r,
-            pb1_r         => pb1_r,
-            i2_g          => i2_g,
-            pb2_g         => pb2_g,
-            al6_hl        => al_6,
-            al7_fl        => al_7,
+            data_select_n => s_data_select_n,
+            i0_b          => s_i0_b,
+            pb0_b         => s_pb0_b,
+            i1_r          => s_i1_r,
+            pb1_r         => s_pb1_r,
+            i2_g          => s_i2_g,
+            pb2_g         => s_pb2_g,
+            al6_hl        => s_al_6,
+            al7_fl        => s_al_7,
             a_o_latch_n   => attr_output_latch_n,
             blue          => blue,
             red           => red,
             green         => green,
             hl            => hl,
-            fl            => fl_i
+            fl            => s_fl_i
         );
 
 end architecture structural;
