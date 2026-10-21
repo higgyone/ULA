@@ -63,10 +63,28 @@ entity horiz_timing is
     port (
         clk_7_n  : in    std_logic;
         reset    : in    std_logic;
+        tclk_a   : in    std_logic;
         hsync_5c : out   std_logic;
         hsync_6c : out   std_logic;
         hblank_n : out   std_logic;
+        c0       : out   std_logic;
+        c0_n     : out   std_logic;
+        c1       : out   std_logic;
+        c1_n     : out   std_logic;
+        c2       : out   std_logic;
+        c2_n     : out   std_logic;
+        c3       : out   std_logic;
+        c3_n     : out   std_logic;
+        c4       : out   std_logic;
+        c4_n     : out   std_logic;
+        c5       : out   std_logic;
+        c5_n     : out   std_logic;
+        c6       : out   std_logic;
+        c6_n     : out   std_logic;
+        c7       : out   std_logic;
+        c7_n     : out   std_logic;
         c8       : out   std_logic;   -- H-counter MSB (HIGH for pixels 256..447); exposed so video_sync can gate the horizontal border
+        c8_n     : out   std_logic;
         clk_hc6  : out   std_logic;
         hc_rst   : out   std_logic
     );
@@ -75,14 +93,23 @@ end entity horiz_timing;
 architecture behavioral of horiz_timing is
 
     signal s_c0      : std_logic;
+    signal s_c0_n    : std_logic;
     signal s_c1      : std_logic;
+    signal s_c1_n    : std_logic;
     signal s_c2      : std_logic;
+    signal s_c2_n    : std_logic;
     signal s_c3      : std_logic;
+    signal s_c3_n    : std_logic;
     signal s_c4      : std_logic;
+    signal s_c4_n    : std_logic;
     signal s_c5      : std_logic;
+    signal s_c5_n    : std_logic;
     signal s_c6      : std_logic;
+    signal s_c6_n    : std_logic;
     signal s_c7      : std_logic;
+    signal s_c7_n    : std_logic;
     signal s_c8      : std_logic;   -- H-counter MSB; backs the c8 output port (cf. s_clk_hc6 / s_hc_rst)
+    signal s_c8_n    : std_logic;
     signal s_clk_hc6 : std_logic;
     signal s_hc_rst  : std_logic;
 
@@ -102,24 +129,50 @@ begin
         port map (
             clk_7_n => clk_7_n,
             reset   => reset,
-            tclk_a  => '0',
+            tclk_a  => tclk_a,
             c0      => s_c0,
+            c0_n    => s_c0_n,
             c1      => s_c1,
+            c1_n    => s_c1_n,
             c2      => s_c2,
+            c2_n    => s_c2_n,
             c3      => s_c3,
+            c3_n    => s_c3_n,
             c4      => s_c4,
+            c4_n    => s_c4_n,
             c5      => s_c5,
+            c5_n    => s_c5_n,
             c6      => s_c6,
+            c6_n    => s_c6_n,
             c7      => s_c7,
+            c7_n    => s_c7_n,
             c8      => s_c8,
+            c8_n    => s_c8_n,
             clk_hc6 => s_clk_hc6,
             hc_rst  => s_hc_rst
         );
 
     clk_hc6 <= s_clk_hc6;
     hc_rst  <= s_hc_rst;
-    c8      <= s_c8; -- expose the H-counter MSB for the border decode in video_sync
 
+    c0   <= s_c0;
+    c0_n <= s_c0_n;
+    c1   <= s_c1;
+    c1_n <= s_c1_n;
+    c2   <= s_c2;
+    c2_n <= s_c2_n;
+    c3   <= s_c3;
+    c3_n <= s_c3_n;
+    c4   <= s_c4;
+    c4_n <= s_c4_n;
+    c5   <= s_c5;
+    c5_n <= s_c5_n;
+    c6   <= s_c6;
+    c6_n <= s_c6_n;
+    c7   <= s_c7;
+    c7_n <= s_c7_n;
+    c8   <= s_c8; -- expose the H-counter MSB for the border decode in video_sync
+    c8_n <= s_c8_n;
     --------------------------------------------------------------
     -- Horizontal blanking — LOW during pixels 320..415
     --------------------------------------------------------------

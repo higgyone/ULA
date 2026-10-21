@@ -71,6 +71,7 @@ begin
         port map (
             clk_7_n  => clk_7_n,
             reset    => reset,
+            tclk_a   => tclk_a,
             hsync_5c => hsync_5c,
             hsync_6c => hsync_6c,
             hblank_n => hblank_n
