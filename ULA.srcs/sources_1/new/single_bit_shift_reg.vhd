@@ -12,47 +12,47 @@
 -- Topology:
 --
 --   input mux (set selects the source):
---      e_out = NOT(set)                     -- inverter
---      d_out = NOR(e_out, data_n)           -- parallel-load path (set='1')
---      f_out = NOR(set,   data_1_n)         -- shift-in path      (set='0')
+--      s_e_out = NOT(set)                     -- inverter
+--      s_d_out = NOR(s_e_out, data_n)           -- parallel-load path (set='1')
+--      s_f_out = NOR(set,   data_1_n)         -- shift-in path      (set='0')
 --
 --   master latch (gated by clk, 4 NORs):
---      c_out = NOR(clk, b_out)
---      b_out = NOR(clk, a_out)
---      a_out = NOR(b_out, i_out)
---      i_out = NOR(c_out, d_out, f_out)     -- folds mux output into master
+--      s_c_out = NOR(clk, s_b_out)
+--      s_b_out = NOR(clk, s_a_out)
+--      s_a_out = NOR(s_b_out, s_i_out)
+--      s_i_out = NOR(s_c_out, s_d_out, s_f_out)     -- folds mux output into master
 --
 --   slave SR latch (2 cross-coupled NORs):
---      h_out = NOR(c_out, g_out)
---      g_out = NOR(b_out, h_out)
+--      s_h_out = NOR(s_c_out, s_g_out)
+--      s_g_out = NOR(s_b_out, s_h_out)
 --
---      q     = g_out
---      q_bar = h_out
+--      q     = s_g_out
+--      q_n = s_h_out
 --
 -- Mux / load-vs-shift semantics:
---   set='1' : e_out=0 => d_out = data (from data_n), f_out = 0.
+--   set='1' : s_e_out=0 => s_d_out = data (from data_n), s_f_out = 0.
 --             Master input = data      -> LOADS the parallel bit.
---   set='0' : e_out=1 => d_out = 0,     f_out = data-1 (from data_1_n).
+--   set='0' : s_e_out=1 => s_d_out = 0,     s_f_out = data-1 (from data_1_n).
 --             Master input = data-1    -> SHIFTS in the neighbour bit.
 --
 -- Behaviour by clk phase:
---   clk='1' : b_out = c_out = 0. Master is transparent (a_out follows the
+--   clk='1' : s_b_out = s_c_out = 0. Master is transparent (s_a_out follows the
 --             mux output); slave is in HOLD.
 --   clk='0' : master is locked on the value sampled at the falling edge;
 --             the slave becomes transparent, so q takes that value.
 --   => q updates on the falling edge of clk. In a chain sharing one clk,
 --      every cell samples its neighbour's stable held output while clk is
 --      high, then all slaves update together on the edge — no shift race.
---   q and q_bar are complementary in both phases.
+--   q and q_n are complementary in both phases.
 --
 -- Gate delay `TG` (simulation only). Each NOR assignment carries an
 -- `after TG` inertial delay. Without it the cross-coupled pairs
--- (a_out<->b_out, g_out<->h_out) re-evaluate within the same simulation
+-- (s_a_out<->s_b_out, s_g_out<->s_h_out) re-evaluate within the same simulation
 -- instant, spinning delta cycles at a fixed `t` until xsim hits its
 -- iteration guard (a t=0 hang). Real gates have propagation delay, so the
 -- loop advances through time and settles; `after TG` models exactly that.
 -- Same treatment as d_ff_nor. TG is kept small (1 ns): the worst-case
--- master path is ~4 gates (data -> e_out -> d_out -> i_out -> a_out) ≈
+-- master path is ~4 gates (data -> s_e_out -> s_d_out -> s_i_out -> s_a_out) ≈
 -- 4·TG, which must settle inside the testbench setup margin.
 --
 -- Initial values seed a valid "holding 0" resting state (clk='0', set='0',
@@ -81,7 +81,7 @@ library ieee;
 --
 --   clk is only the timing: nothing changes until clk falls 1->0. While clk is
 --   high the cell samples the chosen input; on the falling edge it stores that
---   bit and then holds it steady on q (and its inverse on q_bar) until the next
+--   bit and then holds it steady on q (and its inverse on q_n) until the next
 --   falling edge.
 
 entity single_bit_shift_register is
@@ -91,46 +91,46 @@ entity single_bit_shift_register is
         data_1_n : in    std_logic; -- active-low shift-in bit from neighbour (SHIFT, set='0')
         set      : in    std_logic; -- '1' = LOAD from data_n, '0' = SHIFT from data_1_n
         q        : out   std_logic;
-        q_bar    : out   std_logic
+        q_n      : out   std_logic
     );
 end entity single_bit_shift_register;
 
 architecture structure of single_bit_shift_register is
 
     -- Seeded to the "holding 0" state (clk='0', set='0', q='0'):
-    --   a_out=0 b_out=1 c_out=0  master holding 0
-    --   g_out=0 h_out=1          slave  holding 0  => q=0, q_bar=1
-    --   e_out=1 d_out=0 f_out=0 i_out=1  mux/fold nets consistent
-    signal a_out : std_logic := '0';
-    signal b_out : std_logic := '1';
-    signal c_out : std_logic := '0';
-    signal d_out : std_logic := '0';
-    signal e_out : std_logic := '1';
-    signal f_out : std_logic := '0';
-    signal g_out : std_logic := '0';
-    signal h_out : std_logic := '1';
-    signal i_out : std_logic := '1';
+    --   s_a_out=0 s_b_out=1 s_c_out=0  master holding 0
+    --   s_g_out=0 s_h_out=1          slave  holding 0  => q=0, q_n=1
+    --   s_e_out=1 s_d_out=0 s_f_out=0 s_i_out=1  mux/fold nets consistent
+    signal s_a_out : std_logic := '0';
+    signal s_b_out : std_logic := '1';
+    signal s_c_out : std_logic := '0';
+    signal s_d_out : std_logic := '0';
+    signal s_e_out : std_logic := '1';
+    signal s_f_out : std_logic := '0';
+    signal s_g_out : std_logic := '0';
+    signal s_h_out : std_logic := '1';
+    signal s_i_out : std_logic := '1';
 
     constant tg : time := 1 ns;   -- modelled NOR propagation delay (sim only)
 
 begin
 
     -- input mux: set selects parallel data (data_n) vs shift-in (data_1_n)
-    f_out <= not(set or data_1_n)         after tg;
-    e_out <= not(set)                     after tg;
-    d_out <= not(e_out or data_n)         after tg;
+    s_f_out <= not(set or data_1_n)         after tg;
+    s_e_out <= not(set)                     after tg;
+    s_d_out <= not(s_e_out or data_n)         after tg;
 
     -- master latch (gated by clk)
-    c_out <= not(clk or b_out)            after tg;
-    b_out <= not(clk or a_out)            after tg;
-    a_out <= not(b_out or i_out)          after tg;
-    i_out <= not(c_out or d_out or f_out) after tg;
+    s_c_out <= not(clk or s_b_out)            after tg;
+    s_b_out <= not(clk or s_a_out)            after tg;
+    s_a_out <= not(s_b_out or s_i_out)          after tg;
+    s_i_out <= not(s_c_out or s_d_out or s_f_out) after tg;
 
     -- slave SR latch
-    h_out <= not(c_out or g_out)          after tg;
-    g_out <= not(b_out or h_out)          after tg;
+    s_h_out <= not(s_c_out or s_g_out)          after tg;
+    s_g_out <= not(s_b_out or s_h_out)          after tg;
 
-    q     <= g_out;
-    q_bar <= h_out;
+    q   <= s_g_out;
+    q_n <= s_h_out;
 
 end architecture structure;

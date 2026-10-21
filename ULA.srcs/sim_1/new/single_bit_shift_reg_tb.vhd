@@ -35,7 +35,7 @@ architecture behavioral of single_bit_shift_reg_tb is
     signal data_1_n : std_logic := '1'; -- data-1 = 0
     signal set      : std_logic := '1'; -- start in LOAD mode
     signal q        : std_logic;
-    signal q_bar    : std_logic;
+    signal q_n      : std_logic;
 
     -- Check q (and its complement) after the falling edge just passed.
 
@@ -52,7 +52,7 @@ architecture behavioral of single_bit_shift_reg_tb is
                    & " got q=" & std_logic'image(qv)
             severity failure;
         assert qbv = not qv
-            report "FAIL: " & msg & " - q_bar not complementary"
+            report "FAIL: " & msg & " - q_n not complementary"
             severity failure;
         report "PASS: " & msg
             severity note;
@@ -68,7 +68,7 @@ begin
             data_1_n => data_1_n,
             set      => set,
             q        => q,
-            q_bar    => q_bar
+            q_n      => q_n
         );
 
     -- *****************************************************************
@@ -94,38 +94,38 @@ begin
         -- driven above; capture it on the first falling edge.
         wait until falling_edge(clk);
         wait for settle;
-        check(q, q_bar, '0', "initial load 0");
+        check(q, q_n, '0', "initial load 0");
 
         -- LOAD a 1  (set='1', data_n='0' => data=1)
         set    <= '1';
         data_n <= '0';
         wait until falling_edge(clk);
         wait for settle;
-        check(q, q_bar, '1', "load 1");
+        check(q, q_n, '1', "load 1");
 
         -- SHIFT in a 0 (set='0', data_1_n='1' => data-1=0)
         set      <= '0';
         data_1_n <= '1';
         wait until falling_edge(clk);
         wait for settle;
-        check(q, q_bar, '0', "shift in 0");
+        check(q, q_n, '0', "shift in 0");
 
         -- SHIFT in a 1 (set='0', data_1_n='0' => data-1=1)
         data_1_n <= '0';
         wait until falling_edge(clk);
         wait for settle;
-        check(q, q_bar, '1', "shift in 1");
+        check(q, q_n, '1', "shift in 1");
 
         -- HOLD the 1 by shifting in another 1
         wait until falling_edge(clk);
         wait for settle;
-        check(q, q_bar, '1', "shift in 1 again (hold high)");
+        check(q, q_n, '1', "shift in 1 again (hold high)");
 
         -- SHIFT in a 0 again, back to low
         data_1_n <= '1';
         wait until falling_edge(clk);
         wait for settle;
-        check(q, q_bar, '0', "shift in 0 (back low)");
+        check(q, q_n, '0', "shift in 0 (back low)");
 
         -- LOAD overrides shift: request shift-in 1 but assert set to load 0
         set      <= '1';
@@ -133,7 +133,7 @@ begin
         data_1_n <= '0';
         wait until falling_edge(clk);
         wait for settle;
-        check(q, q_bar, '0', "load 0 overrides shift-in 1");
+        check(q, q_n, '0', "load 0 overrides shift-in 1");
 
         report "ALL TESTS PASSED"
             severity note;

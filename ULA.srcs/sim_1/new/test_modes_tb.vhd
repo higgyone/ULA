@@ -4,17 +4,17 @@
 -- Test modes are entered with MREQ and IORQ held low TOGETHER, which a real
 -- Z80 never does. The level of the other strobe picks the mode, and the
 -- strobe that is left free becomes a fast test clock:
---   A  WR high, rd_n is the clock -> tclka_n = NOT rd_n (C6..C8 via tclk_a)
---   B  RD high, wr_n is the clock -> tclkb_n = NOT wr_n (flash counter)
+--   A  WR high, rd_n is the clock -> tclk_a = NOT rd_n (C6..C8 via tclk_a)
+--   B  RD high, wr_n is the clock -> tclk_b = NOT wr_n (flash counter)
 -- In test B, the K0 pin carries v8_n (while wr_n is low) for the wafer probe.
--- Outside a test mode tclka_n and tclkb_n are '0'.
+-- Outside a test mode tclk_a and tclk_b are '0'.
 --
 -- K0 is open collector with a WEAK on-chip pull-up: the DUT pulls it LOW
 -- ('0') or releases it to 'H'. The TB adds NO pull-up of its own, so a
 -- released pin must read exactly 'H' from the DUT itself. key_k0 models a
 -- key on keyboard column 0 sharing the pin ('Z' = no key, '0' = key down).
 --
--- flash_clock is instantiated on tclkb_n, so the TB also proves the test
+-- flash_clock is instantiated on tclk_b, so the TB also proves the test
 -- clock reaches the flash counter with the right polarity.
 --
 -- What it proves:
@@ -23,12 +23,12 @@
 --   2. NORMAL Z80 CYCLES: idle, memory read / write, refresh, I/O read /
 --      write and interrupt acknowledge (IORQ without MREQ) never enter a
 --      test mode: test clocks '0' and K0 released ('H'), with v8_n either way.
---   3. TEST A CLOCK: rd_n toggled at 20 MHz; tclka_n follows it inverted on
---      every half cycle, tclkb_n stays '0', K0 stays released.
---   4. TEST B CLOCK: wr_n toggled at 20 MHz; tclkb_n follows it inverted,
---      tclka_n stays '0', K0 = v8_n ('0' / 'H') while wr_n is low.
+--   3. TEST A CLOCK: rd_n toggled at 20 MHz; tclk_a follows it inverted on
+--      every half cycle, tclk_b stays '0', K0 stays released.
+--   4. TEST B CLOCK: wr_n toggled at 20 MHz; tclk_b follows it inverted,
+--      tclk_a stays '0', K0 = v8_n ('0' / 'H') while wr_n is low.
 --   5. FLASH, NORMAL: with the bus idle, 64 frames of v8 give exactly 4
---      flash_clk edges (one every 16 frames). This fails if tclkb_n is '1'
+--      flash_clk edges (one every 16 frames). This fails if tclk_b is '1'
 --      outside test mode, which blocks v8 at flash_clock's NOR.
 --   6. FLASH, TEST B: v8_n low, 64 wr_n cycles at 20 MHz give exactly 4
 --      flash_clk edges, 800 ns apart: 625 kHz instead of 1.5625 Hz.
@@ -64,10 +64,10 @@ architecture behavioral of test_modes_tb is
     signal mreq_n  : std_logic := '1';
     signal v8_n    : std_logic := '1';
 
-    signal k0      : std_logic;
-    signal key_k0  : std_logic := 'Z'; -- a key on column 0 ('0' = down)
-    signal tclka_n : std_logic;
-    signal tclkb_n : std_logic;
+    signal k0     : std_logic;
+    signal key_k0 : std_logic := 'Z'; -- a key on column 0 ('0' = down)
+    signal tclk_a : std_logic;
+    signal tclk_b : std_logic;
 
     signal flash_clk : std_logic;
 
@@ -90,14 +90,14 @@ begin
             mreq_n  => mreq_n,
             wr_n    => wr_n,
             k0      => k0,
-            tclkb_n => tclkb_n,
-            tclka_n => tclka_n
+            tclk_b  => tclk_b,
+            tclk_a  => tclk_a
         );
 
     flash : entity work.flash_clock(structural)
         port map (
             v8_n      => v8_n,
-            tclkb_n   => tclkb_n,
+            tclk_b    => tclk_b,
             flash_clk => flash_clk
         );
 
@@ -169,12 +169,12 @@ begin
                 exp_k0 := '0';
             end if;
 
-            assert tclka_n = exp_a
-                report "FAIL " & what & ": tclka_n = " & std_logic'image(tclka_n)
+            assert tclk_a = exp_a
+                report "FAIL " & what & ": tclk_a = " & std_logic'image(tclk_a)
                        & ", expected " & std_logic'image(exp_a)
                 severity failure;
-            assert tclkb_n = exp_b
-                report "FAIL " & what & ": tclkb_n = " & std_logic'image(tclkb_n)
+            assert tclk_b = exp_b
+                report "FAIL " & what & ": tclk_b = " & std_logic'image(tclk_b)
                        & ", expected " & std_logic'image(exp_b)
                 severity failure;
             assert k0 = exp_k0
@@ -307,7 +307,7 @@ begin
                 v8_n     <= '1' when v = 1 else '0';
                 set_bus(cycles(c).mreq, cycles(c).ioreq, cycles(c).rd, cycles(c).wr);
                 wait for settle;
-                assert tclka_n = '0' and tclkb_n = '0' and k0 = 'H'
+                assert tclk_a = '0' and tclk_b = '0' and k0 = 'H'
                     report "FAIL normal cycle " & integer'image(c)
                            & ": a test clock is not '0' or K0 is not released"
                     severity failure;
@@ -332,7 +332,7 @@ begin
 
         end loop;
 
-        report "PASS: test A: tclka_n follows rd_n (inverted) at 20 MHz";
+        report "PASS: test A: tclk_a follows rd_n (inverted) at 20 MHz";
 
         -- 4. test B: wr_n is the clock ------------------------------------
         for v in 0 to 1 loop
@@ -352,7 +352,7 @@ begin
 
         end loop;
 
-        report "PASS: test B: tclkb_n follows wr_n (inverted), K0 = v8_n while wr_n is low";
+        report "PASS: test B: tclk_b follows wr_n (inverted), K0 = v8_n while wr_n is low";
 
         -- 5. flash counter in normal operation: clocked by v8 --------------
         set_bus('1', '1', '1', '1');

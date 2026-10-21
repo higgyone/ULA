@@ -27,20 +27,20 @@ end entity d_ff_nor_tb;
 
 architecture behavioral of d_ff_nor_tb is
 
-    constant t    : time := 10 ns; -- clk period
-    signal   clk  : std_logic;
-    signal   d    : std_logic;
-    signal   q    : std_logic;
-    signal   qbar : std_logic;
+    constant t   : time := 10 ns; -- clk period
+    signal   clk : std_logic;
+    signal   d   : std_logic;
+    signal   q   : std_logic;
+    signal   q_n : std_logic;
 
 begin
 
     d_ffnor : entity work.d_ff_nor(Behavioral)
         port map (
-            clk  => clk,
-            d    => d,
-            q    => q,
-            qbar => qbar
+            clk => clk,
+            d   => d,
+            q   => q,
+            q_n => q_n
         );
 
     -- *****************************************************************

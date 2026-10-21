@@ -23,12 +23,12 @@
 -- NOR-gated clock derivation per cell (read: "C_n toggles when all
 -- lower bits are 1 at the next clk_7_n edge"):
 --
---   clk_c0 = NOT clk_7_n                            ; C0 always toggles
---   clk_c1 = NOR(c0_n, clk_7_n)         = c0 . !clk_7_n; C1 toggles when c0=1
---   clk_c2 = NOR(c0_n, c1_n, clk_7_n)   = c0.c1.!clk_7_n
---   clk_c3 = NOR(c0_n..c2_n, clk_7_n)   = c0.c1.c2.!clk_7_n
---   clk_c4 = NOT c3_n                = c3        ; C4 ripples off C3
---   clk_c5 = NOR(c3_n, c4_n)         = c3 . c4   ; C5 falls when c3.c4 falls
+--   s_clk_c0 = NOT clk_7_n                            ; C0 always toggles
+--   s_clk_c1 = NOR(c0_n, clk_7_n)         = c0 . !clk_7_n; C1 toggles when c0=1
+--   s_clk_c2 = NOR(c0_n, c1_n, clk_7_n)   = c0.c1.!clk_7_n
+--   s_clk_c3 = NOR(c0_n..c2_n, clk_7_n)   = c0.c1.c2.!clk_7_n
+--   s_clk_c4 = NOT c3_n                = c3        ; C4 ripples off C3
+--   s_clk_c5 = NOR(c3_n, s_c4_n)         = c3 . c4   ; C5 falls when c3.c4 falls
 --
 -- (The mix of styles — gated for C0..C3, ripple for C4..C5 — mirrors
 -- the original ULA layout; it is not a uniform ripple counter.)
@@ -66,20 +66,20 @@ end entity master_horiz_counter;
 
 architecture behavioral of master_horiz_counter is
 
-    signal c0_n   : std_logic;
-    signal c1_n   : std_logic;
-    signal c2_n   : std_logic;
-    signal c3_n   : std_logic;
-    signal c4_n   : std_logic;
-    signal c5_n   : std_logic;
-    signal clk_c0 : std_logic;
-    signal clk_c1 : std_logic;
-    signal clk_c2 : std_logic;
-    signal clk_c3 : std_logic;
-    signal clk_c4 : std_logic;
-    signal clk_c5 : std_logic;
+    signal s_c0_n   : std_logic;
+    signal s_c1_n   : std_logic;
+    signal s_c2_n   : std_logic;
+    signal s_c3_n   : std_logic;
+    signal s_c4_n   : std_logic;
+    signal s_c5_n   : std_logic;
+    signal s_clk_c0 : std_logic;
+    signal s_clk_c1 : std_logic;
+    signal s_clk_c2 : std_logic;
+    signal s_clk_c3 : std_logic;
+    signal s_clk_c4 : std_logic;
+    signal s_clk_c5 : std_logic;
 
-    signal clk8_6   : std_logic_vector(2 downto 0);
+    signal s_clk8_6 : std_logic_vector(2 downto 0);
     signal s_clkhc6 : std_logic;
 
 begin
@@ -87,72 +87,72 @@ begin
     --------------------------------------------------------------
     -- NOR-gated clock chain for C0..C5 (see header for derivation)
     --------------------------------------------------------------
-    clk_c0 <= not clk_7_n;
-    clk_c1 <= c0_n nor clk_7_n;
-    clk_c2 <= not(c0_n or c1_n or clk_7_n);
-    clk_c3 <= not(c2_n or c1_n or c0_n or clk_7_n);
-    clk_c4 <= not c3_n;
-    clk_c5 <= c4_n nor c3_n;
+    s_clk_c0 <= not clk_7_n;
+    s_clk_c1 <= s_c0_n nor clk_7_n;
+    s_clk_c2 <= not(s_c0_n or s_c1_n or clk_7_n);
+    s_clk_c3 <= not(s_c2_n or s_c1_n or s_c0_n or clk_7_n);
+    s_clk_c4 <= not s_c3_n;
+    s_clk_c5 <= s_c4_n nor s_c3_n;
 
     -- clk_hc6 drives the C6..C8 bit3_counter. tclk_a is always '0'
-    -- in this design, so the NOR reduces to NOT c5_n = c5.
-    s_clkhc6 <= tclk_a nor c5_n;
+    -- in this design, so the NOR reduces to NOT s_c5_n = c5.
+    s_clkhc6 <= tclk_a nor s_c5_n;
     clk_hc6  <= s_clkhc6;
 
     -- C6..C8 are the three bits of the modulo-7 bit3_counter.
-    c6 <= clk8_6(0);
-    c7 <= clk8_6(1);
-    c8 <= clk8_6(2);
+    c6 <= s_clk8_6(0);
+    c7 <= s_clk8_6(1);
+    c8 <= s_clk8_6(2);
 
     -- ******************************************************************
     --  Counter cell instances (C0..C5 = clk_div_2; C6..C8 = bit3_counter)
     -- ******************************************************************
     count_0 : entity work.clk_div_2
         port map (
-            clk_in    => clk_c0,
+            clk_in    => s_clk_c0,
             reset     => reset,
             clk_out   => c0,
-            clk_out_n => c0_n
+            clk_out_n => s_c0_n
         );
 
     count_1 : entity work.clk_div_2
         port map (
-            clk_in    => clk_c1,
+            clk_in    => s_clk_c1,
             reset     => reset,
             clk_out   => c1,
-            clk_out_n => c1_n
+            clk_out_n => s_c1_n
         );
 
     count_2 : entity work.clk_div_2
         port map (
-            clk_in    => clk_c2,
+            clk_in    => s_clk_c2,
             reset     => reset,
             clk_out   => c2,
-            clk_out_n => c2_n
+            clk_out_n => s_c2_n
         );
 
     count_3 : entity work.clk_div_2
         port map (
-            clk_in    => clk_c3,
+            clk_in    => s_clk_c3,
             reset     => reset,
             clk_out   => c3,
-            clk_out_n => c3_n
+            clk_out_n => s_c3_n
         );
 
     count_4 : entity work.clk_div_2
         port map (
-            clk_in    => clk_c4,
+            clk_in    => s_clk_c4,
             reset     => reset,
             clk_out   => c4,
-            clk_out_n => c4_n
+            clk_out_n => s_c4_n
         );
 
     count_5 : entity work.clk_div_2
         port map (
-            clk_in    => clk_c5,
+            clk_in    => s_clk_c5,
             reset     => reset,
             clk_out   => c5,
-            clk_out_n => c5_n
+            clk_out_n => s_c5_n
         );
 
     -- C6..C8 use the schematic-faithful T_Structure architecture (chained
@@ -164,7 +164,7 @@ begin
         port map (
             clk      => s_clkhc6,
             reset    => reset,
-            output   => clk8_6,
+            output   => s_clk8_6,
             overflow => hc_rst
         );
 

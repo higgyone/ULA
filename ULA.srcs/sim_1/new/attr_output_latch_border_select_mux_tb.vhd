@@ -11,8 +11,8 @@
 --     * display area, flash active    — INK/PAPER swap on the flash_clk='0' half
 --     * flash bit set but flash_clk='1' — swap suppressed (flash_clk gating)
 --     * BRIGHT bit                    — hl passes through in the display area
---     * border region (vid_en='0')    — background = BORDER, hl/fl forced 0
---     * blanking (v_sync / h_blank_n) — colour forced black, hl/fl unaffected
+--     * border region (video_en='0')    — background = BORDER, hl/fl forced 0
+--     * blanking (vsync / hblank_n) — colour forced black, hl/fl unaffected
 --
 -- Drive sequence (mirrors pixel_serialiser_tb, which signed off the front path):
 --   1. Present the attribute byte and capture it: input latch transparent
@@ -20,8 +20,8 @@
 --      (attr_output_latch_n='0') -> then hold the output latch (='1'). This
 --      freezes the cell's colours + fl/hl for all 8 pixels (double buffer).
 --   2. Capture the pixel byte in its latch, then LOAD the shift register
---      (s_load='1', one falling clk edge): serial pixel = bit7 (MSB).
---   3. Hold s_load='0' and clock: bit6..bit0 appear one per falling edge.
+--      (sload='1', one falling clk edge): serial pixel = bit7 (MSB).
+--   3. Hold sload='0' and clock: bit6..bit0 appear one per falling edge.
 --   The falling edge of clk_7 is the active (commit) edge for the shift
 --   register; a SETTLE wait after each edge lets the `after tg` gate delays
 --   finish before sampling. Any mismatch is fatal; a clean run prints
@@ -48,10 +48,10 @@ architecture behavioral of attr_output_latch_border_select_mux_tb is
         pixel     : std_logic_vector(7 downto 0); -- 8 pixel bits (MSB painted first)
         attr      : std_logic_vector(7 downto 0); -- D7 fl|D6 hl|D5:3 paper|D2:0 ink
         border    : std_logic_vector(2 downto 0); -- border colour; b0-Blue b1-Red b2-Green
-        vid_en    : std_logic;                    -- '1' display area, '0' border region
+        video_en  : std_logic;                    -- '1' display area, '0' border region
         flash_clk : std_logic;                    -- slow flash toggle (live, not latched)
-        v_sync    : std_logic;                    -- '1' vertical sync -> black
-        h_blank_n : std_logic;                    -- '0' horizontal blank -> black
+        vsync     : std_logic;                    -- '1' vertical sync -> black
+        hblank_n  : std_logic;                    -- '0' horizontal blank -> black
     end record scenario_t;
 
     type scenario_arr is array (natural range <>) of scenario_t;
@@ -99,7 +99,7 @@ architecture behavioral of attr_output_latch_border_select_mux_tb is
             '0',
             '1'
         ),
-        -- 4: border (vid_en=0): bg=BORDER(blue+red), hl/fl forced 0
+        -- 4: border (video_en=0): bg=BORDER(blue+red), hl/fl forced 0
         (
             "10100000",
             "10100010",
@@ -109,7 +109,7 @@ architecture behavioral of attr_output_latch_border_select_mux_tb is
             '0',
             '1'
         ),
-        -- 5: blank via v_sync: colour black, hl/fl unaffected
+        -- 5: blank via vsync: colour black, hl/fl unaffected
         (
             "11110000",
             "00100010",
@@ -119,7 +119,7 @@ architecture behavioral of attr_output_latch_border_select_mux_tb is
             '1',
             '1'
         ),
-        -- 6: blank via h_blank_n: colour black
+        -- 6: blank via hblank_n: colour black
         (
             "10101010",
             "00100010",
@@ -133,16 +133,16 @@ architecture behavioral of attr_output_latch_border_select_mux_tb is
 
     signal clk_7               : std_logic                    := '0';
     signal flash_clk           : std_logic                    := '0';
-    signal s_load              : std_logic                    := '0';
+    signal sload               : std_logic                    := '0';
     signal pixel_data_latch_n  : std_logic                    := '1';
     signal pixel_data          : std_logic_vector(7 downto 0) := (others => '0');
     signal attr_data_latch_n   : std_logic                    := '1';
     signal attr_data           : std_logic_vector(7 downto 0) := (others => '0');
-    signal border_colour_bgr   : std_logic_vector(2 downto 0) := (others => '0');
+    signal border_colour       : std_logic_vector(2 downto 0) := (others => '0');
     signal video_en            : std_logic                    := '0';
     signal attr_output_latch_n : std_logic                    := '1';
-    signal v_sync              : std_logic                    := '0';
-    signal h_blank_n           : std_logic                    := '1';
+    signal vsync               : std_logic                    := '0';
+    signal hblank_n            : std_logic                    := '1';
 
     signal blue  : std_logic;
     signal green : std_logic;
@@ -164,8 +164,8 @@ architecture behavioral of attr_output_latch_border_select_mux_tb is
 
     begin
 
-        fl_i := sc.attr(7) and sc.vid_en;  -- latched flash (gated by vid_en)
-        gate := fl_i and not sc.flash_clk; -- flash swap active only on flash_clk='0'
+        fl_i := sc.attr(7) and sc.video_en; -- latched flash (gated by video_en)
+        gate := fl_i and not sc.flash_clk;  -- flash swap active only on flash_clk='0'
         -- data_select_n = XNOR(serial, gate): '1' -> paper/border, '0' -> ink
         if (serial = gate) then
             dsn := '1';
@@ -173,11 +173,11 @@ architecture behavioral of attr_output_latch_border_select_mux_tb is
             dsn := '0';
         end if;
 
-        if (sc.v_sync = '1' or sc.h_blank_n = '0') then
+        if (sc.vsync = '1' or sc.hblank_n = '0') then
             return "000";               -- blanked: black
         elsif (dsn = '0') then
             return sc.attr(2 downto 0); -- INK  : b0=attr0, r=attr1, g=attr2
-        elsif (sc.vid_en = '1') then
+        elsif (sc.video_en = '1') then
             return sc.attr(5 downto 3); -- PAPER: b0=attr3, r=attr4, g=attr5
         else
             return sc.border;           -- BORDER: b0=border0, r=border1, g=border2
@@ -218,16 +218,16 @@ begin
         port map (
             clk_7               => clk_7,
             flash_clk           => flash_clk,
-            s_load              => s_load,
+            sload               => sload,
             pixel_data_latch_n  => pixel_data_latch_n,
             pixel_data          => pixel_data,
             attr_data_latch_n   => attr_data_latch_n,
             attr_data           => attr_data,
-            border_colour_bgr   => border_colour_bgr,
+            border_colour       => border_colour,
             video_en            => video_en,
             attr_output_latch_n => attr_output_latch_n,
-            v_sync              => v_sync,
-            h_blank_n           => h_blank_n,
+            vsync               => vsync,
+            hblank_n            => hblank_n,
             blue                => blue,
             green               => green,
             red                 => red,
@@ -263,8 +263,8 @@ begin
             -- 1) present + capture the attribute byte into the double buffer
             ------------------------------------------------------------------
             attr_data           <= sc.attr;
-            border_colour_bgr   <= sc.border;
-            video_en            <= sc.vid_en;
+            border_colour       <= sc.border;
+            video_en            <= sc.video_en;
             attr_data_latch_n   <= '0';                                                                 -- input latch transparent
             attr_output_latch_n <= '0';                                                                 -- output latch transparent
             wait for 2 * settle;                                                                        -- let attr flow through both latches
@@ -274,19 +274,19 @@ begin
 
             -- live (unlatched) colour-mux context for this scenario
             flash_clk <= sc.flash_clk;
-            v_sync    <= sc.v_sync;
-            h_blank_n <= sc.h_blank_n;
+            vsync     <= sc.vsync;
+            hblank_n  <= sc.hblank_n;
             wait for settle;
 
-            -- hl/fl are the latched bright/flash bits (gated by vid_en);
+            -- hl/fl are the latched bright/flash bits (gated by video_en);
             -- constant across the 8 pixels, so check once here.
-            assert hl = (sc.attr(6) and sc.vid_en)
+            assert hl = (sc.attr(6) and sc.video_en)
                 report "FAIL scn " & integer'image(s) & ": hl expected "
-                       & std_logic'image(sc.attr(6) and sc.vid_en) & " got " & std_logic'image(hl)
+                       & std_logic'image(sc.attr(6) and sc.video_en) & " got " & std_logic'image(hl)
                 severity failure;
-            assert fl = (sc.attr(7) and sc.vid_en)
+            assert fl = (sc.attr(7) and sc.video_en)
                 report "FAIL scn " & integer'image(s) & ": fl expected "
-                       & std_logic'image(sc.attr(7) and sc.vid_en) & " got " & std_logic'image(fl)
+                       & std_logic'image(sc.attr(7) and sc.video_en) & " got " & std_logic'image(fl)
                 severity failure;
             checks := checks + 2;
 
@@ -299,7 +299,7 @@ begin
             pixel_data_latch_n <= '1';                                                                  -- hold it
             wait for settle;
 
-            s_load <= '1';                                                                              -- load mode
+            sload <= '1';                                                                               -- load mode
             wait until falling_edge(clk_7);                                                             -- LOAD edge: serial = bit7 (MSB)
             wait for settle;
 
@@ -313,12 +313,12 @@ begin
                        & "  exp(b,r,g)=" & std_logic'image(ve(0)) & std_logic'image(ve(1))
                        & std_logic'image(ve(2)) & "  got=" & std_logic'image(blue)
                        & std_logic'image(red) & std_logic'image(green)
-                       & "  [attr=" & to_bin(sc.attr) & " vid_en=" & std_logic'image(sc.vid_en)
+                       & "  [attr=" & to_bin(sc.attr) & " video_en=" & std_logic'image(sc.video_en)
                        & " fclk=" & std_logic'image(sc.flash_clk) & "]"
                 severity failure;
             checks := checks + 1;
 
-            s_load <= '0';                                                                              -- shift mode for the rest
+            sload <= '0';                                                                               -- shift mode for the rest
 
             for i in 6 downto 0 loop
 
@@ -332,7 +332,7 @@ begin
                            & std_logic'image(ve(0)) & std_logic'image(ve(1)) & std_logic'image(ve(2))
                            & "  got=" & std_logic'image(blue) & std_logic'image(red)
                            & std_logic'image(green) & "  [attr=" & to_bin(sc.attr)
-                           & " vid_en=" & std_logic'image(sc.vid_en)
+                           & " video_en=" & std_logic'image(sc.video_en)
                            & " fclk=" & std_logic'image(sc.flash_clk) & "]"
                     severity failure;
                 checks := checks + 1;

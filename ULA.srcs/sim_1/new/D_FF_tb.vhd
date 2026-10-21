@@ -36,20 +36,20 @@ end entity d_ff_tb;
 
 architecture behavioral of d_ff_tb is
 
-    constant t     : time      := 10 ns; -- clk period
-    signal   clk   : std_logic;
-    signal   d     : std_logic := '0';
-    signal   q     : std_logic;
-    signal   q_bar : std_logic;
+    constant t   : time      := 10 ns; -- clk period
+    signal   clk : std_logic;
+    signal   d   : std_logic := '0';
+    signal   q   : std_logic;
+    signal   q_n : std_logic;
 
 begin
 
     dflipflop : entity work.d_ff(Behavioral)
         port map (
-            clk   => clk,
-            d     => d,
-            q     => q,
-            q_bar => q_bar
+            clk => clk,
+            d   => d,
+            q   => q,
+            q_n => q_n
         );
 
     -- *****************************************************************
@@ -66,11 +66,11 @@ begin
 
     end process;
 
-    -- Tie d to q_bar so the FF toggles on every falling edge.
-    -- Concurrent assignment, so d tracks q_bar every time it changes
-    -- (not a one-shot sample at t=0 where q_bar is still 'U').
+    -- Tie d to q_n so the FF toggles on every falling edge.
+    -- Concurrent assignment, so d tracks q_n every time it changes
+    -- (not a one-shot sample at t=0 where q_n is still 'U').
 
-    d <= q_bar;
+    d <= q_n;
 -- process
 --   begin
 ----        d <= '1';
@@ -78,16 +78,16 @@ begin
 
 ----        wait for 100ns;
 --        if rising_edge(clk) then
---            d <= q_bar;
+--            d <= q_n;
 --        end if;
 --    end process;
 -- wait for 100ns;
 -- d <= qb_out;
 --   d <= '1';
 --   wait for 50ns;
---   qb_out <= q_bar;
+--   qb_out <= q_n;
 --   d <= qb_out;
--- d <= q_bar;
+-- d <= q_n;
 -- wait for 50ns;
 --       d <= '1';
 --       wait for 50ns;
@@ -99,6 +99,6 @@ begin
 
 --      d <= '0';
 --      wait for 50ns;
---      d <= q_bar;
+--      d <= q_n;
 
 end architecture behavioral;

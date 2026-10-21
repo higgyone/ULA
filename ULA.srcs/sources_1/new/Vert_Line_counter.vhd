@@ -24,11 +24,11 @@
 -- Architectures:
 --   T_Structure — gate-faithful structural form using tce_ff / trce_ff
 --                 (primary; matches Smith pg 92)
---   Behavioral  — reference `output_cnt + 1` model (kept for comparison)
+--   Behavioral  — reference `s_output_cnt + 1` model (kept for comparison)
 --
 -- Outputs:
 --   v0..v8     — the nine counter bits, tapped for downstream decode
---   v0_n..v8_n — complemented taps (qbar), used directly by NOR gates
+--   v0_n..v8_n — complemented taps (q_n), used directly by NOR gates
 --                in video_sync to avoid extra inverters
 --   vrst       — frame-wrap indicator. T_Structure: combinational, high
 --                while count = 311 with hcrst asserted (fires at end of
@@ -78,13 +78,13 @@ end entity vert_line_counter;
 -- The schematic has no reset on v0–v2. This is safe because at the
 -- only wrap point (count = 311 = "100110111") v0=v1=v2=1, so the
 -- carry chain enables all three and they toggle 1→0, landing on 0
--- without needing an explicit reset. v3–v8 are reset by v3_8_reset.
+-- without needing an explicit reset. v3–v8 are reset by s_v3_8_reset.
 --
 -- Carry chain: hcrst feeds v0's enable; each stage's carry output
 -- (= enable AND q) feeds the next stage's enable, so hcrst propagates
 -- automatically to all stages — no separate enable tree needed.
 --
--- Reset decode (v3_8_reset):
+-- Reset decode (s_v3_8_reset):
 --   311 = "100110111" → v8·v5·v4·v2·v1·v0 = 1, v3·v6·v7 = 0.
 --   The NOR gate checks v4_n, v5_n, v8_n (= 0 when Vx = 1) plus
 --   not(s_v2_c). Using s_v2_c (= hcrst·v0·v1·v2) rather than v2
@@ -97,7 +97,7 @@ end entity vert_line_counter;
 
 architecture t_structure of vert_line_counter is
 
-    -- Per-stage q, qbar, and carry signals
+    -- Per-stage q, q_n, and carry signals
     signal s_v0   : std_logic;
     signal s_v0_n : std_logic;
     signal s_v0_c : std_logic;
@@ -125,13 +125,13 @@ architecture t_structure of vert_line_counter is
     signal s_v8   : std_logic;
     signal s_v8_n : std_logic;
 
-    signal v3_8_reset : std_logic;   -- synchronous reset for v3–v8; fires at count=311 with hcrst
+    signal s_v3_8_reset : std_logic;   -- synchronous reset for v3–v8; fires at count=311 with hcrst
 
 begin
 
     -- NOR decode: high when hcrst·v0·v1·v2·v4·v5·v8 = 1 (count = 311, line enabled)
-    v3_8_reset <= not (not(s_v2_c) or s_v4_n or s_v5_n or s_v8_n);
-    vrst       <= v3_8_reset;
+    s_v3_8_reset <= not (not(s_v2_c) or s_v4_n or s_v5_n or s_v8_n);
+    vrst         <= s_v3_8_reset;
 
     v0   <= s_v0;
     v0_n <= s_v0_n;
@@ -158,7 +158,7 @@ begin
             clk    => clk_hc6,
             enable => hcrst,
             q      => s_v0,
-            qbar   => s_v0_n,
+            q_n    => s_v0_n,
             carry  => s_v0_c
         );
 
@@ -167,7 +167,7 @@ begin
             clk    => clk_hc6,
             enable => s_v0_c,
             q      => s_v1,
-            qbar   => s_v1_n,
+            q_n    => s_v1_n,
             carry  => s_v1_c
         );
 
@@ -176,68 +176,68 @@ begin
             clk    => clk_hc6,
             enable => s_v1_c,
             q      => s_v2,
-            qbar   => s_v2_n,
+            q_n    => s_v2_n,
             carry  => s_v2_c
         );
 
-    -- v3–v8: trce_ff (reset by v3_8_reset on wrap)
+    -- v3–v8: trce_ff (reset by s_v3_8_reset on wrap)
     v_count_3 : entity work.trce_ff
         port map (
             clk    => clk_hc6,
-            reset  => v3_8_reset,
+            reset  => s_v3_8_reset,
             enable => s_v2_c,
             q      => s_v3,
-            qbar   => s_v3_n,
+            q_n    => s_v3_n,
             carry  => s_v3_c
         );
 
     v_count_4 : entity work.trce_ff
         port map (
             clk    => clk_hc6,
-            reset  => v3_8_reset,
+            reset  => s_v3_8_reset,
             enable => s_v3_c,
             q      => s_v4,
-            qbar   => s_v4_n,
+            q_n    => s_v4_n,
             carry  => s_v4_c
         );
 
     v_count_5 : entity work.trce_ff
         port map (
             clk    => clk_hc6,
-            reset  => v3_8_reset,
+            reset  => s_v3_8_reset,
             enable => s_v4_c,
             q      => s_v5,
-            qbar   => s_v5_n,
+            q_n    => s_v5_n,
             carry  => s_v5_c
         );
 
     v_count_6 : entity work.trce_ff
         port map (
             clk    => clk_hc6,
-            reset  => v3_8_reset,
+            reset  => s_v3_8_reset,
             enable => s_v5_c,
             q      => s_v6,
-            qbar   => s_v6_n,
+            q_n    => s_v6_n,
             carry  => s_v6_c
         );
 
     v_count_7 : entity work.trce_ff
         port map (
             clk    => clk_hc6,
-            reset  => v3_8_reset,
+            reset  => s_v3_8_reset,
             enable => s_v6_c,
             q      => s_v7,
-            qbar   => s_v7_n,
+            q_n    => s_v7_n,
             carry  => s_v7_c
         );
 
     v_count_8 : entity work.trce_ff
         port map (
             clk    => clk_hc6,
-            reset  => v3_8_reset,
+            reset  => s_v3_8_reset,
             enable => s_v7_c,
             q      => s_v8,
-            qbar   => s_v8_n,
+            q_n    => s_v8_n,
             carry  => open
         );
 
@@ -251,9 +251,9 @@ end architecture t_structure;
 
 architecture behavioral of vert_line_counter is
 
-    constant v_max      : unsigned( 8 downto 0) := "100110111";  -- 311
-    signal   output_cnt : unsigned( 8 downto 0) := (others => '0');
-    signal   vrst_set   : std_logic             := '0';
+    constant v_max        : unsigned( 8 downto 0) := "100110111";  -- 311
+    signal   s_output_cnt : unsigned( 8 downto 0) := (others => '0');
+    signal   s_vrst_set   : std_logic             := '0';
 
 begin
 
@@ -262,37 +262,37 @@ begin
 
         if falling_edge(clk_hc6) then
             if (hcrst = '1') then
-                output_cnt <= output_cnt + 1;
-                vrst_set   <= '0';
-                if (output_cnt = v_max) then
-                    output_cnt <= (others => '0');
-                    vrst_set   <= '1';
+                s_output_cnt <= s_output_cnt + 1;
+                s_vrst_set   <= '0';
+                if (s_output_cnt = v_max) then
+                    s_output_cnt <= (others => '0');
+                    s_vrst_set   <= '1';
                 end if;
             end if;
         end if;
 
     end process;
 
-    v0 <= output_cnt(0);
-    v1 <= output_cnt(1);
-    v2 <= output_cnt(2);
-    v3 <= output_cnt(3);
-    v4 <= output_cnt(4);
-    v5 <= output_cnt(5);
-    v6 <= output_cnt(6);
-    v7 <= output_cnt(7);
-    v8 <= output_cnt(8);
+    v0 <= s_output_cnt(0);
+    v1 <= s_output_cnt(1);
+    v2 <= s_output_cnt(2);
+    v3 <= s_output_cnt(3);
+    v4 <= s_output_cnt(4);
+    v5 <= s_output_cnt(5);
+    v6 <= s_output_cnt(6);
+    v7 <= s_output_cnt(7);
+    v8 <= s_output_cnt(8);
 
-    v0_n <= not (output_cnt(0));
-    v1_n <= not (output_cnt(1));
-    v2_n <= not (output_cnt(2));
-    v3_n <= not (output_cnt(3));
-    v4_n <= not (output_cnt(4));
-    v5_n <= not (output_cnt(5));
-    v6_n <= not (output_cnt(6));
-    v7_n <= not (output_cnt(7));
-    v8_n <= not (output_cnt(8));
+    v0_n <= not (s_output_cnt(0));
+    v1_n <= not (s_output_cnt(1));
+    v2_n <= not (s_output_cnt(2));
+    v3_n <= not (s_output_cnt(3));
+    v4_n <= not (s_output_cnt(4));
+    v5_n <= not (s_output_cnt(5));
+    v6_n <= not (s_output_cnt(6));
+    v7_n <= not (s_output_cnt(7));
+    v8_n <= not (s_output_cnt(8));
 
-    vrst <= vrst_set;
+    vrst <= s_vrst_set;
 
 end architecture behavioral;

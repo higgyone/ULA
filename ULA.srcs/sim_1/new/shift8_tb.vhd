@@ -49,9 +49,9 @@ architecture behavioral of shift8_tb is
     signal sin    : std_logic                    := '1';             -- active-low serial-in: '1' feeds 0s into the LSB (don't-care here)
     signal data_n : std_logic_vector(7 downto 0) := (others => '1'); -- active-low load bus; all '1' = load 0x00
     signal q      : std_logic;
-    signal q_bar  : std_logic;
+    signal q_n    : std_logic;
 
-    -- Check q (and that q_bar is its complement) after the falling edge just passed.
+    -- Check q (and that q_n is its complement) after the falling edge just passed.
 
     procedure check (
         signal qv  : in std_logic;
@@ -66,7 +66,7 @@ architecture behavioral of shift8_tb is
                    & " got q=" & std_logic'image(qv)
             severity failure;
         assert qbv = not qv
-            report "FAIL: " & msg & " - q_bar not complementary"
+            report "FAIL: " & msg & " - q_n not complementary"
             severity failure;
         report "PASS: " & msg
             severity note;
@@ -82,7 +82,7 @@ begin
             sin    => sin,
             data_n => data_n,
             q      => q,
-            q_bar  => q_bar
+            q_n    => q_n
         );
 
     -- *****************************************************************
@@ -111,7 +111,7 @@ begin
         data_n <= not byte1;                                     -- active-low: drive the inverse of the byte
         wait until falling_edge(clk);                            -- LOAD edge: all 8 cells grab BYTE1
         wait for settle;
-        check(q, q_bar, BYTE1(7), "BYTE1 load: q = bit7 (MSB)");
+        check(q, q_n, BYTE1(7), "BYTE1 load: q = bit7 (MSB)");
 
         sload <= '0';                                            -- switch to SHIFT for every following edge
 
@@ -119,7 +119,7 @@ begin
 
             wait until falling_edge(clk);                        -- one left-shift: next lower bit reaches the MSB
             wait for settle;
-            check(q, q_bar, BYTE1(i),
+            check(q, q_n, BYTE1(i),
                   "BYTE1 shift: q = bit" & integer'image(i));
 
         end loop;
@@ -132,7 +132,7 @@ begin
         data_n <= not byte2;
         wait until falling_edge(clk);                            -- LOAD edge
         wait for settle;
-        check(q, q_bar, BYTE2(7), "BYTE2 load: q = bit7 (MSB)");
+        check(q, q_n, BYTE2(7), "BYTE2 load: q = bit7 (MSB)");
 
         sload <= '0';
 
@@ -140,7 +140,7 @@ begin
 
             wait until falling_edge(clk);
             wait for settle;
-            check(q, q_bar, BYTE2(i),
+            check(q, q_n, BYTE2(i),
                   "BYTE2 shift: q = bit" & integer'image(i));
 
         end loop;

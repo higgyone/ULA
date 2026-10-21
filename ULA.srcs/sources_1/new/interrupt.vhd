@@ -6,10 +6,10 @@
 -- frame counter 50 times a second.
 --
 -- ── What it decodes ──────────────────────────────────────────────────
---   s_int = NOR(not v_sync, c6, c7, c8, v0, v1, v2)
---         = v_sync AND NOT(v0 OR v1 OR v2) AND NOT(c6 OR c7 OR c8)
+--   s_int = NOR(not vsync, c6, c7, c8, v0, v1, v2)
+--         = vsync AND NOT(v0 OR v1 OR v2) AND NOT(c6 OR c7 OR c8)
 --
---     v_sync = '1'          lines 248..251 (vertical sync, from video_sync)
+--     vsync = '1'          lines 248..251 (vertical sync, from video_sync)
 --     v0 = v1 = v2 = '0'    of those, only LINE 248
 --     c8 = c7 = c6 = '0'    pixels 0..63 of that line
 --
@@ -67,7 +67,7 @@
 -- ── Ports ────────────────────────────────────────────────────────────
 --   v0, v1, v2  line counter bits 0..2
 --   c6, c7, c8  horizontal counter bits 6..8
---   v_sync      vertical sync, active high (lines 248..251)
+--   vsync      vertical sync, active high (lines 248..251)
 --   int_n       /INT to the Z80, active low: '0', or 'H' (on-chip pull-up)
 --
 -- Verified by interrupt_tb.
@@ -81,28 +81,28 @@ entity interrupt is
         t_int_lag : time := 100 ns -- real-chip lag of int_n (sim only, see header)
     );
     port (
-        v0     : in    std_logic; -- line counter bit 0
-        v1     : in    std_logic; -- line counter bit 1
-        v2     : in    std_logic; -- line counter bit 2
-        c6     : in    std_logic; -- horizontal counter bit 6
-        c7     : in    std_logic; -- horizontal counter bit 7
-        c8     : in    std_logic; -- horizontal counter bit 8
-        v_sync : in    std_logic; -- vertical sync, active high
-        int_n  : out   std_logic  -- /INT to the Z80, active low, open collector
+        v0    : in    std_logic; -- line counter bit 0
+        v1    : in    std_logic; -- line counter bit 1
+        v2    : in    std_logic; -- line counter bit 2
+        c6    : in    std_logic; -- horizontal counter bit 6
+        c7    : in    std_logic; -- horizontal counter bit 7
+        c8    : in    std_logic; -- horizontal counter bit 8
+        vsync : in    std_logic; -- vertical sync, active high
+        int_n : out   std_logic  -- /INT to the Z80, active low, open collector
     );
 end entity interrupt;
 
 architecture structural of interrupt is
 
-    signal s_v_sync_n : std_logic;
-    signal s_int      : std_logic;
+    signal s_vsync_n : std_logic;
+    signal s_int     : std_logic;
 
 begin
 
-    s_v_sync_n <= not(v_sync);
+    s_vsync_n <= not(vsync);
 
     -- line 248 (first line of vsync), pixels 0..63
-    s_int <= not(s_v_sync_n or c6 or c7 or c8 or v0 or v1 or v2);
+    s_int <= not(s_vsync_n or c6 or c7 or c8 or v0 or v1 or v2);
 
     -- collector follower: pull /INT low, otherwise release it to the
     -- on-chip pull-up; with the real chip's propagation + ripple lag

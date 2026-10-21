@@ -8,25 +8,25 @@
 --      exactly where the header table says:
 --        pixel 1, 5 -> pixel_data_latch_n  (display bytes A and C)
 --        pixel 3, 7 -> attr_data_latch_n   (attribute bytes B and D)
---        pixel 4    -> s_load
+--        pixel 4    -> sload
 --        pixel 5    -> attr_output_latch_n (output load)
 --      Two display + two attribute captures per pass = the 4-byte A/B/C/D burst.
 --   2. Clock gating — with the pixel clock HIGH the two capture strobes must
 --      stay de-asserted at every pixel. This is the ordering the book buys with
 --      its 24 ns delay ("clk7 low before the latch opens"), here enforced as a
 --      logic condition, so it is checked directly.
---   3. Border gating — nborder='0' (border region) suppresses the display
+--   3. Border gating — border_n='0' (border region) suppresses the display
 --      capture; vid_c3_n='1' (outside the display-qualified c3 window)
 --      suppresses the attribute capture.
 --   4. video_en latch — the data_latch_1_bit is transparent while c3='1' and
---      holds when c3='0', so video_en tracks nborder then freezes it.
+--      holds when c3='0', so video_en tracks border_n then freezes it.
 --
 -- Everything is compared against an independent reference model written from
 -- the header table, not from the gate equations. Any mismatch is fatal; a clean
 -- run prints "ALL TESTS PASSED".
 --
 -- Polarity reminders: clk_7_n is the INVERTED clock, so pix_clk = not(clk_7_n)
--- and "pixel clock low" means clk_7_n='1'. nborder and vid_c3_n are active-low.
+-- and "pixel clock low" means clk_7_n='1'. border_n and vid_c3_n are active-low.
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -50,7 +50,7 @@ architecture behavioral of latch_and_shift_reg_control_clks_tb is
     signal c1_n     : std_logic := '1';
     signal c2_n     : std_logic := '1';
     signal c3_n     : std_logic := '0'; -- '0' => c3='1' (fetch burst window)
-    signal nborder  : std_logic := '1'; -- '1' => inside display (not border)
+    signal border_n : std_logic := '1'; -- '1' => inside display (not border)
     signal vid_c3_n : std_logic := '0'; -- '0' => display-qualified c3 active
 
     signal clk_7_pixel         : std_logic;
@@ -58,7 +58,7 @@ architecture behavioral of latch_and_shift_reg_control_clks_tb is
     signal pixel_data_latch_n  : std_logic;
     signal attr_data_latch_n   : std_logic;
     signal video_en            : std_logic;
-    signal s_load              : std_logic;
+    signal sload               : std_logic;
     signal attr_output_latch_n : std_logic;
 
     signal checks : integer := 0;
@@ -146,14 +146,14 @@ begin
             c1                  => c1,
             c1_n                => c1_n,
             c2_n                => c2_n,
-            nborder             => nborder,
+            border_n            => border_n,
             vid_c3_n            => vid_c3_n,
             clk_7_pixel         => clk_7_pixel,
             vid_cas_pulse       => vid_cas_pulse,
             pixel_data_latch_n  => pixel_data_latch_n,
             attr_data_latch_n   => attr_data_latch_n,
             video_en            => video_en,
-            s_load              => s_load,
+            sload               => sload,
             attr_output_latch_n => attr_output_latch_n
         );
 
@@ -190,10 +190,10 @@ begin
                 set_pix(p);
                 wait for settle;
 
-                assert pixel_data_latch_n = exp_pdl(p, clk_7_n, nborder, c3_n)
+                assert pixel_data_latch_n = exp_pdl(p, clk_7_n, border_n, c3_n)
                     report "FAIL " & phase & " pix " & integer'image(p)
                            & ": pixel_data_latch_n expected "
-                           & std_logic'image(exp_pdl(p, clk_7_n, nborder, c3_n))
+                           & std_logic'image(exp_pdl(p, clk_7_n, border_n, c3_n))
                            & " got " & std_logic'image(pixel_data_latch_n)
                     severity failure;
 
@@ -211,10 +211,10 @@ begin
                            & " got " & std_logic'image(attr_output_latch_n)
                     severity failure;
 
-                assert s_load = exp_sload(p, video_en)
+                assert sload = exp_sload(p, video_en)
                     report "FAIL " & phase & " pix " & integer'image(p)
-                           & ": s_load expected " & std_logic'image(exp_sload(p, video_en))
-                           & " got " & std_logic'image(s_load)
+                           & ": sload expected " & std_logic'image(exp_sload(p, video_en))
+                           & " got " & std_logic'image(sload)
                     severity failure;
 
                 checks <= checks + 4;
@@ -249,33 +249,33 @@ begin
         --------------------------------------------------------------
         -- 1) fetch burst, pixel clock LOW: strobes land at 1,3,4,5,7
         --------------------------------------------------------------
-        clk_7_n  <= '1';                                                        -- pix_clk low -> captures enabled
-        nborder  <= '1';                                                        -- inside the display
-        c3_n     <= '0';                                                        -- c3='1' -> fetch window
-        vid_c3_n <= '0';                                                        -- display-qualified c3 active
+        clk_7_n  <= '1';                                                         -- pix_clk low -> captures enabled
+        border_n <= '1';                                                         -- inside the display
+        c3_n     <= '0';                                                         -- c3='1' -> fetch window
+        vid_c3_n <= '0';                                                         -- display-qualified c3 active
         wait for settle;
         sweep("clk-low");
 
         --------------------------------------------------------------
         -- 2) pixel clock HIGH: both capture strobes must stay idle
         --------------------------------------------------------------
-        clk_7_n <= '0';                                                         -- pix_clk high -> captures blocked
+        clk_7_n <= '0';                                                          -- pix_clk high -> captures blocked
         wait for settle;
         sweep("clk-high");
 
         --------------------------------------------------------------
-        -- 3) border region: display capture suppressed by nborder='0'
+        -- 3) border region: display capture suppressed by border_n='0'
         --------------------------------------------------------------
-        clk_7_n <= '1';
-        nborder <= '0';                                                         -- border -> a_out = 0
+        clk_7_n  <= '1';
+        border_n <= '0';                                                         -- border -> a_out = 0
         wait for settle;
         sweep("border");
 
         --------------------------------------------------------------
         -- 4) attribute capture suppressed by vid_c3_n='1'
         --------------------------------------------------------------
-        nborder  <= '1';
-        vid_c3_n <= '1';                                                        -- outside the display-qualified c3
+        border_n <= '1';
+        vid_c3_n <= '1';                                                         -- outside the display-qualified c3
         wait for settle;
         sweep("no-vid-c3");
 
@@ -283,29 +283,29 @@ begin
         -- 5) video_en latch: transparent while c3='1', holds when c3='0'
         --------------------------------------------------------------
         vid_c3_n <= '0';
-        c3_n     <= '0';                                                        -- c3='1' -> latch transparent
-        nborder  <= '1';
+        c3_n     <= '0';                                                         -- c3='1' -> latch transparent
+        border_n <= '1';
         wait for settle;
 
         assert video_en = '1'
-            report "FAIL video_en should follow nborder='1' while c3='1', got "
+            report "FAIL video_en should follow border_n='1' while c3='1', got "
                    & std_logic'image(video_en)
             severity failure;
 
-        nborder <= '0';                                                         -- still transparent: should follow
+        border_n <= '0';                                                         -- still transparent: should follow
         wait for settle;
 
         assert video_en = '0'
-            report "FAIL video_en should follow nborder='0' while c3='1', got "
+            report "FAIL video_en should follow border_n='0' while c3='1', got "
                    & std_logic'image(video_en)
             severity failure;
 
-        nborder <= '1';                                                         -- back to display, then freeze it
+        border_n <= '1';                                                         -- back to display, then freeze it
         wait for settle;
-        c3_n    <= '1';                                                         -- c3='0' -> latch HOLDS
+        c3_n     <= '1';                                                         -- c3='0' -> latch HOLDS
         wait for settle;
 
-        nborder <= '0';                                                         -- must be ignored now
+        border_n <= '0';                                                         -- must be ignored now
         wait for settle;
 
         assert video_en = '1'

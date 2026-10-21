@@ -5,7 +5,7 @@
 -- input. Priority: reset > enable.
 --
 --   d = '0'   when reset='1'                  (sync clear)
---   d = qbar  when reset='0' and enable='1'   (toggle)
+--   d = q_n  when reset='0' and enable='1'   (toggle)
 --   d = q     when reset='0' and enable='0'   (hold)
 --
 -- Falling-edge triggered. Reset is SYNCHRONOUS — q clears on the
@@ -15,18 +15,18 @@
 -- instantiation site for stages that should always toggle.
 --
 -- NOTE: `carry` is the stage carry-out, combinational: carry = enable AND q
--- (built as NOR(not enable, qbar), gate-faithful). It feeds the `enable` of the
+-- (built as NOR(not enable, q_n), gate-faithful). It feeds the `enable` of the
 -- next counter stage. Consumed by bit3_counter(T_Structure) to chain
--- C6 → C7 → C8. (Formerly aliased to qbar; redefined for enable-chaining.)
+-- C6 → C7 → C8. (Formerly aliased to q_n; redefined for enable-chaining.)
 --
 -- Characteristic table:
 --
---   reset  enable  clk       |  q(next)   qbar(next)
+--   reset  enable  clk       |  q(next)   q_n(next)
 --   -----  ------  --------  |  -------   ----------
 --     1    X       ↓       |  0         1
---     0    1       ↓       |  not q     not qbar    (toggle)
---     0    0       ↓       |  q         qbar        (hold)
---     X    X       no edge   |  q         qbar        (hold)
+--     0    1       ↓       |  not q     not q_n    (toggle)
+--     0    0       ↓       |  q         q_n        (hold)
+--     X    X       no edge   |  q         q_n        (hold)
 ----------------------------------------------------------------------
 
 library ieee;
@@ -38,34 +38,34 @@ entity trce_ff is
         reset  : in    std_logic;
         enable : in    std_logic;
         q      : out   std_logic;
-        qbar   : out   std_logic;
+        q_n    : out   std_logic;
         carry  : out   std_logic
     );
 end entity trce_ff;
 
 architecture behavioral of trce_ff is
 
-    signal d_in     : std_logic;
-    signal q_int    : std_logic;
-    signal qbar_int : std_logic;
+    signal s_d   : std_logic;
+    signal s_q   : std_logic;
+    signal s_q_n : std_logic;
 
 begin
 
     -- Priority: reset > enable.
-    d_in <= '0' when reset = '1' else
-            qbar_int when enable = '1' else
-            q_int;
+    s_d <= '0' when reset = '1' else
+           s_q_n when enable = '1' else
+           s_q;
 
     ff : entity work.d_ff_nor(Behavioral)
         port map (
-            clk  => clk,
-            d    => d_in,
-            q    => q_int,
-            qbar => qbar_int
+            clk => clk,
+            d   => s_d,
+            q   => s_q,
+            q_n => s_q_n
         );
 
-    q     <= q_int;
-    qbar  <= qbar_int;
-    carry <= not ((not enable) or qbar_int); -- = enable and q : stage carry-out
+    q     <= s_q;
+    q_n   <= s_q_n;
+    carry <= not ((not enable) or s_q_n); -- = enable and q : stage carry-out
 
 end architecture behavioral;

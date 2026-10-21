@@ -5,12 +5,12 @@
 -- master_horiz_counter + Vert_Line_counter(T_Structure) + the FF
 -- library) at the real 7 MHz pixel clock and checks the border + vsync
 -- decode end to end:
---   * nBorder (vertical)   : sampled at c8=0 (~pixel 4) -- HIGH on display
+--   * border_n (vertical)   : sampled at c8=0 (~pixel 4) -- HIGH on display
 --                            lines 0..191, LOW on border lines 192..311
---   * nBorder (horizontal) : sampled at c8=1 (~pixel 304) -- LOW on EVERY
+--   * border_n (horizontal) : sampled at c8=1 (~pixel 304) -- LOW on EVERY
 --                            line, incl. display lines, which exercises the
 --                            c8 term (the old vertical-only decode wrongly
---                            held nBorder HIGH here)
+--                            held border_n HIGH here)
 --   * vsync   : HIGH only on lines 248..251 (4-line PAL vsync)
 --   * frame wrap at 312 (V 311 -> 0): decode returns to the line-0 state
 --
@@ -21,9 +21,9 @@
 -- Line tracking: one-time phase-lock at line 0's start. hsync_5c is
 -- active-HIGH, so it sits inactive-LOW at pixel 0 right after reset --
 -- that low level is the lock reference. Then count exactly 448 pixel
--- clocks per line. vsync and the vertical nBorder term are functions of
+-- clocks per line. vsync and the vertical border_n term are functions of
 -- V0..V8, sampled mid-line clear of the line-boundary carry ripple; the
--- horizontal nBorder term is then checked by stepping into the c8=1
+-- horizontal border_n term is then checked by stepping into the c8=1
 -- region of the same line.
 --
 -- Runtime: ~315 lines x 64 us ~= 20 ms of gate-level sim (~30 s wall).
@@ -48,11 +48,12 @@ architecture behavioral of video_sync_tb is
     signal reset     : std_logic := '1';
     signal hsync_5c  : std_logic;
     signal hsync_6c  : std_logic;
-    signal nhblank   : std_logic;
+    signal hblank_n  : std_logic;
     signal vsync     : std_logic;
-    signal nborder   : std_logic;
-    signal n_sync_5c : std_logic;
-    signal n_sync_6c : std_logic;
+    signal border_n  : std_logic;
+    signal border    : std_logic;
+    signal sync_5c_n : std_logic;
+    signal sync_6c_n : std_logic;
     signal sim_done  : boolean   := false;
 
     -- Waveform instrumentation (driven by the track process below).
@@ -61,7 +62,7 @@ architecture behavioral of video_sync_tb is
     --   dbg_vline : which scan line   (0..311) -> tells you when vsync/
     --               border are due
     --   dbg_line  : absolute line since lock (lets you see frame number)
-    --   dbg_exp_* : expected nBorder/vsync for the current line, so you
+    --   dbg_exp_* : expected border_n/vsync for the current line, so you
     --               can line them up against the real outputs
     signal dbg_pixel       : integer range 0 to pix_line - 1 := 0;
     signal dbg_line        : integer                         := 0;
@@ -78,11 +79,12 @@ begin
             tclk_a    => '0',
             hsync_5c  => hsync_5c,
             hsync_6c  => hsync_6c,
-            nhblank   => nhblank,
+            hblank_n  => hblank_n,
             vsync     => vsync,
-            nborder   => nborder,
-            n_sync_5c => n_sync_5c,
-            n_sync_6c => n_sync_6c
+            border_n  => border_n,
+            border    => border,
+            sync_5c_n => sync_5c_n,
+            sync_6c_n => sync_6c_n
         );
 
     -- 7 MHz pixel clock (stops when the checker is done)
@@ -118,7 +120,7 @@ begin
 
         variable line  : integer := 0; -- absolute line count since lock
         variable vline : integer := 0; -- line mod 312 = expected V count
-        variable expb  : std_logic;    -- expected nBorder
+        variable expb  : std_logic;    -- expected border_n
         variable expv  : std_logic;    -- expected vsync
 
         procedure wait_cycles (
@@ -161,11 +163,15 @@ begin
                 expv := '0';
             end if;
 
-            -- (1) vertical check at c8=0 (~pixel 4): nBorder follows the V decode
-            assert nborder = expb
-                report "nBorder (c8=0) mismatch at V=" & integer'image(vline) &
+            -- (1) vertical check at c8=0 (~pixel 4): border_n follows the V decode
+            assert border_n = expb
+                report "border_n (c8=0) mismatch at V=" & integer'image(vline) &
                        " (abs line " & integer'image(line) & "): expected " &
-                       std_logic'image(expb) & ", got " & std_logic'image(nborder)
+                       std_logic'image(expb) & ", got " & std_logic'image(border_n)
+                severity error;
+
+            assert border = not border_n
+                report "border is not the complement of border_n at V=" & integer'image(vline)
                 severity error;
 
             assert vsync = expv
@@ -178,30 +184,34 @@ begin
             if (vline = 0   or vline = 191 or vline = 192 or
                 vline = 247 or vline = 248 or vline = 251 or vline = 252) then
                 report "V=" & integer'image(vline) &
-                       "  nBorder=" & std_logic'image(nborder) &
+                       "  border_n=" & std_logic'image(border_n) &
                        "  vsync=" & std_logic'image(vsync)
                     severity note;
             end if;
 
             -- (2) horizontal check: step into the c8=1 region (~pixel 304,
-            -- right border) and re-read nBorder. With c8=1 the border NOR is
-            -- forced, so nBorder MUST be '0' on EVERY line -- including display
+            -- right border) and re-read border_n. With c8=1 the border NOR is
+            -- forced, so border_n MUST be '0' on EVERY line -- including display
             -- lines 0..191, where the old vertical-only decode wrongly held it
             -- '1'. This is the regression check for the horizontal c8 term.
-            wait_cycles(C8_HI_OFF);                                                -- ~pixel 4 -> ~pixel 304 (c8=1)
+            wait_cycles(C8_HI_OFF);                                                                 -- ~pixel 4 -> ~pixel 304 (c8=1)
 
-            assert nborder = '0'
-                report "nBorder (c8=1 horizontal border) should be '0' at V=" &
+            assert border_n = '0'
+                report "border_n (c8=1 horizontal border) should be '0' at V=" &
                        integer'image(vline) & " (abs line " &
-                       integer'image(line) & "), got " & std_logic'image(nborder)
+                       integer'image(line) & "), got " & std_logic'image(border_n)
                 severity error;
 
-            wait_cycles(PIX_LINE - C8_HI_OFF);                                     -- finish the line, restore phase
+            assert border = '1'
+                report "border (c8=1 horizontal border) should be '1' at V=" & integer'image(vline)
+                severity error;
+
+            wait_cycles(PIX_LINE - C8_HI_OFF);                                                      -- finish the line, restore phase
             line := line + 1;
 
             if (line > last_line) then
                 report "video_sync_tb PASS: H+V border + vsync correct through " &
-                       integer'image(line) & " lines (nBorder: V-edge @192, " &
+                       integer'image(line) & " lines (border_n: V-edge @192, " &
                        "H-border via c8 @>=256; vsync 248..251; frame wrap @312)"
                     severity note;
                 sim_done <= true;
@@ -250,9 +260,9 @@ begin
     end process track;
 
     -- expected vertical-decode regions, derived from the tracked line, so
-    -- they can sit next to nBorder/vsync in the wave window. NOTE
+    -- they can sit next to border_n/vsync in the wave window. NOTE
     -- dbg_exp_nborder is the VERTICAL (c8=0) expectation only; at c8=1
-    -- pixels the real nBorder is '0' regardless (horizontal border).
+    -- pixels the real border_n is '0' regardless (horizontal border).
     dbg_exp_nborder <= '1' when dbg_vline <= 191 else
                        '0';
     dbg_exp_vsync   <= '1' when (dbg_vline >= 248 and dbg_vline <= 251) else

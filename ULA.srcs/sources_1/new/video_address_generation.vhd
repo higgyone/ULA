@@ -8,7 +8,7 @@
 --
 -- ── The three mux phases ─────────────────────────────────────────────
 --   Selected by vid_ras_n (from ras_cas_generation) and c1:
---     rsel_n   = not vid_ras_n     ROW       phase: vid_ras_n = '1' (RAS high)
+--     s_rsel_n   = not vid_ras_n     ROW       phase: vid_ras_n = '1' (RAS high)
 --     cdatasel = NOR(vid_ras_n,c1) DISPLAY   column: RAS low, c1 = '0'
 --     cattrsel = NOR(c1_n,vid_ras_n) ATTRIBUTE column: RAS low, c1 = '1'
 --   The row is presented BEFORE RAS falls (so RAS captures it), then the mux
@@ -42,7 +42,7 @@
 --   tRAH — is expressed as a transparent latch instead of a delay.
 --
 -- ── ae_n (address enable, active-low) ────────────────────────────────
---   ae   = NOR(r_out, border),  r_out = NOR(q_out, c3),  q_out = NOR(c0_n,c1_n,c2_n)
+--   ae   = NOR(s_r_out, border),  s_r_out = NOR(s_q_out, c3),  s_q_out = NOR(c0_n,c1_n,c2_n)
 --   i.e. ae = (c0.c1.c2 + c3) AND NOT border
 --   Opens the tri-state address drivers one pixel before the c3 fetch window
 --   (the c0.c1.c2 term) and holds them through it (the c3 term), while keeping
@@ -102,44 +102,44 @@ end entity video_address_generation;
 
 architecture structural of video_address_generation is
 
-    signal rsel_n     : std_logic;
-    signal cdatasel   : std_logic;
-    signal cdatasel_n : std_logic;
-    signal cattrsel   : std_logic;
-    signal cattrsel_n : std_logic;
+    signal s_rsel_n     : std_logic;
+    signal s_cdatasel   : std_logic;
+    signal s_cdatasel_n : std_logic;
+    signal s_cattrsel   : std_logic;
+    signal s_cattrsel_n : std_logic;
 
-    signal c2_latched : std_logic;
+    signal s_c2_latched : std_logic;
 
-    signal a_out : std_logic;
-    signal b_out : std_logic;
-    signal c_out : std_logic;
-    signal d_out : std_logic;
-    signal e_out : std_logic;
-    signal f_out : std_logic;
-    signal g_out : std_logic;
-    signal h_out : std_logic;
-    signal i_out : std_logic;
-    signal j_out : std_logic;
-    signal k_out : std_logic;
-    signal l_out : std_logic;
-    signal m_out : std_logic;
-    signal n_out : std_logic;
-    signal o_out : std_logic;
-    signal p_out : std_logic;
-    signal q_out : std_logic;
-    signal r_out : std_logic;
+    signal s_a_out : std_logic;
+    signal s_b_out : std_logic;
+    signal s_c_out : std_logic;
+    signal s_d_out : std_logic;
+    signal s_e_out : std_logic;
+    signal s_f_out : std_logic;
+    signal s_g_out : std_logic;
+    signal s_h_out : std_logic;
+    signal s_i_out : std_logic;
+    signal s_j_out : std_logic;
+    signal s_k_out : std_logic;
+    signal s_l_out : std_logic;
+    signal s_m_out : std_logic;
+    signal s_n_out : std_logic;
+    signal s_o_out : std_logic;
+    signal s_p_out : std_logic;
+    signal s_q_out : std_logic;
+    signal s_r_out : std_logic;
 
-    signal ae : std_logic;
+    signal s_ae : std_logic;
 
 begin
 
-    rsel_n <= not(vid_ras_n);
+    s_rsel_n <= not(vid_ras_n);
 
-    cdatasel   <= not(vid_ras_n or c1);
-    cdatasel_n <= not(cdatasel);
+    s_cdatasel   <= not(vid_ras_n or c1);
+    s_cdatasel_n <= not(s_cdatasel);
 
-    cattrsel   <= not(not(c1) or vid_ras_n);
-    cattrsel_n <= not(cattrsel);
+    s_cattrsel   <= not(not(c1) or vid_ras_n);
+    s_cattrsel_n <= not(s_cattrsel);
 
     -- Row address bit a0 -- why c2 stands in for c3, and why it is LATCHED.
     --
@@ -183,45 +183,45 @@ begin
     -- races RAS, and tRAH is satisfied by construction.
     row_a0_latch : entity work.data_latch_1_bit
         port map (
-            e     => rsel_n,
-            d     => c2,
-            q     => c2_latched,
-            q_bar => open
+            e   => s_rsel_n,
+            d   => c2,
+            q   => s_c2_latched,
+            q_n => open
         );
 
-    a_out <= not(c2_latched or rsel_n);
-    b_out <= not(v5 or cdatasel_n);
-    c_out <= not(v5 or cattrsel_n);
-    a0    <= not(a_out or b_out or c_out);
+    s_a_out <= not(s_c2_latched or s_rsel_n);
+    s_b_out <= not(v5 or s_cdatasel_n);
+    s_c_out <= not(v5 or s_cattrsel_n);
+    a0      <= not(s_a_out or s_b_out or s_c_out);
 
-    d_out <= not(c4 or rsel_n);
-    e_out <= not(v0 or cdatasel_n);
-    f_out <= not(v6 or cattrsel_n);
-    a1    <= not(d_out or e_out or f_out);
+    s_d_out <= not(c4 or s_rsel_n);
+    s_e_out <= not(v0 or s_cdatasel_n);
+    s_f_out <= not(v6 or s_cattrsel_n);
+    a1      <= not(s_d_out or s_e_out or s_f_out);
 
-    g_out <= not(c5 or rsel_n);
-    h_out <= not(v1 or cdatasel_n);
-    i_out <= not(v7 or cattrsel_n);
-    a2    <= not(g_out or h_out or i_out);
+    s_g_out <= not(c5 or s_rsel_n);
+    s_h_out <= not(v1 or s_cdatasel_n);
+    s_i_out <= not(v7 or s_cattrsel_n);
+    a2      <= not(s_g_out or s_h_out or s_i_out);
 
-    j_out <= not(c6 or rsel_n);
-    k_out <= not(v2 or cdatasel_n);
-    a3    <= not(j_out or k_out or cattrsel);
+    s_j_out <= not(c6 or s_rsel_n);
+    s_k_out <= not(v2 or s_cdatasel_n);
+    a3      <= not(s_j_out or s_k_out or s_cattrsel);
 
-    l_out <= not(c7 or rsel_n);
-    m_out <= not(v6 or cdatasel_n);
-    a4    <= not(l_out or m_out);
+    s_l_out <= not(c7 or s_rsel_n);
+    s_m_out <= not(v6 or s_cdatasel_n);
+    a4      <= not(s_l_out or s_m_out);
 
-    n_out <= not(v3 or rsel_n);
-    o_out <= not(v7 or cdatasel_n);
-    a5    <= not(n_out or o_out);
+    s_n_out <= not(v3 or s_rsel_n);
+    s_o_out <= not(v7 or s_cdatasel_n);
+    a5      <= not(s_n_out or s_o_out);
 
-    p_out <= not(v4 or rsel_n);
-    a6    <= not(p_out or cdatasel or cattrsel);
+    s_p_out <= not(v4 or s_rsel_n);
+    a6      <= not(s_p_out or s_cdatasel or s_cattrsel);
 
-    q_out <= not(c0_n or c1_n or c2_n);
-    r_out <= not(q_out or c3);
-    ae    <= not(r_out or border);
-    ae_n  <= not(ae);
+    s_q_out <= not(c0_n or c1_n or c2_n);
+    s_r_out <= not(s_q_out or c3);
+    s_ae    <= not(s_r_out or border);
+    ae_n    <= not(s_ae);
 
 end architecture structural;

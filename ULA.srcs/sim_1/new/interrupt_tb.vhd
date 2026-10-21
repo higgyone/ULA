@@ -8,8 +8,8 @@
 -- TB adds NO pull-up, so a released line must read 'H' from the DUT itself.
 --
 -- What it proves:
---   1. DECODE: all 2**7 = 128 combinations of v_sync, v0..v2, c6..c8. /INT is
---      pulled low for exactly ONE: v_sync = '1' with the other six '0'.
+--   1. DECODE: all 2**7 = 128 combinations of vsync, v0..v2, c6..c8. /INT is
+--      pulled low for exactly ONE: vsync = '1' with the other six '0'.
 --   2. WHERE AND HOW LONG: over a full frame of the real 448 x 312 raster,
 --      /INT is pulled low once, at line 248 pixel 0 (+ t_int_lag), for 64
 --      pixels = 32 T-states, and the next pulse is exactly one frame later.
@@ -56,9 +56,9 @@ architecture behavioral of interrupt_tb is
     signal r_c    : std_logic_vector(2 downto 0) := "000";
     signal r_sync : std_logic                    := '0';
 
-    signal v      : std_logic_vector(2 downto 0);
-    signal c      : std_logic_vector(2 downto 0);
-    signal v_sync : std_logic;
+    signal v     : std_logic_vector(2 downto 0);
+    signal c     : std_logic_vector(2 downto 0);
+    signal vsync : std_logic;
 
     signal zclk   : std_logic := '0'; -- the Z80's clock = c0
     signal line_n : integer   := 0;
@@ -102,12 +102,12 @@ architecture behavioral of interrupt_tb is
 
 begin
 
-    v      <= r_v when use_counter else
-              s_v;
-    c      <= r_c when use_counter else
-              s_c;
-    v_sync <= r_sync when use_counter else
-              s_sync;
+    v     <= r_v when use_counter else
+             s_v;
+    c     <= r_c when use_counter else
+             s_c;
+    vsync <= r_sync when use_counter else
+             s_sync;
 
     -- another device on the FPGA copy's /INT line (no pull-up here: the
     -- ULA's own pull-up must supply the 'H')
@@ -118,14 +118,14 @@ begin
             t_int_lag => lag_real
         )
         port map (
-            v0     => v(0),
-            v1     => v(1),
-            v2     => v(2),
-            c6     => c(0),
-            c7     => c(1),
-            c8     => c(2),
-            v_sync => v_sync,
-            int_n  => int_real
+            v0    => v(0),
+            v1    => v(1),
+            v2    => v(2),
+            c6    => c(0),
+            c7    => c(1),
+            c8    => c(2),
+            vsync => vsync,
+            int_n => int_real
         );
 
     dut_fpga : entity work.interrupt(structural)
@@ -133,14 +133,14 @@ begin
             t_int_lag => 0 ns
         )
         port map (
-            v0     => v(0),
-            v1     => v(1),
-            v2     => v(2),
-            c6     => c(0),
-            c7     => c(1),
-            c8     => c(2),
-            v_sync => v_sync,
-            int_n  => int_fpga
+            v0    => v(0),
+            v1    => v(1),
+            v2    => v(2),
+            c6    => c(0),
+            c7    => c(1),
+            c8    => c(2),
+            vsync => vsync,
+            int_n => int_fpga
         );
 
     ------------------------------------------------------------------
@@ -327,7 +327,7 @@ begin
             s_sync <= bits3(n / 64)(0);
             wait for lag_real + settle;
 
-            -- only v_sync = '1' with all others '0' (n = 64) pulls /INT low
+            -- only vsync = '1' with all others '0' (n = 64) pulls /INT low
             if (n = 64) then
                 want := '0';
             else

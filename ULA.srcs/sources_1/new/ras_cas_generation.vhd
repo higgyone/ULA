@@ -63,19 +63,21 @@
 --              ripple-clocked horizontal counter, gives clean clock-aligned edges)
 --   clk_7      pixel clock, used as the HALF-PIXEL PHASE bit (not as a clock)
 --   c0, c1     horizontal counter bits 0/1 = pixel within the 4-pixel DRAM cycle
---   n_vid_c3   display-fetch enable, active-LOW ('0' = inside the fetch window).
+--   vid_c3_n   display-fetch enable, active-LOW ('0' = inside the fetch window).
 --              Holds the video strobes de-asserted in the border/blank and in the
 --              c3-low CPU gap. DEFERRED input.
 --   vid_ras    video RAS, ACTIVE HIGH            -> cpu_memory_access
 --   vid_cas_ac video CAS, bytes A and C, ACTIVE HIGH -> cpu_memory_access
 --   vid_cas_bd video CAS, bytes B and D, ACTIVE HIGH -> cpu_memory_access
---   n_vid_ras  video RAS, active-LOW tap         -> video_address_generation
+--   vid_ras_n  video RAS, active-LOW tap         -> video_address_generation
 --              (row/column phase select)
 --
--- Integration note: c0/c1 come from a ripple counter and clk_7 is derived from
--- clk_14 by division, so when this block is wired to the real counter (rather
--- than TB stimulus) those taps may need resyncing into the clk_14 domain to
--- avoid sampling them mid-transition.
+-- Integration note (decided 2026-10-19): no resync is needed, PROVIDED clk_7 is
+-- made by dividing clk_14 with a flip-flop (clk_div_2), not by the MMCM. Then
+-- clk_7 changes just after each clk_14 edge like any register output, and the
+-- ripple taps c0/c1 settle a few ns later, long before the next clk_14 sample
+-- 71 ns on. The XDC must declare generated clocks so Vivado checks this margin.
+-- If clk_7 ever comes from the MMCM, add a resync stage here (see CLAUDE.md).
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -87,94 +89,94 @@ entity ras_cas_generation is
         clk_7      : in    std_logic; -- pixel clock as half-pixel phase bit
         c0         : in    std_logic; -- horizontal counter bit 0
         c1         : in    std_logic; -- horizontal counter bit 1
-        n_vid_c3   : in    std_logic; -- active-low display-fetch enable; deferred
+        vid_c3_n   : in    std_logic; -- active-low display-fetch enable; deferred
         vid_ras    : out   std_logic; -- video RAS, active high
         vid_cas_ac : out   std_logic; -- video CAS, bytes A and C, active high
         vid_cas_bd : out   std_logic; -- video CAS, bytes B and D, active high
-        n_vid_ras  : out   std_logic  -- video RAS tap, active low
+        vid_ras_n  : out   std_logic  -- video RAS tap, active low
     );
 end entity ras_cas_generation;
 
 architecture synchronous of ras_cas_generation is
 
     -- position within the 4-pixel DRAM cycle: {c1, c0, half-pixel phase} = 0..7
-    signal tick : std_logic_vector(2 downto 0);
+    signal s_tick : std_logic_vector(2 downto 0);
 
     -- registered video strobes (active high)
-    signal ras_r    : std_logic := '0';
-    signal cas_ac_r : std_logic := '0';
-    signal cas_bd_r : std_logic := '0';
+    signal s_ras_r    : std_logic := '0';
+    signal s_cas_ac_r : std_logic := '0';
+    signal s_cas_bd_r : std_logic := '0';
 
 begin
 
-    tick <= c1 & c0 & clk_7;
+    s_tick <= c1 & c0 & clk_7;
 
     ------------------------------------------------------------------
     -- Decode the 8-tick waveform (see table in header) and REGISTER it
     -- on clk_14: this cleans up the ripple counter and pins every
     -- strobe edge to a clock edge. Held de-asserted ('0') outside the
-    -- display fetch window (n_vid_c3 = '1'), which covers both the
+    -- display fetch window (vid_c3_n = '1'), which covers both the
     -- border/blank and the c3-low CPU gap.
     ------------------------------------------------------------------
     strobe_reg : process (clk_14) is
     begin
 
         if rising_edge(clk_14) then
-            if (n_vid_c3 = '0') then          -- inside the display fetch window
+            if (vid_c3_n = '0') then            -- inside the display fetch window
 
-                case tick is
+                case s_tick is
 
                     when "000" =>
 
-                        ras_r    <= '1';      -- RAS, cycle starts
-                        cas_ac_r <= '0';
-                        cas_bd_r <= '0';
+                        s_ras_r    <= '1';      -- RAS, cycle starts
+                        s_cas_ac_r <= '0';
+                        s_cas_bd_r <= '0';
 
                     when "001" | "010" =>
 
-                        ras_r    <= '1';      -- first CAS: byte A / C
-                        cas_ac_r <= '1';
-                        cas_bd_r <= '0';
+                        s_ras_r    <= '1';      -- first CAS: byte A / C
+                        s_cas_ac_r <= '1';
+                        s_cas_bd_r <= '0';
 
                     when "011" =>
 
-                        ras_r    <= '1';      -- CAS precharge gap
-                        cas_ac_r <= '0';
-                        cas_bd_r <= '0';
+                        s_ras_r    <= '1';      -- CAS precharge gap
+                        s_cas_ac_r <= '0';
+                        s_cas_bd_r <= '0';
 
                     when "100" | "101" =>
 
-                        ras_r    <= '1';      -- second CAS: byte B / D
-                        cas_ac_r <= '0';
-                        cas_bd_r <= '1';
+                        s_ras_r    <= '1';      -- second CAS: byte B / D
+                        s_cas_ac_r <= '0';
+                        s_cas_bd_r <= '1';
 
                     when "110" =>
 
-                        ras_r    <= '0';      -- RAS released, CAS still on
-                        cas_ac_r <= '0';
-                        cas_bd_r <= '1';
+                        s_ras_r    <= '0';      -- RAS released, CAS still on
+                        s_cas_ac_r <= '0';
+                        s_cas_bd_r <= '1';
 
                     when others =>
 
-                        ras_r    <= '0';      -- tick 7: cycle done
-                        cas_ac_r <= '0';
-                        cas_bd_r <= '0';
+                        s_ras_r    <= '0';      -- tick 7: cycle done
+                        s_cas_ac_r <= '0';
+                        s_cas_bd_r <= '0';
 
                 end case;
 
             else
-                ras_r    <= '0';              -- outside the fetch window: idle
-                cas_ac_r <= '0';
-                cas_bd_r <= '0';
+                s_ras_r    <= '0';              -- outside the fetch window: idle
+                s_cas_ac_r <= '0';
+                s_cas_bd_r <= '0';
             end if;
         end if;
 
     end process strobe_reg;
 
-    vid_ras    <= ras_r;
-    vid_cas_ac <= cas_ac_r;
-    vid_cas_bd <= cas_bd_r;
-    n_vid_ras  <= not ras_r;
+    vid_ras    <= s_ras_r;
+    vid_cas_ac <= s_cas_ac_r;
+    vid_cas_bd <= s_cas_bd_r;
+    vid_ras_n  <= not s_ras_r;
 
 end architecture synchronous;
 
@@ -204,10 +206,10 @@ end architecture synchronous;
 --         n_c0      : in  std_logic;
 --         c1        : in  std_logic;
 --         n_c1      : in  std_logic;
---         n_vid_c3  : in  std_logic;
+--         vid_c3_n  : in  std_logic;
 --         cpu_ras   : in  std_logic;
 --         n_cas     : out std_logic;
---         n_vid_ras : out std_logic;
+--         vid_ras_n : out std_logic;
 --         n_ras     : out std_logic
 --     );
 -- end entity ras_cas_generation;
@@ -232,14 +234,14 @@ end architecture synchronous;
 --     n_vid_ras_pulse <= not(n_c0_delay or n_c0 or n_c1);
 --     n_vid_ras_delay <= not(not(n_c_out));                       -- (chop path)
 --
---     a_out    <= not(n_vid_cas_pulse or n_vid_c3 or n_c1_delay);
---     b_out    <= not(n_vid_cas_pulse or c1 or n_vid_c3 or n_vid_ras_delay);
---     c_out    <= not(n_vid_c3 or n_vid_ras_pulse);
+--     a_out    <= not(n_vid_cas_pulse or vid_c3_n or n_c1_delay);
+--     b_out    <= not(n_vid_cas_pulse or c1 or vid_c3_n or n_vid_ras_delay);
+--     c_out    <= not(vid_c3_n or n_vid_ras_pulse);
 --     d_out    <= not(cpu_cas or a_out or b_out);
 --     n_c_out  <= not(c_out);
 --
 --     n_ras     <= not(c_out or cpu_ras);
 --     n_cas     <= not(not(d_out));                               -- 2-inv "58 ns" delay
---     n_vid_ras <= n_c_out;
+--     vid_ras_n <= n_c_out;
 -- end architecture structural;
 ----------------------------------------------------------------------------------

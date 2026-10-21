@@ -6,12 +6,12 @@
 --      period of 32 frames. At 50 Hz PAL that is 0.64 s = 1.5625 Hz, the
 --      Spectrum's FLASH rate (INK/PAPER swap every 16 frames).
 --   2. Edge selection — the chain advances on the FRAME WRAP. clock_in is
---      NOR(v8_n, tclkb_n) = v8 with tclkb_n low, and d_ff_nor triggers on the
+--      NOR(v8_n, tclk_b) = v8 with tclk_b low, and d_ff_nor triggers on the
 --      falling edge, so a frame tick is a RISING edge of v8_n (v8 falling).
 --      Driving frames one at a time and counting toggles verifies exactly one
 --      count per frame -- a chain clocked on the wrong edge, or on both, would
 --      give the wrong toggle spacing.
---   3. tclkb_n gating — holding tclkb_n HIGH forces clock_in low regardless of
+--   3. tclk_b gating — holding tclk_b HIGH forces clock_in low regardless of
 --      v8_n, so the counter must freeze. This is what makes tying it to '0' the
 --      correct normal-operation setting.
 --   4. Determinism from reset — d_ff_nor's init values mean the chain starts at
@@ -40,7 +40,7 @@ architecture behavioral of flash_clock_tb is
     constant frames_per_toggle : integer := 16;
 
     signal v8_n      : std_logic := '1';
-    signal tclkb_n   : std_logic := '0'; -- normal operation: tied low
+    signal tclk_b    : std_logic := '0'; -- normal operation: tied low
     signal flash_clk : std_logic;
 
 begin
@@ -48,7 +48,7 @@ begin
     dut : entity work.flash_clock(structural)
         port map (
             v8_n      => v8_n,
-            tclkb_n   => tclkb_n,
+            tclk_b    => tclk_b,
             flash_clk => flash_clk
         );
 
@@ -144,10 +144,10 @@ begin
         checks := checks + 1;
 
         --------------------------------------------------------------
-        -- 3) tclkb_n HIGH forces clock_in low -> the counter freezes
+        -- 3) tclk_b HIGH forces clock_in low -> the counter freezes
         --------------------------------------------------------------
         frozen_at := flash_clk;
-        tclkb_n   <= '1';
+        tclk_b    <= '1';
         wait for settle;
 
         for f in 1 to 2 * frames_per_toggle + 4 loop -- well past a normal toggle
@@ -155,7 +155,7 @@ begin
             frame;
 
             assert flash_clk = frozen_at
-                report "FAIL tclkb_n='1' should freeze the counter, but flash_clk moved at frame "
+                report "FAIL tclk_b='1' should freeze the counter, but flash_clk moved at frame "
                        & integer'image(f)
                 severity failure;
 
@@ -164,12 +164,12 @@ begin
         checks := checks + 1;
 
         --------------------------------------------------------------
-        -- 4) release tclkb_n: counting resumes
+        -- 4) release tclk_b: counting resumes
         --------------------------------------------------------------
-        tclkb_n <= '0';
+        tclk_b <= '0';
         wait for settle;
-        prev    := flash_clk;
-        since   := 0;
+        prev   := flash_clk;
+        since  := 0;
 
         loop
 
@@ -178,7 +178,7 @@ begin
             exit when flash_clk /= prev;
 
             assert since <= 64
-                report "FAIL counter did not resume after tclkb_n released"
+                report "FAIL counter did not resume after tclk_b released"
                 severity failure;
 
         end loop;
