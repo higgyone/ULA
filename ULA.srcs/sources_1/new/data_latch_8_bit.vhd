@@ -46,7 +46,7 @@ end entity data_latch_8_bit;
 
 architecture structural of data_latch_8_bit is
 
-    -- per-bit taps from each latch cell: q_i (true) and q_bar_i (active-low)
+    -- per-bit taps from each latch cell: s_q_i (true) and s_q_i_n (active-low)
     signal s_q_0   : std_logic;
     signal s_q_0_n : std_logic;
     signal s_q_1   : std_logic;

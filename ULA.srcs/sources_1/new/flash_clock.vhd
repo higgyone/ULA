@@ -37,7 +37,7 @@
 --
 -- ── T flip-flop wiring ───────────────────────────────────────────────
 --   Each instance maps the SAME signal to both its q_n output and its d
---   input (d => rippleN_q_bar, q_n => rippleN_q_bar). That is the
+--   input (d => s_rippleN_q_n, q_n => s_rippleN_q_n). That is the
 --   standard toggle connection: d always presents the complement of q, so
 --   q inverts on every active clock edge. It simulates cleanly because
 --   d_ff_nor carries `after TG` gate delays and init values, so the
