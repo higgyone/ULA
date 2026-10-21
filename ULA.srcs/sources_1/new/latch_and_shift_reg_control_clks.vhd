@@ -45,7 +45,9 @@
 --   c0/c0_n, c1/c1_n, c2_n, c3_n
 --               horizontal counter taps (true and complement as needed)
 --   border_n     active-low border flag from video_sync
---   vid_c3_n    active-low display-qualified c3. DEFERRED input.
+--   vid_c3_n    OUT: the display fetch window, active low = border OR c3_n
+--               ('0' while c3 is high inside the display). Generated here,
+--               where the book draws it; ras_cas_generation consumes it.
 --   clk_7_pixel pixel clock = not(clk_7_n)
 --   vid_cas_pulse         video CAS pulse (also used internally)
 --   pixel_data_latch_n    -> integration cell (active-low)
@@ -54,11 +56,16 @@
 --   sload                -> integration cell (active-high)
 --   attr_output_latch_n   -> integration cell (active-low: '0' transparent)
 --
--- NOTE: the display leg qualifies itself with a locally decoded vid_c3
--- (s_a_out = border_n AND c3) while the attribute leg uses the vid_c3_n input
--- port. The two are equivalent when the input is driven consistently; kept as
--- the book draws it. sload (pixel 4) leads attr_output_latch_n (pixel 5) by
--- one pixel rather than firing together.
+-- ── vid_c3_n: the display fetch window ───────────────────────────────
+--   vid_c3_n = border OR c3_n
+--   '0' only while c3 is high (the second half of each 16-pixel group, when
+--   the four bytes A/B/C/D are fetched) AND the beam is inside the display.
+--   Both strobe legs (display byte and attribute byte) are qualified by it,
+--   and it is exported so ras_cas_generation makes the video RAS/CAS in the
+--   same window: one gate, one source, two blocks.
+--
+-- NOTE: sload (pixel 4) leads attr_output_latch_n (pixel 5) by one pixel
+-- rather than firing together.
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -74,7 +81,7 @@ entity latch_and_shift_reg_control_clks is
         c1_n                : in    std_logic; -- horizontal counter bit 1, complement
         c2_n                : in    std_logic; -- horizontal counter bit 2, complement
         border_n            : in    std_logic; -- border region flag from video_sync (active-low)
-        vid_c3_n            : in    std_logic; -- active-low display-qualified c3; deferred input
+        vid_c3_n            : out   std_logic; -- display fetch window, active low (border OR c3_n)
         clk_7_pixel         : out   std_logic; -- pixel clock = not(clk_7_n)
         vid_cas_pulse       : out   std_logic; -- video CAS pulse
         pixel_data_latch_n  : out   std_logic; -- -> integration cell pixel_data_latch_n (active-low)
@@ -90,8 +97,6 @@ architecture structural of latch_and_shift_reg_control_clks is
     signal s_pix_clk       : std_logic;
     signal s_vid_cas_pulse : std_logic;
     signal s_border        : std_logic;
-    signal s_a_out         : std_logic;
-    signal s_a_out_n       : std_logic;
     signal s_b_out         : std_logic;
     signal s_c_out         : std_logic;
     signal s_c_out_n       : std_logic;
@@ -99,6 +104,7 @@ architecture structural of latch_and_shift_reg_control_clks is
     signal s_vid_en_n      : std_logic;
     signal s_sload         : std_logic;
     signal s_a_latch       : std_logic;
+    signal s_vid_c3_n      : std_logic;
 
 begin
 
@@ -126,9 +132,10 @@ begin
     s_vid_cas_pulse <= not(clk_7_n or c0_n);
     vid_cas_pulse   <= s_vid_cas_pulse;
 
-    s_border  <= not(border_n);
-    s_a_out   <= not(s_border or c3_n);
-    s_a_out_n <= not(s_a_out);
+    s_border <= not(border_n);
+    -- the display fetch window (active low): c3 high inside the display
+    s_vid_c3_n <= s_border or c3_n;
+    vid_c3_n   <= s_vid_c3_n;
 
     -- DISPLAY (bitmap) byte capture -- fires at c1='0', c0='1' (pixels 1 and 5
     -- of the character cell), i.e. the book's vid_cas_ac / "first and third byte".
@@ -139,10 +146,10 @@ begin
     -- condition instead of a propagation delay, which is what actually works on
     -- an FPGA. The book's 3-inverter delay chain on the output was an odd count,
     -- i.e. just an inversion, so a single not() replaces it exactly.
-    s_b_out            <= not(s_vid_cas_pulse or s_a_out_n or c0_n or c1);
+    s_b_out            <= not(s_vid_cas_pulse or s_vid_c3_n or c0_n or c1);
     pixel_data_latch_n <= not(s_b_out);
 
-    s_c_out           <= not(s_vid_cas_pulse or vid_c3_n or c0_n or c1_n);
+    s_c_out           <= not(s_vid_cas_pulse or s_vid_c3_n or c0_n or c1_n);
     s_c_out_n         <= not(s_c_out);
     attr_data_latch_n <= s_c_out_n;
 
