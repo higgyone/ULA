@@ -63,6 +63,15 @@
 -- Also checked throughout: the Z80 clock never has a runt pulse (every high or
 -- low phase lasts at least most of a pixel).
 --
+-- ── Pin 32 and the PCB clock stage ───────────────────────────────────
+--   Pin 32 is an inverting OPEN COLLECTOR: '0' while cpuclk = '1', released
+--   ('Z') while cpuclk = '0'. The TB adds the PCB around it:
+--     - a 1k pull-up on pin 32, modelled as 'H';
+--     - the common-emitter NPN, on while pin 32 is high, whose collector is
+--       the Z80 CLK with a 180 ohm pull-up: Z80 CLK = '0' / 'H'.
+--   pin_check proves the pin is pulled LOW only while cpuclk = '1' and is
+--   otherwise RELEASED (reads the pull-up's 'H', never a driven '1').
+--
 -- Any mismatch is fatal; a clean run prints "ALL TESTS PASSED".
 ----------------------------------------------------------------------------------
 
@@ -170,23 +179,40 @@ begin
             ioreqtw3_n => ioreqtw3_n
         );
 
-    -- The PCB transistor inverts pin 32 (phicpu_n) back for the Z80, so by
-    -- default the Z80 runs on cpuclk. TRUE leaves the pin uninverted (one net
-    -- inversion), kept to show what would break.
-    zclk <= phicpu_n when g_z80_inverted else
-            not phicpu_n;
+    -- the PCB's 1k pull-up on pin 32 (the ULA's open collector only pulls low)
+    phicpu_n <= 'H';
 
-    -- the pin is the complement of the internal clock, one tg later
+    -- The PCB transistor inverts pin 32 (phicpu_n) back for the Z80, so by
+    -- default the Z80 runs on cpuclk: the NPN is on (Z80 CLK low) while the
+    -- pin is high, and off (Z80 CLK pulled up by 180 ohm, 'H') while it is
+    -- low. TRUE leaves the pin uninverted (one net inversion), kept to show
+    -- what would break. Until the pin has a real level (start-up) Z80 CLK
+    -- stays 'U', so runt_watch does not count a spurious edge at t = 0.
+    zclk <= phicpu_n when g_z80_inverted else
+            '0' when to_x01(phicpu_n) = '1' else
+            'H' when to_x01(phicpu_n) = '0' else
+            'U';
+
+    -- the pin follows the complement of the internal clock, one tg later:
+    -- pulled LOW while cpuclk = '1', RELEASED to the pull-up while cpuclk = '0'
     pin_check : process is
     begin
 
         wait on cpuclk;
         wait for 2 ns;
 
-        assert phicpu_n = not cpuclk
-            report "FAIL pin 32: phicpu_n is not the complement of cpuclk at "
-                   & time'image(now)
-            severity failure;
+        if (cpuclk = '1') then
+            assert phicpu_n = '0'
+                report "FAIL pin 32: should be pulled low while cpuclk = '1', got "
+                       & std_logic'image(phicpu_n) & " at " & time'image(now)
+                severity failure;
+        else
+            assert phicpu_n = 'H'
+                report "FAIL pin 32: should be released to the 1k pull-up ('H') while "
+                       & "cpuclk = '0', got " & std_logic'image(phicpu_n)
+                       & " at " & time'image(now)
+                severity failure;
+        end if;
 
     end process pin_check;
 

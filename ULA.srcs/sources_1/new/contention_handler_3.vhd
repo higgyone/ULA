@@ -53,10 +53,24 @@
 --   '1' during a hold. It does not leave the chip directly. The ULA's output
 --   stage on pin 32 is a PERIPHERAL TRANSISTOR (part of the chip's pad
 --   circuitry, not the gate array) that inverts it, so the pin carries
---   phicpu_n. That transistor is modelled here as the final NOT, so this block
---   presents the real pin. The PCB's own transistor inverts again before the
---   Z80, so the Z80 runs on cpuclk itself (= c0) and is held HIGH with it.
---   The PCB transistor belongs outside the ULA (testbench / top level).
+--   phicpu_n. The PCB's own transistor inverts again before the Z80, so the
+--   Z80 runs on cpuclk itself (= c0) and is held HIGH with it. The PCB
+--   transistor belongs outside the ULA (testbench / top level).
+--
+--   Pin 32's pad is an INVERTING OPEN COLLECTOR with NO on-chip pull-up: the
+--   transistor is on, pulling the pin to '0', while cpuclk = '1', and lets go
+--   ('Z') while cpuclk = '0'. The high level comes from a 1k pull-up to 5 V on
+--   the PCB. Modelled as phicpu_n = '0' / 'Z', so this block presents the real
+--   pin. On the PCB:
+--
+--     pin 32 ─┬─ 1k ── 5 V
+--             └─▶ base, NPN common emitter: collector = Z80 CLK, 180 ohm to 5 V
+--
+--     cpuclk = '1' -> pin 32 low  -> NPN off -> Z80 CLK high (180 ohm)
+--     cpuclk = '0' -> pin 32 high -> NPN on  -> Z80 CLK low
+--
+--   The NPN and its strong 180 ohm pull-up give the Z80 the near-5 V clock
+--   swing its CLK input needs, which TTL levels do not reach.
 --
 --   This phasing is what makes the rest of the circuit work:
 --     - checking (s_e_out, s_f_out) is enabled only while s_g_out = '0', i.e. while
@@ -82,8 +96,9 @@
 --   border      ACTIVE HIGH: '1' in the border (video_sync's border output,
 --               the complement of border_n)
 --   cpuclk      internal CPU clock: c0 when running, held '1' during a hold
---   phicpu_n    pin 32: cpuclk through the inverting peripheral transistor.
---               The PCB transistor inverts it back for the Z80.
+--   phicpu_n    pin 32: cpuclk through the inverting peripheral transistor,
+--               open collector: '0' while cpuclk = '1', else 'Z' (1k PCB
+--               pull-up). The PCB transistor inverts it back for the Z80.
 --   ioreqtw3_n  ULA-port I/O access in T2 / TW / T3, active low (no consumer
 --               yet)
 ----------------------------------------------------------------------------------
@@ -160,7 +175,8 @@ begin
     cpuclk     <= s_cpuclk;
 
     -- pin 32: the ULA's inverting peripheral (output) transistor
-    phicpu_n <= not(s_cpuclk) after tg;
+    phicpu_n <= '0' after tg when s_cpuclk = '1' else
+                'Z' after tg;
 
     -- ioreqtw3: ULA-port I/O access under way (T2 onwards)
     latch_0 : entity work.data_latch_1_bit
