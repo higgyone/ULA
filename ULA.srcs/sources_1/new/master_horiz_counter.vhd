@@ -10,11 +10,16 @@
 --            bits. This is the ULA's "gated clock" style rather than
 --            a pure ripple chain, and keeps the +1 timing tight.
 --   C6..C8 — bit3_counter (modulo-7, three d_ff_nor cells) clocked
---            by clk_hc6 (= C5 with the always-zero tclk_a).
+--            by clk_hc6 = NOR(tclk_a, c5_n): C5 in normal operation
+--            (tclk_a = '0'); in wafer test mode A, test_modes drives tclk_a
+--            from rd_n so C6..C8 can be clocked directly (see test_modes).
 --
 -- Outputs:
 --   c0..c8  — counter taps, used by horiz_timing to decode
---             hsync/blank windows.
+--             hsync/blank windows, and by the video and CPU blocks.
+--   c0_n..c8_n — their complements, each from its flip-flop (clk_div_2
+--             clk_out_n for C0..C5, bit3_counter output_n for C6..C8),
+--             for the blocks' NOR-with-inverted-input gates.
 --   clk_hc6 — clock for the C6..C8 stage, exposed for external use
 --             (e.g. driving Vert_Line_counter).
 --   hc_rst  — single-cycle pulse on counter wrap (line-end trigger
@@ -47,20 +52,29 @@ library ieee;
 
 entity master_horiz_counter is
     port (
-        clk_7_n : in    std_logic;        -- master clock
+        clk_7_n : in    std_logic; -- master clock
         reset   : in    std_logic;
-        tclk_a  : in    std_logic := '0'; -- always assumed to be '0'
+        tclk_a  : in    std_logic; -- test clock A from test_modes; '0' in normal operation
         c0      : out   std_logic;
+        c0_n    : out   std_logic;
         c1      : out   std_logic;
+        c1_n    : out   std_logic;
         c2      : out   std_logic;
+        c2_n    : out   std_logic;
         c3      : out   std_logic;
+        c3_n    : out   std_logic;
         c4      : out   std_logic;
+        c4_n    : out   std_logic;
         c5      : out   std_logic;
+        c5_n    : out   std_logic;
         c6      : out   std_logic;
+        c6_n    : out   std_logic;
         c7      : out   std_logic;
+        c7_n    : out   std_logic;
         c8      : out   std_logic;
-        clk_hc6 : out   std_logic;        -- clock for 3 bit counter, same as c5
-        hc_rst  : out   std_logic         -- horizontal counter reset
+        c8_n    : out   std_logic;
+        clk_hc6 : out   std_logic; -- clock for 3 bit counter, same as c5
+        hc_rst  : out   std_logic  -- horizontal counter reset
     );
 end entity master_horiz_counter;
 
@@ -79,8 +93,9 @@ architecture behavioral of master_horiz_counter is
     signal s_clk_c4 : std_logic;
     signal s_clk_c5 : std_logic;
 
-    signal s_clk8_6 : std_logic_vector(2 downto 0);
-    signal s_clkhc6 : std_logic;
+    signal s_clk8_6   : std_logic_vector(2 downto 0);
+    signal s_clk8_6_n : std_logic_vector(2 downto 0);
+    signal s_clkhc6   : std_logic;
 
 begin
 
@@ -94,8 +109,9 @@ begin
     s_clk_c4 <= not s_c3_n;
     s_clk_c5 <= s_c4_n nor s_c3_n;
 
-    -- clk_hc6 drives the C6..C8 bit3_counter. tclk_a is always '0'
-    -- in this design, so the NOR reduces to NOT s_c5_n = c5.
+    -- clk_hc6 drives the C6..C8 bit3_counter. In normal operation
+    -- tclk_a = '0', so the NOR reduces to NOT s_c5_n = c5. In test mode A
+    -- tclk_a (= NOT rd_n) takes over while c5 = '1' (s_c5_n = '0').
     s_clkhc6 <= tclk_a nor s_c5_n;
     clk_hc6  <= s_clkhc6;
 
@@ -103,6 +119,19 @@ begin
     c6 <= s_clk8_6(0);
     c7 <= s_clk8_6(1);
     c8 <= s_clk8_6(2);
+
+    -- complement taps for the consumers' NOR gates, each straight from its
+    -- flip-flop: C0..C5 from the clk_div_2 cells' clk_out_n, C6..C8 from
+    -- bit3_counter's output_n (each FF's q_n). No extra inverters.
+    c0_n <= s_c0_n;
+    c1_n <= s_c1_n;
+    c2_n <= s_c2_n;
+    c3_n <= s_c3_n;
+    c4_n <= s_c4_n;
+    c5_n <= s_c5_n;
+    c6_n <= s_clk8_6_n(0);
+    c7_n <= s_clk8_6_n(1);
+    c8_n <= s_clk8_6_n(2);
 
     -- ******************************************************************
     --  Counter cell instances (C0..C5 = clk_div_2; C6..C8 = bit3_counter)
@@ -165,6 +194,7 @@ begin
             clk      => s_clkhc6,
             reset    => reset,
             output   => s_clk8_6,
+            output_n => s_clk8_6_n,
             overflow => hc_rst
         );
 

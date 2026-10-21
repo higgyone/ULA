@@ -33,15 +33,20 @@
 --
 -- A behavioural reference architecture is preserved below as
 -- `architecture Reference` — selectable at instantiation by name.
--- The testbench instantiates BOTH architectures in parallel as a
--- design-oracle pattern: same clk/reset into both, assert their
--- outputs match cycle-by-cycle. Any divergence is a bug in the
--- structural next-state logic or wrap detection.
+-- bit3_counter_tb checks ONE architecture at a time (edit its uut line)
+-- against a golden modulo-7 count computed inside the testbench. Two
+-- instances side by side cannot be used: xsim 2025.2 transposes their
+-- clk/reset ports (see CLAUDE.md "bit3_counter verification").
 --
 -- State sequence:
 --
 --   output  : 000 → 001 → 010 → 011 → 100 → 101 → 110 → 000 → ...
 --   overflow:  0     0     0     0     0     0     1     0
+--
+-- output_n is the complement of output (C8..C6 inverted), for the
+-- consumers that need c6_n..c8_n. In Structural and T_Structure it is
+-- taken from each flip-flop's own q_n, so no extra inverters, as in
+-- Vert_Line_counter's v*_n; Reference simply inverts its count.
 ----------------------------------------------------------------------
 
 library ieee;
@@ -52,7 +57,8 @@ entity bit3_counter is
     port (
         clk      : in    std_logic;
         reset    : in    std_logic;
-        output   : out   std_logic_vector(2 downto 0);
+        output   : out   std_logic_vector(2 downto 0); -- C8..C6
+        output_n : out   std_logic_vector(2 downto 0); -- complement of output (each FF's q_n)
         overflow : out   std_logic
     );
 end entity bit3_counter;
@@ -60,6 +66,7 @@ end entity bit3_counter;
 architecture structural of bit3_counter is
 
     signal s_q    : std_logic_vector(2 downto 0); -- current state
+    signal s_q_n  : std_logic_vector(2 downto 0); -- complement of the state (each FF's q_n)
     signal s_d    : std_logic_vector(2 downto 0); -- next state into FFs
     signal s_wrap : std_logic;                    -- 1 when at "110"
 
@@ -79,7 +86,7 @@ begin
             clk => clk,
             d   => s_d(0),
             q   => s_q(0),
-            q_n => open
+            q_n => s_q_n(0)
         );
 
     ff1 : entity work.d_ff_nor
@@ -87,7 +94,7 @@ begin
             clk => clk,
             d   => s_d(1),
             q   => s_q(1),
-            q_n => open
+            q_n => s_q_n(1)
         );
 
     ff2 : entity work.d_ff_nor
@@ -95,10 +102,11 @@ begin
             clk => clk,
             d   => s_d(2),
             q   => s_q(2),
-            q_n => open
+            q_n => s_q_n(2)
         );
 
     output   <= s_q;
+    output_n <= s_q_n;
     overflow <= s_wrap;
 
 end architecture structural;
@@ -107,6 +115,7 @@ architecture t_structure of bit3_counter is
 
     signal s_carry_count_6 : std_logic;
     signal s_count_6_q_out : std_logic;
+    signal s_count_6_q_n   : std_logic; -- C6 complement, for output_n
     signal s_carry_count_7 : std_logic;
     signal s_count_7_q_out : std_logic;
     signal s_count_7_q_n   : std_logic;
@@ -122,7 +131,7 @@ begin
             clk   => clk,
             reset => s_ff_rst,
             q     => s_count_6_q_out,
-            q_n   => open,
+            q_n   => s_count_6_q_n,
             carry => s_carry_count_6
         );
 
@@ -149,6 +158,7 @@ begin
     s_hcrst  <= not (s_count_7_q_n or s_count_8_q_n);
     s_ff_rst <= reset or s_hcrst;
     output   <= s_count_8_q_out & s_count_7_q_out & s_count_6_q_out;
+    output_n <= s_count_8_q_n & s_count_7_q_n & s_count_6_q_n;
     overflow <= s_hcrst;
 
 end architecture t_structure;
@@ -185,6 +195,7 @@ begin
     end process;
 
     output   <= std_logic_vector(s_output);
+    output_n <= not(std_logic_vector(s_output));
     overflow <= '1' when s_output = "110" else
                 '0';
 

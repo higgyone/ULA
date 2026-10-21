@@ -26,12 +26,20 @@
 -- horizontal border_n term is then checked by stepping into the c8=1
 -- region of the same line.
 --
+-- Counter taps (exported for the rest of the ULA): a separate taps
+-- process checks, on every falling clk_7_n edge after reset:
+--   * c0_n..c8_n = NOT c0..c8 and v0_n..v8_n = NOT v0..v8
+--   * c8..c0 steps by exactly 1 per pixel and wraps 447 -> 0
+--   * v8..v0 (read mid-line) steps by exactly 1 per line and wraps 311 -> 0
+-- so a crossed or missing tap shows up, not just a bad complement.
+--
 -- Runtime: ~315 lines x 64 us ~= 20 ms of gate-level sim (~30 s wall).
 -- PASS = runs to the "video_sync_tb PASS" note with no assertion errors.
 ----------------------------------------------------------------------
 
 library ieee;
     use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
 
 entity video_sync_tb is
 end entity video_sync_tb;
@@ -55,6 +63,12 @@ architecture behavioral of video_sync_tb is
     signal sync_5c_n : std_logic;
     signal sync_6c_n : std_logic;
     signal sim_done  : boolean   := false;
+
+    -- counter taps out of video_sync, bit n = cn / vn
+    signal cv   : std_logic_vector(8 downto 0);
+    signal cv_n : std_logic_vector(8 downto 0);
+    signal vv   : std_logic_vector(8 downto 0);
+    signal vv_n : std_logic_vector(8 downto 0);
 
     -- Waveform instrumentation (driven by the track process below).
     -- Add these to the wave window to read position and expected pulses:
@@ -84,7 +98,43 @@ begin
             border_n  => border_n,
             border    => border,
             sync_5c_n => sync_5c_n,
-            sync_6c_n => sync_6c_n
+            sync_6c_n => sync_6c_n,
+            c0        => cv(0),
+            c0_n      => cv_n(0),
+            c1        => cv(1),
+            c1_n      => cv_n(1),
+            c2        => cv(2),
+            c2_n      => cv_n(2),
+            c3        => cv(3),
+            c3_n      => cv_n(3),
+            c4        => cv(4),
+            c4_n      => cv_n(4),
+            c5        => cv(5),
+            c5_n      => cv_n(5),
+            c6        => cv(6),
+            c6_n      => cv_n(6),
+            c7        => cv(7),
+            c7_n      => cv_n(7),
+            c8        => cv(8),
+            c8_n      => cv_n(8),
+            v0        => vv(0),
+            v0_n      => vv_n(0),
+            v1        => vv(1),
+            v1_n      => vv_n(1),
+            v2        => vv(2),
+            v2_n      => vv_n(2),
+            v3        => vv(3),
+            v3_n      => vv_n(3),
+            v4        => vv(4),
+            v4_n      => vv_n(4),
+            v5        => vv(5),
+            v5_n      => vv_n(5),
+            v6        => vv(6),
+            v6_n      => vv_n(6),
+            v7        => vv(7),
+            v7_n      => vv_n(7),
+            v8        => vv(8),
+            v8_n      => vv_n(8)
         );
 
     -- 7 MHz pixel clock (stops when the checker is done)
@@ -114,6 +164,82 @@ begin
         wait;
 
     end process rstgen;
+
+    -- Counter taps: complements, C steps per pixel, V steps per line -------
+    taps : process (clk_7_n, sim_done) is
+
+        variable c_now    : integer;
+        variable c_prev   : integer := -1;
+        variable v_now    : integer;
+        variable v_prev   : integer := -1;
+        variable n_checks : integer := 0;
+        variable valid    : boolean := false; -- taps seen fully defined once
+
+    begin
+
+        if (falling_edge(clk_7_n) and reset = '0') then
+            if (is_x(cv) or is_x(cv_n) or is_x(vv) or is_x(vv_n)) then
+                -- allowed only while the counters come out of reset; once
+                -- they have been valid, an 'X' / 'U' tap is a wiring fault
+                assert not valid
+                    report "FAIL taps: undefined tap after start-up (c = " & to_string(cv)
+                           & ", c_n = " & to_string(cv_n) & ", v = " & to_string(vv)
+                           & ", v_n = " & to_string(vv_n) & ")"
+                    severity failure;
+            else
+                valid := true;
+
+                assert cv_n = not cv
+                    report "FAIL taps: c8_n..c0_n /= NOT c8..c0 (c = " & to_string(cv)
+                           & ", c_n = " & to_string(cv_n) & ")"
+                    severity failure;
+                assert vv_n = not vv
+                    report "FAIL taps: v8_n..v0_n /= NOT v8..v0 (v = " & to_string(vv)
+                           & ", v_n = " & to_string(vv_n) & ")"
+                    severity failure;
+
+                c_now := to_integer(unsigned(cv));
+
+                if (c_prev >= 0) then
+                    assert c_now = (c_prev + 1) mod pix_line
+                        report "FAIL taps: c8..c0 went " & integer'image(c_prev) & " -> "
+                               & integer'image(c_now)
+                        severity failure;
+                end if;
+
+                c_prev := c_now;
+
+                -- V is stable mid-line, well clear of the line-boundary ripple
+                if (c_now = 200) then
+                    v_now := to_integer(unsigned(vv));
+
+                    if (v_prev >= 0) then
+                        assert v_now = (v_prev + 1) mod v_lines
+                            report "FAIL taps: v8..v0 went " & integer'image(v_prev)
+                                   & " -> " & integer'image(v_now)
+                            severity failure;
+                    end if;
+
+                    v_prev := v_now;
+                end if;
+
+                n_checks := n_checks + 1;
+            end if;
+        end if;
+
+        if (sim_done'event and sim_done) then
+            -- the run is ~316 lines x 448 pixels: the taps must have been
+            -- checked on (nearly) all of them, or the checks were skipped
+            assert n_checks > (last_line - 2) * pix_line
+                report "FAIL taps: only " & integer'image(n_checks)
+                       & " samples had defined taps"
+                severity failure;
+            report "video_sync_tb taps PASS: complements, C per pixel and V per line ("
+                   & integer'image(n_checks) & " samples)"
+                severity note;
+        end if;
+
+    end process taps;
 
     -- Border (H+V) + vsync checker --------------------------------------
     check : process is

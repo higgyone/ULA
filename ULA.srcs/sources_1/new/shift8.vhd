@@ -54,7 +54,7 @@ end entity shift8;
 
 architecture structural of shift8 is
 
-    -- Per-cell output taps. q_<i> is bit i; q_bar_<i> is its inverse and is what
+    -- Per-cell output taps. s_q_<i> is bit i; s_q_<i>_n is its inverse and is what
     -- feeds the next cell up the chain (see header: the active-low trick).
     signal s_q_0   : std_logic;
     signal s_q_0_n : std_logic;

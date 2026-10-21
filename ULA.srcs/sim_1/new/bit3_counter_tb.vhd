@@ -26,6 +26,7 @@
 -- CHECKS (every rising edge, once outputs have left 'U'):
 --   1. output   = golden count          (functional equivalence)
 --   2. overflow = '1' iff output = "110" (overflow invariant)
+--   3. output_n = NOT output             (complement taps, from each FF's q_n)
 --
 -- STIMULUS:
 --   * Phase 1 — power-on reset, 45 ns (settles the d_ff_nor network).
@@ -60,8 +61,9 @@ architecture behavioral of bit3_counter_tb is
     signal sysrst : std_logic;
 
     -- UUT outputs.
-    signal out_uut : std_logic_vector(2 downto 0);
-    signal ov_uut  : std_logic;
+    signal out_uut  : std_logic_vector(2 downto 0);
+    signal outn_uut : std_logic_vector(2 downto 0);
+    signal ov_uut   : std_logic;
 
     -- Golden model (computed in this testbench, not a second entity).
     signal exp_out : std_logic_vector(2 downto 0);
@@ -84,6 +86,7 @@ begin
             clk      => sysclk,
             reset    => sysrst,
             output   => out_uut,
+            output_n => outn_uut,
             overflow => ov_uut
         );
 
@@ -171,6 +174,10 @@ begin
 
                 assert (ov_uut = '1') = (out_uut = "110")
                     report "OVERFLOW invariant broken: overflow vs output."
+                    severity error;
+
+                assert outn_uut = not out_uut
+                    report "COMPLEMENT mismatch: output_n /= NOT output."
                     severity error;
             end if;
         end if;
