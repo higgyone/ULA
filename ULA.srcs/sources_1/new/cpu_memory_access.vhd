@@ -64,6 +64,13 @@
 --   '1' while enabled, and is high impedance ('Z') otherwise. Unlike the
 --   open-collector pins (int_n, the D pins: '0' / 'H'), there is no pull-up.
 --
+--   The book calls this enable an IMPLEMENTATION ERROR: it was meant to enable
+--   RAS only while the video generator or the Z80 needs the lower 16K, but as
+--   built it is enabled for most of the time (released only for MREQ in
+--   0x0000..0x3FFF in the border). The gate above is the book's, error
+--   included: do NOT "correct" it, or the pin will behave differently from
+--   the real chip on a real board.
+--
 -- ── The delay chains (book form, ~10 ns per gate) ────────────────────
 --   mreq_n -> ras_n      2 gates   ~20 ns
 --   ras_n  -> cas_n      8 gates   ~80 ns  (3-inverter s_ram_16_n chain,

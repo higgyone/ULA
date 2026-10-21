@@ -19,6 +19,16 @@
 --   4. ae_n = NOT( (c0.c1.c2 + c3) AND NOT border ) — the address-enable that
 --      opens the tri-state drivers one pixel before the c3 fetch window, and
 --      keeps them shut in the border.
+--   5. TRI-STATE PADS: a0..a6 are 'Z' while ae_n = '1', and driven while
+--      ae_n = '0'. The PCB's '157 mux (through its bus-isolating resistor) is
+--      modelled as a WEAK second driver on every pin ('L' / 'H'): with the ULA
+--      released the pins carry it; with the ULA driving, its strong '0' / '1'
+--      wins, with no 'X'. Covers both enable terms (c3, and the c0.c1.c2
+--      pre-pixel) and the border shut-off.
+--
+-- Sections 1-3 check the mux, so they hold c3 = '1' and border = '0' to keep
+-- the pins enabled. c3 is not part of the address map (it only feeds ae), so
+-- this hides nothing.
 --
 -- a0 note: c2 is used directly and un-inverted. The book delays AND inverts c2
 -- (the delay pushes its edge past ras_n for DRAM tRAH and covers the master
@@ -58,6 +68,10 @@ architecture behavioral of video_address_generation_tb is
     signal ae_n : std_logic;
 
     signal addr : std_logic_vector(6 downto 0); -- a6..a0, for comparison
+
+    -- the PCB's '157 mux on the far side of each pin, through its isolating
+    -- resistor: a weak 'L' / 'H', or 'Z' when not modelled
+    signal ext : std_logic_vector(6 downto 0) := (others => 'Z');
 
     signal checks : integer := 0;
 
@@ -165,6 +179,15 @@ begin
             ae_n      => ae_n
         );
 
+    -- second driver on every address pin (the '157 side); 'Z' unless set
+    a0 <= ext(0);
+    a1 <= ext(1);
+    a2 <= ext(2);
+    a3 <= ext(3);
+    a4 <= ext(4);
+    a5 <= ext(5);
+    a6 <= ext(6);
+
     addr <= a6 & a5 & a4 & a3 & a2 & a1 & a0;
 
     stim : process is
@@ -172,7 +195,9 @@ begin
         variable held : std_logic_vector(6 downto 0);
 
         -- the DUT takes c0/c1/c2 complements as separate ports; drive them
-        -- consistently from cv, then let the phase select ras_n / c1
+        -- consistently from cv, then let the phase select ras_n / c1.
+        -- c3 is forced to '1' so the tri-state pads are enabled (ae_n = '0')
+        -- while the mux is checked; c3 is not in the address map.
 
         procedure apply (
             c : in std_logic_vector(7 downto 0);
@@ -180,7 +205,7 @@ begin
         ) is
         begin
 
-            cv <= c;
+            cv <= c(7 downto 4) & '1' & c(2 downto 0);
             vv <= v;
             wait for settle;
 
@@ -253,13 +278,13 @@ begin
         --    disturb the address. Only the column may change.
         --------------------------------------------------------------
         ras_n <= '1';
-        apply("10101010", "11010101");                                                  -- c2 = '0' here
-        ras_n <= '0';                                                                   -- RAS asserted: row frozen
+        apply("10101010", "11010101");                                                            -- c2 = '0' here
+        ras_n <= '0';                                                                             -- RAS asserted: row frozen
         wait for settle;
 
         held := addr;
 
-        cv(2) <= '1';                                                                   -- c2 moves during the page read
+        cv(2) <= '1';                                                                             -- c2 moves during the page read
         wait for settle;
 
         assert addr = held
@@ -352,6 +377,76 @@ begin
             end loop;
 
         end loop;
+
+        report "PASS: ae_n decode, border shut-off"
+            severity note;
+
+        --------------------------------------------------------------
+        -- 5) tri-state pads, with the '157 side as a weak driver
+        --------------------------------------------------------------
+        brdr  <= '0';
+        ras_n <= '1';
+        vv    <= "11010101";
+
+        -- ULA released: c3 = '0' and c0.c1.c2 = 0  ->  ae_n = '1'
+        cv     <= "10100010";
+        wait for settle;
+        assert ae_n = '1' and addr = "ZZZZZZZ"
+            report "FAIL tri-state, released, nothing else driving: a6..a0 = "
+                   & to_bin(addr) & " (expected all 'Z')"
+            severity failure;
+        checks <= checks + 1;
+        wait for 1 ns;
+
+        -- the '157 side drives a CPU address: the pins carry it
+        ext    <= "LHLHHLH";
+        wait for settle;
+        assert addr = "LHLHHLH"
+            report "FAIL tri-state, released: pins should carry the '157 address, got "
+                   & to_bin(addr)
+            severity failure;
+        checks <= checks + 1;
+        wait for 1 ns;
+
+        -- enable via c3: the ULA's strong drive wins over the weak '157 side
+        cv(3)  <= '1';
+        wait for settle;
+        assert ae_n = '0' and addr = row_ref(cv, vv)
+            report "FAIL tri-state, c3 enable: expected the ULA's row "
+                   & to_bin(row_ref(cv, vv)) & ", got " & to_bin(addr)
+            severity failure;
+        assert is_x(addr) = false
+            report "FAIL tri-state, c3 enable: 'X' on the address pins"
+            severity failure;
+        checks <= checks + 2;
+        wait for 1 ns;
+
+        -- border shuts the drivers again, even with c3 = '1'
+        brdr   <= '1';
+        wait for settle;
+        assert ae_n = '1' and addr = "LHLHHLH"
+            report "FAIL tri-state, border: pins should be released to the '157, got "
+                   & to_bin(addr)
+            severity failure;
+        checks <= checks + 1;
+        wait for 1 ns;
+
+        -- enable via the c0.c1.c2 pre-pixel term (c3 = '0')
+        brdr   <= '0';
+        cv     <= "10100111";
+        wait for settle;
+        assert ae_n = '0' and addr = row_ref(cv, vv)
+            report "FAIL tri-state, c0.c1.c2 enable: expected the ULA's row "
+                   & to_bin(row_ref(cv, vv)) & ", got " & to_bin(addr)
+            severity failure;
+        checks <= checks + 1;
+        wait for 1 ns;
+
+        ext <= (others => 'Z');
+        wait for settle;
+
+        report "PASS: tri-state pads: 'Z' when released, the ULA overrides the '157 when enabled"
+            severity note;
 
         report "ALL TESTS PASSED (" & integer'image(checks) & " checks)"
             severity note;

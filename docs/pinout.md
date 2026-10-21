@@ -6,8 +6,8 @@ this design that drives or reads it. Reviewed pin by pin on 2026-10-21. This is
 the port list for the Phase 7 top level (`ULA.vhd`).
 
 Status: ✅ matches · ✅ sim = correct in simulation, needs hardware work for the
-FPGA · ⚠ = pad fix outstanding (see [Pad fixes](#pad-fixes)) · n/a = no VHDL
-port.
+FPGA · n/a = no VHDL port. Pad fixes 1-4 are done (PR `pad-fixes`); fix 5
+belongs to the top level.
 
 ## Pad types
 
@@ -32,14 +32,14 @@ port.
 | 2 | `/WR` | 17 | TTL in | Z80 write | `wr_n` → `cpu_memory_access`, `io_port_decode_0xfe`, `test_modes` | ✅ |
 | 3 | `/RD` | 16 | TTL in | Z80 read | `rd_n` → `cpu_memory_access`, `io_port_decode_0xfe`, `test_modes` | ✅ |
 | 4 | `/WE` | 15 | totem pole out | lower-16K DRAM write enable | `cpu_memory_access.we_n` | ✅ |
-| 5 | A0 | 14 | tri-state totem pole out + TTL in | multiplexed DRAM address; read for the port decode | out: `video_address_generation.a0`; in: `io_port_decode_0xfe.a0` | ⚠ fix 1 |
-| 6 | A1 | 13 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a1` | ⚠ fix 1 |
-| 7 | A2 | 12 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a2` | ⚠ fix 1 |
-| 8 | A3 | 11 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a3` | ⚠ fix 1 |
-| 9 | A4 | 10 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a4` | ⚠ fix 1 |
-| 10 | A5 | 9 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a5` | ⚠ fix 1 |
-| 11 | A6 | 8 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a6` | ⚠ fix 1 |
-| 12 | `/INT` | 7 | collector follower + strong on-chip pull-up | Z80 maskable interrupt, once a frame | `interrupt.int_n` | ✅ (doc: fix 4) |
+| 5 | A0 | 14 | tri-state totem pole out + TTL in | multiplexed DRAM address; read for the port decode | out: `video_address_generation.a0`; in: `io_port_decode_0xfe.a0` | ✅ (fix 1 done) |
+| 6 | A1 | 13 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a1` | ✅ (fix 1 done) |
+| 7 | A2 | 12 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a2` | ✅ (fix 1 done) |
+| 8 | A3 | 11 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a3` | ✅ (fix 1 done) |
+| 9 | A4 | 10 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a4` | ✅ (fix 1 done) |
+| 10 | A5 | 9 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a5` | ✅ (fix 1 done) |
+| 11 | A6 | 8 | tri-state totem pole out | multiplexed DRAM address | `video_address_generation.a6` | ✅ (fix 1 done) |
+| 12 | `/INT` | 7 | collector follower + strong on-chip pull-up | Z80 maskable interrupt, once a frame | `interrupt.int_n` | ✅ (fix 4 done) |
 | 13 | Vcc (logic) | — | supply | 5 V logic supply | — | n/a |
 | 14 | Vcc (I/O) | 5, 6 | supply | 5 V analogue and interface supply | — | n/a |
 | 15 | U | 2, 3, 4 | analogue | colour difference | `yuv_video.u` (mV) | ✅ sim |
@@ -55,14 +55,14 @@ port.
 | 25 | D3 | 36 | open collector (weak pull-up) + TTL in | data bus | out: `keyboard_input.do_3`; in: `cassette_speaker_out.di_3` (MIC), video latches bit 3 | ✅ |
 | 26 | K4 | 35 | emitter-follower in + weak pull-up | keyboard column 4 | `keyboard_input.k4` | ✅ (top: fix 5) |
 | 27 | D4 | 34 | open collector (weak pull-up) + TTL in | data bus | out: `keyboard_input.do_4`; in: `cassette_speaker_out.di_4` (speaker), video latches bit 4 | ✅ |
-| 28 | SOUND | 32, 33 | analogue | MIC / speaker out, EAR in, on one pin | logic only: `cassette_speaker_out.mic`/`speaker`, `cassette_input.ear` | ⚠ fix 3 |
+| 28 | SOUND | 32, 33 | analogue | MIC / speaker out, EAR in, on one pin | `sound_io`: `sound` out, `tape_mv` in (mV); `ear` → `cassette_input`; `mic`/`speaker` from `cassette_speaker_out` | ✅ sim (fix 3 done) |
 | 29 | D5 | 31, 28 | **input only** | data bus | never driven; read by the video latches bit 5 | ✅ |
 | 30 | D6 | 30 | open collector (weak pull-up) + TTL in | data bus | out: `cassette_input.do_6` (EAR); in: video latches bit 6 | ✅ |
 | 31 | D7 | 29 | open collector (weak pull-up) + TTL in | data bus | out: nothing ever pulls it low; in: video latches bit 7 | ✅ |
-| 32 | `/phicpu` | 28 | inverting open collector | inverted 3.5 MHz Z80 clock | `contention_handler_3.phicpu_n` | ⚠ fix 2 |
+| 32 | `/phicpu` | 28 | inverting open collector | inverted 3.5 MHz Z80 clock | `contention_handler_3.phicpu_n`: `'0'` / `'Z'` | ✅ (fix 2 done) |
 | 33 | `/IOREQ` | 27 | TTL in | I/O port select (board: /IORQ OR A0) | `ioreq_n` → `io_port_decode_0xfe`, `contention_handler_3`, `test_modes` | ✅ |
 | 34 | `/ROMCS` | 26 | totem pole out | ROM chip enable (address only, not MREQ-qualified) | `cpu_memory_access.rom_cs_n` | ✅ |
-| 35 | `/RAS` | 25 | tri-state totem pole out | lower-16K DRAM row strobe | `cpu_memory_access.ras_n` (released by `rasen_n`) | ✅ (doc: fix 4) |
+| 35 | `/RAS` | 25 | tri-state totem pole out | lower-16K DRAM row strobe | `cpu_memory_access.ras_n` (released by `rasen_n`) | ✅ (fix 4 done) |
 | 36 | A14 | 24 | TTL in | Z80 address | `a14` → `cpu_memory_access`, `contention_handler_3` | ✅ |
 | 37 | A15 | 23 | TTL in | Z80 address | `a15` → `cpu_memory_access`, `contention_handler_3` | ✅ |
 | 38 | `/MREQ` | 22 | TTL in | Z80 memory request | `mreq_n` → `cpu_memory_access`, `contention_handler_3`, `test_modes` | ✅ |
@@ -135,13 +135,13 @@ time. The design reproduces the book's gate as built.
 
 ## Pad fixes
 
-| # | Change | Where | Kind |
+| # | Change | Where | Status |
 |---|---|---|---|
-| 1 | Tri-state `a0..a6` on `ae_n`; A0 becomes `inout` at the top level, read by the port decode | `video_address_generation` + TB | design |
-| 2 | `/phicpu` open collector: `'0'` / `'Z'`; TB adds the 1k pull-up and the PCB transistor | `contention_handler_3` + TB | design |
-| 3 | New behavioural `sound_io`: (speaker, mic) → 4 levels in mV; EAR = pin > 714 mV | new block + TB | design |
-| 4 | Header notes: 470 Ω on `/INT`; the `/RAS` "implementation error" | `interrupt`, `cpu_memory_access` | doc only |
-| 5 | Weak `'H'` on K1–K4 (on-chip pull-ups); A0 `inout` | top-level `ULA.vhd` | Phase 7 |
+| 1 | Tri-state `a0..a6` on `ae_n`; A0 becomes `inout` at the top level, read by the port decode | `video_address_generation` + TB | ✅ done |
+| 2 | `/phicpu` open collector: `'0'` / `'Z'`; TB adds the 1k pull-up and the PCB transistor | `contention_handler_3` + TB | ✅ done |
+| 3 | New behavioural `sound_io`: (speaker, mic) → 4 levels in mV; EAR = pin > 714 mV | new block + TB | ✅ done |
+| 4 | Header notes: 470 Ω on `/INT`; the `/RAS` "implementation error" | `interrupt`, `cpu_memory_access` | ✅ done |
+| 5 | Weak `'H'` on K1–K4 (on-chip pull-ups); A0 `inout` | top-level `ULA.vhd` | ⏳ Phase 7 |
 
 ## Phase 7: board and hardware items
 
