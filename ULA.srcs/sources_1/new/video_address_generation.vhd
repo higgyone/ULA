@@ -48,13 +48,27 @@
 --   (the c0.c1.c2 term) and holds them through it (the c3 term), while keeping
 --   them shut in the border so the CPU can reach the DRAM.
 --
+-- ── The address pins: tri-state (pins 5..11) ─────────────────────────
+--   aN = s_aN when s_ae = '1', else 'Z'          (N = 0..6)
+--   The pads are TRI-STATE TOTEM POLES: strong '0' / '1' while /AE is active,
+--   high impedance otherwise. While the ULA lets go, the PCB's '157 muxes put
+--   the CPU's address on the same pins (row or column, switched by ras_n), so
+--   the ULA may only drive them during its own video fetch.
+--
+--   A0 is special: it also has a TTL input. While the ULA lets go, the Z80's A0
+--   reaches pin 5 through the '157 and a bus-isolating resistor, and the ULA
+--   reads it for the I/O port decode (io_port_decode_0xfe). This block only
+--   drives a0; the top level makes the pin inout and the port decode reads the
+--   resolved pin. A1..A6 have no input buffer. See docs/pinout.md.
+--
 -- ── Ports ────────────────────────────────────────────────────────────
 --   vid_ras_n  video RAS tap from ras_cas_generation, active-low. Phase select.
 --   c0_n..c7   master horizontal counter taps (true/complement as each leg needs)
 --   v0..v7     vertical line counter taps
 --   border     border-region flag; forces ae_n de-asserted outside the display
---   a0..a6     multiplexed DRAM address out
---   ae_n       address enable, active-low
+--   a0..a6     multiplexed DRAM address out: tri-state, driven only while ae_n
+--              = '0', otherwise 'Z' (the '157 muxes drive the pins)
+--   ae_n       address enable, active-low (also exported for the TB / top level)
 --
 -- Gate style: NOR-with-inverted-inputs throughout, matching the rest of the
 -- design. No `after TG` delays are modelled here — the mux is feedback-free
@@ -96,7 +110,7 @@ entity video_address_generation is
         a5 : out   std_logic;
         a6 : out   std_logic;
 
-        ae_n : out   std_logic
+        ae_n : out   std_logic -- address enable: a0..a6 driven while '0', else 'Z'
     );
 end entity video_address_generation;
 
@@ -129,6 +143,13 @@ architecture structural of video_address_generation is
     signal s_q_out : std_logic;
     signal s_r_out : std_logic;
 
+    signal s_a0 : std_logic;
+    signal s_a1 : std_logic;
+    signal s_a2 : std_logic;
+    signal s_a3 : std_logic;
+    signal s_a4 : std_logic;
+    signal s_a5 : std_logic;
+    signal s_a6 : std_logic;
     signal s_ae : std_logic;
 
 begin
@@ -192,32 +213,49 @@ begin
     s_a_out <= not(s_c2_latched or s_rsel_n);
     s_b_out <= not(v5 or s_cdatasel_n);
     s_c_out <= not(v5 or s_cattrsel_n);
-    a0      <= not(s_a_out or s_b_out or s_c_out);
+
+    -- each bit: the NOR-NOR mux onto s_aN, then the tri-state totem-pole pad,
+    -- driven only while the address enable is active, otherwise 'Z'
+    s_a0 <= not(s_a_out or s_b_out or s_c_out);
+    a0   <= s_a0 when s_ae = '1' else
+            'Z';
 
     s_d_out <= not(c4 or s_rsel_n);
     s_e_out <= not(v0 or s_cdatasel_n);
     s_f_out <= not(v6 or s_cattrsel_n);
-    a1      <= not(s_d_out or s_e_out or s_f_out);
+    s_a1    <= not(s_d_out or s_e_out or s_f_out);
+    a1      <= s_a1 when s_ae = '1' else
+               'Z';
 
     s_g_out <= not(c5 or s_rsel_n);
     s_h_out <= not(v1 or s_cdatasel_n);
     s_i_out <= not(v7 or s_cattrsel_n);
-    a2      <= not(s_g_out or s_h_out or s_i_out);
+    s_a2    <= not(s_g_out or s_h_out or s_i_out);
+    a2      <= s_a2 when s_ae = '1' else
+               'Z';
 
     s_j_out <= not(c6 or s_rsel_n);
     s_k_out <= not(v2 or s_cdatasel_n);
-    a3      <= not(s_j_out or s_k_out or s_cattrsel);
+    s_a3    <= not(s_j_out or s_k_out or s_cattrsel);
+    a3      <= s_a3 when s_ae = '1' else
+               'Z';
 
     s_l_out <= not(c7 or s_rsel_n);
     s_m_out <= not(v6 or s_cdatasel_n);
-    a4      <= not(s_l_out or s_m_out);
+    s_a4    <= not(s_l_out or s_m_out);
+    a4      <= s_a4 when s_ae = '1' else
+               'Z';
 
     s_n_out <= not(v3 or s_rsel_n);
     s_o_out <= not(v7 or s_cdatasel_n);
-    a5      <= not(s_n_out or s_o_out);
+    s_a5    <= not(s_n_out or s_o_out);
+    a5      <= s_a5 when s_ae = '1' else
+               'Z';
 
     s_p_out <= not(v4 or s_rsel_n);
-    a6      <= not(s_p_out or s_cdatasel or s_cattrsel);
+    s_a6    <= not(s_p_out or s_cdatasel or s_cattrsel);
+    a6      <= s_a6 when s_ae = '1' else
+               'Z';
 
     s_q_out <= not(c0_n or c1_n or c2_n);
     s_r_out <= not(s_q_out or c3);
