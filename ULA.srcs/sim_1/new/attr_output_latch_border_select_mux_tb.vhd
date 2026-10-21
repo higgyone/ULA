@@ -22,7 +22,7 @@
 --   2. Capture the pixel byte in its latch, then LOAD the shift register
 --      (sload='1', one falling clk edge): serial pixel = bit7 (MSB).
 --   3. Hold sload='0' and clock: bit6..bit0 appear one per falling edge.
---   The falling edge of clk_7 is the active (commit) edge for the shift
+--   The falling edge of clk_7_pixel is the active (commit) edge for the shift
 --   register; a SETTLE wait after each edge lets the `after tg` gate delays
 --   finish before sampling. Any mismatch is fatal; a clean run prints
 --   "ALL TESTS PASSED".
@@ -39,7 +39,7 @@ end entity attr_output_latch_border_select_mux_tb;
 
 architecture behavioral of attr_output_latch_border_select_mux_tb is
 
-    constant t      : time := 100 ns; -- clk_7 period
+    constant t      : time := 100 ns; -- clk_7_pixel period
     constant settle : time := 25 ns;  -- > worst-case gate settle after an edge
 
     -- one stimulus case: a character cell plus its display/blank context
@@ -131,7 +131,7 @@ architecture behavioral of attr_output_latch_border_select_mux_tb is
         )
     );
 
-    signal clk_7               : std_logic                    := '0';
+    signal clk_7_pixel         : std_logic                    := '0';
     signal flash_clk           : std_logic                    := '0';
     signal sload               : std_logic                    := '0';
     signal pixel_data_latch_n  : std_logic                    := '1';
@@ -216,7 +216,7 @@ begin
 
     dut : entity work.attr_output_latch_border_select_mux(structural)
         port map (
-            clk_7               => clk_7,
+            clk_7_pixel         => clk_7_pixel,
             flash_clk           => flash_clk,
             sload               => sload,
             pixel_data_latch_n  => pixel_data_latch_n,
@@ -239,9 +239,9 @@ begin
     clk_gen : process is
     begin
 
-        clk_7 <= '0';
+        clk_7_pixel <= '0';
         wait for t / 2;
-        clk_7 <= '1';
+        clk_7_pixel <= '1';
         wait for t / 2;
 
     end process clk_gen;
@@ -265,11 +265,11 @@ begin
             attr_data           <= sc.attr;
             border_colour       <= sc.border;
             video_en            <= sc.video_en;
-            attr_data_latch_n   <= '0';                                                                 -- input latch transparent
-            attr_output_latch_n <= '0';                                                                 -- output latch transparent
-            wait for 2 * settle;                                                                        -- let attr flow through both latches
-            attr_output_latch_n <= '1';                                                                 -- HOLD: freeze colours + hl/fl
-            attr_data_latch_n   <= '1';                                                                 -- hold input latch too
+            attr_data_latch_n   <= '0';                                                                       -- input latch transparent
+            attr_output_latch_n <= '0';                                                                       -- output latch transparent
+            wait for 2 * settle;                                                                              -- let attr flow through both latches
+            attr_output_latch_n <= '1';                                                                       -- HOLD: freeze colours + hl/fl
+            attr_data_latch_n   <= '1';                                                                       -- hold input latch too
             wait for settle;
 
             -- live (unlatched) colour-mux context for this scenario
@@ -294,13 +294,13 @@ begin
             -- 2) capture the pixel byte, then LOAD the shift register
             ------------------------------------------------------------------
             pixel_data         <= sc.pixel;
-            pixel_data_latch_n <= '0';                                                                  -- capture pixel byte
+            pixel_data_latch_n <= '0';                                                                        -- capture pixel byte
             wait for settle;
-            pixel_data_latch_n <= '1';                                                                  -- hold it
+            pixel_data_latch_n <= '1';                                                                        -- hold it
             wait for settle;
 
-            sload <= '1';                                                                               -- load mode
-            wait until falling_edge(clk_7);                                                             -- LOAD edge: serial = bit7 (MSB)
+            sload <= '1';                                                                                     -- load mode
+            wait until falling_edge(clk_7_pixel);                                                             -- LOAD edge: serial = bit7 (MSB)
             wait for settle;
 
             ------------------------------------------------------------------
@@ -318,11 +318,11 @@ begin
                 severity failure;
             checks := checks + 1;
 
-            sload <= '0';                                                                               -- shift mode for the rest
+            sload <= '0';                                                                                     -- shift mode for the rest
 
             for i in 6 downto 0 loop
 
-                wait until falling_edge(clk_7);
+                wait until falling_edge(clk_7_pixel);
                 wait for settle;
                 sbit   := sc.pixel(i);
                 ve     := exp_rgb(sc, sbit);
