@@ -932,5 +932,11 @@ None is wired into a top level yet. **Phase 6 is complete.**
     `master_horiz_counter`.
 
 **Phase 7 — Top level**
+- **Pinout: [`docs/pinout.md`](docs/pinout.md)** — all 40 pins (cell, pad type,
+  board circuit, which block drives/reads each), reviewed 2026-10-21. It is the
+  port list for `ULA.vhd` and lists the outstanding **pad fixes** (A0–A6
+  tri-state on `ae_n`, `/phicpu` open collector, the new `sound_io` analogue
+  pin model, header notes, K1–K4 on-chip `'H'`) and the board/hardware items
+  (DAC boundary, 14 MHz MMCM, 5 V ↔ 3.3 V, board resistor model).
 - `ULA.vhd` — instantiates all sub-modules; full Z80 bus; wired to the Arty A7-35T XDC
 - Full system testbench with Z80 bus model, multi-frame video timing verification
