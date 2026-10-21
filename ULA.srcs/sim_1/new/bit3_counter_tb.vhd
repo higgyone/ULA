@@ -32,7 +32,9 @@
 --   * Phase 2 — 200 ns free run (cycles all 7 states many times).
 --   * Phase 3 — reset asserted from each non-zero state K = 1..6,
 --     checking synchronous-clear from an arbitrary state.
---   * Phase 4 — final free run, then end-of-sim coverage report.
+--   * Phase 4 — final free run, then end-of-sim coverage report, then
+--     finish (the clock is free-running, so without it `run all` would
+--     never return).
 --   Reset transitions are timed to land on rising clk edges.
 --
 -- NOT testable through entity ports: the illegal-state "111" self-
@@ -43,6 +45,9 @@
 library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
+
+library std;
+    use std.env.all;
 
 entity bit3_counter_tb is
 end entity bit3_counter_tb;
@@ -213,6 +218,9 @@ begin
 
             report "bit3_counter_tb: simulation complete."
                 severity note;
+
+            -- stop the free-running clock: end the simulation
+            finish;
         end if;
 
     end process report_cov;
