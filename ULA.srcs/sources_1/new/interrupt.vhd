@@ -58,7 +58,10 @@
 --
 --   That matters because /INT is a shared line on the Z80: other devices
 --   (e.g. on the expansion bus) can pull it low too, and none of them fights
---   the ULA (wired-OR).
+--   the ULA (wired-OR). On the board, pin 12 reaches the Z80's /INT (and the
+--   expansion bus) through a 470 ohm series resistor, which also limits the
+--   current when another device pulls the line low against the ULA's pull-up.
+--   See docs/pinout.md.
 --
 --   Modelled as '0' / 'H'. 'H' is VHDL's resistive '1', which any '0' on the
 --   line overrides; VHDL has no separate "strong resistor" level, and none is
