@@ -14,7 +14,10 @@
 --
 -- Outputs:
 --   c0..c8  — counter taps, used by horiz_timing to decode
---             hsync/blank windows.
+--             hsync/blank windows, and by the video and CPU blocks.
+--   c0_n..c8_n — their complements, each from its flip-flop (clk_div_2
+--             clk_out_n for C0..C5, bit3_counter output_n for C6..C8),
+--             for the blocks' NOR-with-inverted-input gates.
 --   clk_hc6 — clock for the C6..C8 stage, exposed for external use
 --             (e.g. driving Vert_Line_counter).
 --   hc_rst  — single-cycle pulse on counter wrap (line-end trigger
@@ -51,14 +54,23 @@ entity master_horiz_counter is
         reset   : in    std_logic;
         tclk_a  : in    std_logic := '0'; -- always assumed to be '0'
         c0      : out   std_logic;
+        c0_n    : out   std_logic;
         c1      : out   std_logic;
+        c1_n    : out   std_logic;
         c2      : out   std_logic;
+        c2_n    : out   std_logic;
         c3      : out   std_logic;
+        c3_n    : out   std_logic;
         c4      : out   std_logic;
+        c4_n    : out   std_logic;
         c5      : out   std_logic;
+        c5_n    : out   std_logic;
         c6      : out   std_logic;
+        c6_n    : out   std_logic;
         c7      : out   std_logic;
+        c7_n    : out   std_logic;
         c8      : out   std_logic;
+        c8_n    : out   std_logic;
         clk_hc6 : out   std_logic;        -- clock for 3 bit counter, same as c5
         hc_rst  : out   std_logic         -- horizontal counter reset
     );
@@ -79,8 +91,9 @@ architecture behavioral of master_horiz_counter is
     signal s_clk_c4 : std_logic;
     signal s_clk_c5 : std_logic;
 
-    signal s_clk8_6 : std_logic_vector(2 downto 0);
-    signal s_clkhc6 : std_logic;
+    signal s_clk8_6   : std_logic_vector(2 downto 0);
+    signal s_clk8_6_n : std_logic_vector(2 downto 0);
+    signal s_clkhc6   : std_logic;
 
 begin
 
@@ -103,6 +116,19 @@ begin
     c6 <= s_clk8_6(0);
     c7 <= s_clk8_6(1);
     c8 <= s_clk8_6(2);
+
+    -- complement taps for the consumers' NOR gates, each straight from its
+    -- flip-flop: C0..C5 from the clk_div_2 cells' clk_out_n, C6..C8 from
+    -- bit3_counter's output_n (each FF's q_n). No extra inverters.
+    c0_n <= s_c0_n;
+    c1_n <= s_c1_n;
+    c2_n <= s_c2_n;
+    c3_n <= s_c3_n;
+    c4_n <= s_c4_n;
+    c5_n <= s_c5_n;
+    c6_n <= s_clk8_6_n(0);
+    c7_n <= s_clk8_6_n(1);
+    c8_n <= s_clk8_6_n(2);
 
     -- ******************************************************************
     --  Counter cell instances (C0..C5 = clk_div_2; C6..C8 = bit3_counter)
@@ -165,6 +191,7 @@ begin
             clk      => s_clkhc6,
             reset    => reset,
             output   => s_clk8_6,
+            output_n => s_clk8_6_n,
             overflow => hc_rst
         );
 

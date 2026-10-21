@@ -1,21 +1,18 @@
 ----------------------------------------------------------------------------------
--- Company:
--- Engineer:
+-- master_horiz_counter_tb — self-checking TB for the 9-bit horizontal counter
 --
--- Create Date: 29.06.2020 14:01:39
--- Design Name:
--- Module Name: master_horiz_counter_tb - Behavioral
--- Project Name:
--- Target Devices:
--- Tool Versions:
--- Description:
+-- What it proves (sampled on every falling clk_7_n edge after reset):
+--   1. COUNT: the tap word c8..c0 advances by exactly 1 every clk_7_n and
+--      wraps 447 -> 0 (448 pixels per line). It locks onto the count after
+--      reset instead of predicting the start phase.
+--   2. COMPLEMENTS: c0_n..c8_n = NOT c0..c8 at every sample. c0_n..c5_n are
+--      the clk_div_2 cells' clk_out_n; c6_n..c8_n are bit3_counter's
+--      output_n (each flip-flop's q_n).
 --
--- Dependencies:
---
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
---
+-- No finish: the clock is free-running, so run it for a fixed time, e.g.
+-- `run 200 us` (about 3 lines). A clean run prints a "line complete" note per
+-- line and no "mismatch" errors. Must run at the real 143 ns pixel period
+-- (see the constant below).
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -49,6 +46,15 @@ architecture behavioral of master_horiz_counter_tb is
     signal   c6      : std_logic;
     signal   c7      : std_logic;
     signal   c8      : std_logic;
+    signal   c0_n    : std_logic;
+    signal   c1_n    : std_logic;
+    signal   c2_n    : std_logic;
+    signal   c3_n    : std_logic;
+    signal   c4_n    : std_logic;
+    signal   c5_n    : std_logic;
+    signal   c6_n    : std_logic;
+    signal   c7_n    : std_logic;
+    signal   c8_n    : std_logic;
     signal   clk_hc6 : std_logic;
     signal   hc_rst  : std_logic;
 
@@ -68,6 +74,15 @@ begin
             c6      => c6,
             c7      => c7,
             c8      => c8,
+            c0_n    => c0_n,
+            c1_n    => c1_n,
+            c2_n    => c2_n,
+            c3_n    => c3_n,
+            c4_n    => c4_n,
+            c5_n    => c5_n,
+            c6_n    => c6_n,
+            c7_n    => c7_n,
+            c8_n    => c8_n,
             clk_hc6 => clk_hc6,
             hc_rst  => hc_rst
         );
@@ -114,6 +129,7 @@ begin
     check_proc : process (clk_7_n) is
 
         variable taps    : std_logic_vector(8 downto 0);
+        variable taps_n  : std_logic_vector(8 downto 0);
         variable act     : integer range 0 to 511;
         variable expnext : integer range 0 to 447;
         variable locked  : boolean := false;
@@ -124,8 +140,15 @@ begin
             if (reset = '1') then
                 locked := false;                 -- re-lock after every reset
             else
-                taps := c8 & c7 & c6 & c5 & c4 & c3 & c2 & c1 & c0;
+                taps   := c8 & c7 & c6 & c5 & c4 & c3 & c2 & c1 & c0;
+                taps_n := c8_n & c7_n & c6_n & c5_n & c4_n & c3_n & c2_n & c1_n & c0_n;
                 if (not is_x(taps)) then
+                    -- every complement tap must be the inverse of its bit
+                    assert taps_n = not taps
+                        report "MHC complement mismatch: c8..c0 = " & to_string(taps)
+                               & ", c8_n..c0_n = " & to_string(taps_n)
+                        severity error;
+
                     act := to_integer(unsigned(taps));
                     if (locked) then
                         assert act = expnext
