@@ -10,7 +10,9 @@
 --            bits. This is the ULA's "gated clock" style rather than
 --            a pure ripple chain, and keeps the +1 timing tight.
 --   C6..C8 — bit3_counter (modulo-7, three d_ff_nor cells) clocked
---            by clk_hc6 (= C5 with the always-zero tclk_a).
+--            by clk_hc6 = NOR(tclk_a, c5_n): C5 in normal operation
+--            (tclk_a = '0'); in wafer test mode A, test_modes drives tclk_a
+--            from rd_n so C6..C8 can be clocked directly (see test_modes).
 --
 -- Outputs:
 --   c0..c8  — counter taps, used by horiz_timing to decode
@@ -50,9 +52,9 @@ library ieee;
 
 entity master_horiz_counter is
     port (
-        clk_7_n : in    std_logic;        -- master clock
+        clk_7_n : in    std_logic; -- master clock
         reset   : in    std_logic;
-        tclk_a  : in    std_logic := '0'; -- always assumed to be '0'
+        tclk_a  : in    std_logic; -- test clock A from test_modes; '0' in normal operation
         c0      : out   std_logic;
         c0_n    : out   std_logic;
         c1      : out   std_logic;
@@ -71,8 +73,8 @@ entity master_horiz_counter is
         c7_n    : out   std_logic;
         c8      : out   std_logic;
         c8_n    : out   std_logic;
-        clk_hc6 : out   std_logic;        -- clock for 3 bit counter, same as c5
-        hc_rst  : out   std_logic         -- horizontal counter reset
+        clk_hc6 : out   std_logic; -- clock for 3 bit counter, same as c5
+        hc_rst  : out   std_logic  -- horizontal counter reset
     );
 end entity master_horiz_counter;
 
@@ -107,8 +109,9 @@ begin
     s_clk_c4 <= not s_c3_n;
     s_clk_c5 <= s_c4_n nor s_c3_n;
 
-    -- clk_hc6 drives the C6..C8 bit3_counter. tclk_a is always '0'
-    -- in this design, so the NOR reduces to NOT s_c5_n = c5.
+    -- clk_hc6 drives the C6..C8 bit3_counter. In normal operation
+    -- tclk_a = '0', so the NOR reduces to NOT s_c5_n = c5. In test mode A
+    -- tclk_a (= NOT rd_n) takes over while c5 = '1' (s_c5_n = '0').
     s_clkhc6 <= tclk_a nor s_c5_n;
     clk_hc6  <= s_clkhc6;
 

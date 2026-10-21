@@ -10,6 +10,15 @@
 -- The horizontal sync and blanking signals (hsync_5c/hsync_6c/hblank_n)
 -- come directly from horiz_timing and are passed through.
 --
+-- It also exports every counter tap for the rest of the ULA (the video,
+-- DRAM, contention and interrupt blocks): c0..c8 and v0..v8 with their
+-- complements c0_n..c8_n and v0_n..v8_n. Each complement comes from its
+-- own flip-flop's q_n (no inverters), so there is one source per bit:
+--   c0_n..c5_n  clk_div_2 cells        c6_n..c8_n  bit3_counter
+--   v0_n..v8_n  Vert_Line_counter
+-- tclk_a (test clock A from test_modes, '0' in normal operation) is passed
+-- down through horiz_timing to the counter's clk_hc6 NOR.
+--
 -- All combinational logic uses NORs with inverted inputs (the Ferranti
 -- gate style), with named intermediate signals matching the schematic.
 ----------------------------------------------------------------------
@@ -22,7 +31,7 @@ entity video_sync is
     port (
         clk_7_n   : in    std_logic;
         reset     : in    std_logic;
-        tclk_a    : in    std_logic; -- retained for back-compat; unused (horiz_timing ties it to '0')
+        tclk_a    : in    std_logic; -- test clock A from test_modes; '0' in normal operation
         hsync_5c  : out   std_logic;
         hsync_6c  : out   std_logic;
         hblank_n  : out   std_logic;
@@ -30,7 +39,48 @@ entity video_sync is
         border_n  : out   std_logic; -- '0' in the border (book /BORDER)
         border    : out   std_logic; -- '1' in the border, for contention_handler_3 and video_address_generation
         sync_5c_n : out   std_logic; -- composite active-low sync = NOR(vsync, hsync), issue-5 hsync timing
-        sync_6c_n : out   std_logic  -- composite active-low sync = NOR(vsync, hsync), issue-6 hsync timing
+        sync_6c_n : out   std_logic; -- composite active-low sync = NOR(vsync, hsync), issue-6 hsync timing
+
+        -- horizontal counter taps (c8 = MSB) and their complements
+        c0   : out   std_logic;
+        c0_n : out   std_logic;
+        c1   : out   std_logic;
+        c1_n : out   std_logic;
+        c2   : out   std_logic;
+        c2_n : out   std_logic;
+        c3   : out   std_logic;
+        c3_n : out   std_logic;
+        c4   : out   std_logic;
+        c4_n : out   std_logic;
+        c5   : out   std_logic;
+        c5_n : out   std_logic;
+        c6   : out   std_logic;
+        c6_n : out   std_logic;
+        c7   : out   std_logic;
+        c7_n : out   std_logic;
+        c8   : out   std_logic;
+        c8_n : out   std_logic;
+
+        -- vertical line counter taps (v8 = MSB) and their complements
+
+        v0   : out   std_logic;
+        v0_n : out   std_logic;
+        v1   : out   std_logic;
+        v1_n : out   std_logic;
+        v2   : out   std_logic;
+        v2_n : out   std_logic;
+        v3   : out   std_logic;
+        v3_n : out   std_logic;
+        v4   : out   std_logic;
+        v4_n : out   std_logic;
+        v5   : out   std_logic;
+        v5_n : out   std_logic;
+        v6   : out   std_logic;
+        v6_n : out   std_logic;
+        v7   : out   std_logic;
+        v7_n : out   std_logic;
+        v8   : out   std_logic;
+        v8_n : out   std_logic
     );
 end entity video_sync;
 
@@ -75,13 +125,33 @@ begin
         port map (
             clk_7_n  => clk_7_n,
             reset    => reset,
+            tclk_a   => tclk_a,
             hsync_5c => s_h_5c,
             hsync_6c => s_h_6c,
             hblank_n => s_h_blank,
+            c0       => c0,
+            c0_n     => c0_n,
+            c1       => c1,
+            c1_n     => c1_n,
+            c2       => c2,
+            c2_n     => c2_n,
+            c3       => c3,
+            c3_n     => c3_n,
+            c4       => c4,
+            c4_n     => c4_n,
+            c5       => c5,
+            c5_n     => c5_n,
+            c6       => c6,
+            c6_n     => c6_n,
+            c7       => c7,
+            c7_n     => c7_n,
             c8       => s_c8,
+            c8_n     => c8_n,
             clk_hc6  => s_hc6,
             hc_rst   => s_hcrst
         );
+
+    c8 <= s_c8;
 
     hsync_5c <= s_h_5c;
     hsync_6c <= s_h_6c;
@@ -94,19 +164,40 @@ begin
         port map (
             hcrst   => s_hcrst,
             clk_hc6 => s_hc6,
-            -- only the taps the decode actually consumes are wired;
-            -- the rest default to open (the counter still counts them).
+            -- every tap goes out to video_sync's ports for the rest of the
+            -- ULA; the ones the decode below also reads (v2, v8, v3_n..v7_n)
+            -- go through s_* signals and are assigned out further down.
+            v0 => v0,
+            v1 => v1,
             v2 => s_v2,
+            v3 => v3,
+            v4 => v4,
+            v5 => v5,
+            v6 => v6,
+            v7 => v7,
             v8 => s_v8,
             -- complemented taps straight from the counter's q_n outputs
             -- (no extra inverters in video_sync)
+            v0_n => v0_n,
+            v1_n => v1_n,
+            v2_n => v2_n,
             v3_n => s_v3_n,
             v4_n => s_v4_n,
             v5_n => s_v5_n,
             v6_n => s_v6_n,
             v7_n => s_v7_n,
+            v8_n => v8_n,
             vrst => open
         );
+
+    v2 <= s_v2;
+    v8 <= s_v8;
+
+    v3_n <= s_v3_n;
+    v4_n <= s_v4_n;
+    v5_n <= s_v5_n;
+    v6_n <= s_v6_n;
+    v7_n <= s_v7_n;
 
     ----------------------------------------------------------------
     -- Border decode (Chris Smith pg 92)
