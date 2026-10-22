@@ -86,8 +86,6 @@ architecture structural of ula is
     -- data
     signal s_d : std_logic_vector(7 downto 0);
 
-    signal s_k0 : std_logic;
-
     -- clocks
     signal s_clk_14_n    : std_logic;
     signal s_clk_7       : std_logic;
@@ -199,6 +197,78 @@ begin
             k0      => k0,
             tclk_b  => s_tclk_b,
             tclk_a  => s_tclk_a
+        );
+
+    video_timing : entity work.video_sync(behavioral)
+        port map (
+            clk_7_n   => s_clk_7_n,
+            reset     => reset,
+            tclk_a    => s_tclk_a,
+            hsync_5c  => open,
+            hsync_6c  => open,
+            hblank_n  => s_hblank_n,
+            vsync     => s_vsync,
+            border_n  => s_border_n,
+            border    => s_border,
+            sync_5c_n => open,
+            sync_6c_n => s_sync_6c_n,
+
+            c0   => s_c0,
+            c0_n => s_c0_n,
+            c1   => s_c1,
+            c1_n => s_c1_n,
+            c2   => s_c2,
+            c2_n => s_c2_n,
+            c3   => s_c3,
+            c3_n => s_c3_n,
+            c4   => s_c4,
+            c4_n => s_c4_n,
+            c5   => s_c5,
+            c5_n => s_c5_n,
+            c6   => s_c6,
+            c6_n => s_c6_n,
+            c7   => s_c7,
+            c7_n => s_c7_n,
+            c8   => s_c8,
+            c8_n => s_c8_n,
+            v0   => s_v0,
+            v0_n => s_v0_n,
+            v1   => s_v1,
+            v1_n => s_v1_n,
+            v2   => s_v2,
+            v2_n => s_v2_n,
+            v3   => s_v3,
+            v3_n => s_v3_n,
+            v4   => s_v4,
+            v4_n => s_v4_n,
+            v5   => s_v5,
+            v5_n => s_v5_n,
+            v6   => s_v6,
+            v6_n => s_v6_n,
+            v7   => s_v7,
+            v7_n => s_v7_n,
+            v8   => s_v8,
+            v8_n => s_v8_n
+        );
+
+    latch_shift_clks : entity work.latch_and_shift_reg_control_clks (structural)
+        port map (
+            clk_7_n             => s_clk_7_n,
+            c0_n                => s_c0_n,
+            c0                  => s_c0,
+            c3_n                => s_c3_n,
+            c1                  => s_c1,
+            c1_n                => s_c1_n,
+            c2_n                => s_c2_n,
+            border_n            => s_border_n,
+            vid_c3_n            => s_vid_c3_n,
+            clk_7_pixel         => s_clk_7_pixel,
+            vid_cas_pulse       => open,
+            pixel_data_latch_n  => s_pixel_data_latch_n,
+            attr_data_latch_n   => s_attr_data_latch_n,
+            video_en            => s_video_en,
+            sload               => s_sload,
+            attr_output_latch_n => s_attr_output_latch_n
         );
 
 end architecture structural;
