@@ -140,13 +140,11 @@ architecture structural of ula is
     signal s_d : std_logic_vector(7 downto 0);
 
     -- clocks
-    signal s_clk_14_n    : std_logic;
     signal s_clk_7       : std_logic;
     signal s_clk_7_n     : std_logic;
     signal s_clk_7_pixel : std_logic;
 
     -- test clocks
-    signal s_tclk_a : std_logic;
     signal s_tclk_b : std_logic;
 
     -- control clocks
@@ -173,32 +171,21 @@ architecture structural of ula is
     signal s_c3   : std_logic;
     signal s_c3_n : std_logic;
     signal s_c4   : std_logic;
-    signal s_c4_n : std_logic;
     signal s_c5   : std_logic;
-    signal s_c5_n : std_logic;
     signal s_c6   : std_logic;
-    signal s_c6_n : std_logic;
     signal s_c7   : std_logic;
     signal s_c7_n : std_logic;
     signal s_c8   : std_logic;
     signal s_c8_n : std_logic;
 
     signal s_v0   : std_logic;
-    signal s_v0_n : std_logic;
     signal s_v1   : std_logic;
-    signal s_v1_n : std_logic;
     signal s_v2   : std_logic;
-    signal s_v2_n : std_logic;
     signal s_v3   : std_logic;
-    signal s_v3_n : std_logic;
     signal s_v4   : std_logic;
-    signal s_v4_n : std_logic;
     signal s_v5   : std_logic;
-    signal s_v5_n : std_logic;
     signal s_v6   : std_logic;
-    signal s_v6_n : std_logic;
     signal s_v7   : std_logic;
-    signal s_v7_n : std_logic;
     signal s_v8   : std_logic;
     signal s_v8_n : std_logic;
 
@@ -225,80 +212,50 @@ begin
 
     s_d <= d7 & d6 & d5 & d4 & d3 & d2 & d1 & d0; -- the data bus as one byte, for the two video fetch latches (read only)
 
-    s_clk_14_n <= not clk_14;
-
     d7 <= 'H'; -- D7's open-collector output never pulls low: released to the weak on-chip pull-up
 
-    master_clock : entity work.clk_div_2(behavioral)
+    timing_subsystem : entity work.ula_timing(structural)
         port map (
-            clk_in    => s_clk_14_n,
-            reset     => '0',
-            clk_out   => s_clk_7,
-            clk_out_n => s_clk_7_n
-        );
-
-    test_clocks : entity work.test_modes(structural)
-        port map (
-            v8_n    => s_v8_n,
-            rd_n    => rd_n,
-            ioreq_n => ioreq_n,
-            mreq_n  => mreq_n,
-            wr_n    => wr_n,
-            k0      => k0,
-            tclk_b  => s_tclk_b,
-            tclk_a  => s_tclk_a
-        );
-
-    video_timing : entity work.video_sync(behavioral)
-        port map (
-            clk_7_n   => s_clk_7_n,
+            clk_14    => clk_14,
             reset     => reset,
-            tclk_a    => s_tclk_a,
-            hsync_5c  => open,
-            hsync_6c  => open,
+            rd_n      => rd_n,
+            wr_n      => wr_n,
+            mreq_n    => mreq_n,
+            ioreq_n   => ioreq_n,
+            k0        => k0,
+            clk_7     => s_clk_7,
+            clk_7_n   => s_clk_7_n,
+            tclk_b    => s_tclk_b,
             hblank_n  => s_hblank_n,
             vsync     => s_vsync,
-            border_n  => s_border_n,
             border    => s_border,
-            sync_5c_n => open,
+            border_n  => s_border_n,
             sync_6c_n => s_sync_6c_n,
-
-            c0   => s_c0,
-            c0_n => s_c0_n,
-            c1   => s_c1,
-            c1_n => s_c1_n,
-            c2   => s_c2,
-            c2_n => s_c2_n,
-            c3   => s_c3,
-            c3_n => s_c3_n,
-            c4   => s_c4,
-            c4_n => s_c4_n,
-            c5   => s_c5,
-            c5_n => s_c5_n,
-            c6   => s_c6,
-            c6_n => s_c6_n,
-            c7   => s_c7,
-            c7_n => s_c7_n,
-            c8   => s_c8,
-            c8_n => s_c8_n,
-            v0   => s_v0,
-            v0_n => s_v0_n,
-            v1   => s_v1,
-            v1_n => s_v1_n,
-            v2   => s_v2,
-            v2_n => s_v2_n,
-            v3   => s_v3,
-            v3_n => s_v3_n,
-            v4   => s_v4,
-            v4_n => s_v4_n,
-            v5   => s_v5,
-            v5_n => s_v5_n,
-            v6   => s_v6,
-            v6_n => s_v6_n,
-            v7   => s_v7,
-            v7_n => s_v7_n,
-            v8   => s_v8,
-            v8_n => s_v8_n
+            c0        => s_c0,
+            c0_n      => s_c0_n,
+            c1        => s_c1,
+            c1_n      => s_c1_n,
+            c2        => s_c2,
+            c2_n      => s_c2_n,
+            c3        => s_c3,
+            c3_n      => s_c3_n,
+            c4        => s_c4,
+            c5        => s_c5,
+            c6        => s_c6,
+            c7        => s_c7,
+            c7_n      => s_c7_n,
+            c8        => s_c8,
+            c8_n      => s_c8_n,
+            v0        => s_v0,
+            v1        => s_v1,
+            v2        => s_v2,
+            v3        => s_v3,
+            v4        => s_v4,
+            v5        => s_v5,
+            v6        => s_v6,
+            v7        => s_v7,
+            v8        => s_v8,
+            v8_n      => s_v8_n
         );
 
     latch_shift_clks : entity work.latch_and_shift_reg_control_clks (synchronous)
