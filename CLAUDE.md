@@ -997,9 +997,18 @@ None is wired into a top level yet. **Phase 6 is complete.**
   **Lesson:** block TBs with ideal stimulus can't see start-up glitches,
   races between clock domains, or fill bits; only the integrated system
   can. Keep `ula_tb` as the regression gate for every future change.
-- ⏳ `latch_and_shift_reg_control_clks_tb` still tests `structural` only
-  (clocks tied off); the `synchronous` strobes are covered end to end by
-  `ula_tb`. A dedicated synchronous TB is still to write.
+- ✅ **`latch_and_shift_reg_control_clks_sync_tb`** (xsim, 1 216 201 checks,
+  2026-10-23) tests the `synchronous` architecture; the older
+  `latch_and_shift_reg_control_clks_tb` still covers `structural`. Its
+  stimulus is the real `ula_timing` (14 MHz clock, divider, gate-level
+  counters), so the strobes see chip timing. Every clk_14 tick, sampled
+  mid-tick, it checks the four strobes against the header's tick table (gating
+  from the previous tick, since a registered strobe lags its decode by one
+  tick), plus `vid_c3_n`, `video_en`, `clk_7_pixel`; and the **race rule**:
+  `sload` stable 20 ns either side of every falling pixel-clock edge. Runs
+  lines 0..193 with coverage asserts (strobes in the display, suppressed in
+  the horizontal AND vertical border, sload given and suppressed). Mutation
+  check: moving sload back to ticks 8, 9 (the bug-5 race) fails it at once.
 - ✅ **Subsystems refactor (2026-10-23).** `ULA.vhd` now instantiates six
   pure-wiring subsystems plus `interrupt`, instead of 18 blocks. `ula_tb` was
   re-run unchanged after each one and stayed ALL TESTS PASSED.
@@ -1030,5 +1039,4 @@ None is wired into a top level yet. **Phase 6 is complete.**
     `ula_video_fetch` and `in` in `ula_io_port` (the pin is `inout`);
     `d0..d2` are `inout` inside `ula_io_port` (keyboard drives, border reads).
 - ⏳ Next: the XDC / FPGA wrapper (Phase 7 hardware items in
-  `docs/pinout.md`), and a dedicated TB for
-  `latch_and_shift_reg_control_clks(synchronous)`.
+  `docs/pinout.md`).
