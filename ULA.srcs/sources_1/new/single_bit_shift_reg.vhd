@@ -55,6 +55,17 @@
 -- master path is ~4 gates (data -> s_e_out -> s_d_out -> s_i_out -> s_a_out) ≈
 -- 4·TG, which must settle inside the testbench setup margin.
 --
+-- ONE gate per loop is slower: s_a_out and s_g_out use `after 2 * TG`.
+-- With every gate at exactly TG, a 1 ns glitch can circulate around a loop
+-- forever, because an inertial `after TG` only rejects pulses SHORTER than
+-- TG and a pulse exactly TG wide passes every gate. The system testbench
+-- (ula_tb) caught exactly that: a start-up glitch rang the shift register
+-- at 1 ns from 256 ns onward. s_a_out sits in both master loops
+-- (s_a_out <-> s_b_out, and s_a_out -> s_b_out -> s_c_out -> s_i_out), and
+-- s_g_out in the slave pair, so every loop has one 2·TG gate that filters a
+-- 1 ns glitch. Real gates never have identical delays, so this is closer
+-- to silicon, not further. Simulation only: synthesis ignores `after`.
+--
 -- Initial values seed a valid "holding 0" resting state (clk='0', set='0',
 -- q='0') so the network has a consistent starting point and avoids the
 -- U-propagation quirk where cross-coupled NORs with a still-'U' input
@@ -123,12 +134,12 @@ begin
     -- master latch (gated by clk)
     s_c_out <= not(clk or s_b_out)            after tg;
     s_b_out <= not(clk or s_a_out)            after tg;
-    s_a_out <= not(s_b_out or s_i_out)          after tg;
+    s_a_out <= not(s_b_out or s_i_out)          after 2 * tg; -- slower: breaks 1 ns rings (see header)
     s_i_out <= not(s_c_out or s_d_out or s_f_out) after tg;
 
     -- slave SR latch
     s_h_out <= not(s_c_out or s_g_out)          after tg;
-    s_g_out <= not(s_b_out or s_h_out)          after tg;
+    s_g_out <= not(s_b_out or s_h_out)          after 2 * tg; -- slower: breaks 1 ns rings (see header)
 
     q   <= s_g_out;
     q_n <= s_h_out;
