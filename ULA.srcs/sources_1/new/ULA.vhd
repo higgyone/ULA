@@ -148,7 +148,6 @@ architecture structural of ula is
     signal s_tclk_b : std_logic;
 
     -- control clocks
-    signal s_vid_c3_n            : std_logic;
     signal s_pixel_data_latch_n  : std_logic;
     signal s_attr_data_latch_n   : std_logic;
     signal s_attr_output_latch_n : std_logic;
@@ -191,7 +190,6 @@ architecture structural of ula is
 
     -- DRAM
     signal s_vid_ras    : std_logic;
-    signal s_vid_ras_n  : std_logic;
     signal s_vid_cas_ac : std_logic;
     signal s_vid_cas_bd : std_logic;
 
@@ -258,40 +256,49 @@ begin
             v8_n      => s_v8_n
         );
 
-    latch_shift_clks : entity work.latch_and_shift_reg_control_clks (synchronous)
+    video_fetch_subsystem : entity work.ula_video_fetch(structural)
         port map (
             clk_14              => clk_14,
             clk_7               => s_clk_7,
             clk_7_n             => s_clk_7_n,
-            c0_n                => s_c0_n,
             c0                  => s_c0,
-            c2                  => s_c2,
-            c3_n                => s_c3_n,
             c1                  => s_c1,
+            c2                  => s_c2,
+            c3                  => s_c3,
+            c4                  => s_c4,
+            c5                  => s_c5,
+            c6                  => s_c6,
+            c7                  => s_c7,
+            c0_n                => s_c0_n,
             c1_n                => s_c1_n,
             c2_n                => s_c2_n,
+            c3_n                => s_c3_n,
+            v0                  => s_v0,
+            v1                  => s_v1,
+            v2                  => s_v2,
+            v3                  => s_v3,
+            v4                  => s_v4,
+            v5                  => s_v5,
+            v6                  => s_v6,
+            v7                  => s_v7,
+            border              => s_border,
             border_n            => s_border_n,
-            vid_c3_n            => s_vid_c3_n,
+            a0                  => a0,
+            a1                  => a1,
+            a2                  => a2,
+            a3                  => a3,
+            a4                  => a4,
+            a5                  => a5,
+            a6                  => a6,
+            vid_ras             => s_vid_ras,
+            vid_cas_ac          => s_vid_cas_ac,
+            vid_cas_bd          => s_vid_cas_bd,
             clk_7_pixel         => s_clk_7_pixel,
-            vid_cas_pulse       => open,
             pixel_data_latch_n  => s_pixel_data_latch_n,
             attr_data_latch_n   => s_attr_data_latch_n,
-            video_en            => s_video_en,
+            attr_output_latch_n => s_attr_output_latch_n,
             sload               => s_sload,
-            attr_output_latch_n => s_attr_output_latch_n
-        );
-
-    strobe_generation : entity work.ras_cas_generation(synchronous)
-        port map (
-            clk_14     => clk_14,
-            clk_7      => s_clk_7,
-            c0         => s_c0,
-            c1         => s_c1,
-            vid_c3_n   => s_vid_c3_n,
-            vid_ras    => s_vid_ras,
-            vid_cas_ac => s_vid_cas_ac,
-            vid_cas_bd => s_vid_cas_bd,
-            vid_ras_n  => s_vid_ras_n
+            video_en            => s_video_en
         );
 
     mem_access : entity work.cpu_memory_access(structural)
@@ -310,38 +317,6 @@ begin
             ras_n      => ras_n,
             cas_n      => cas_n,
             we_n       => we_n
-        );
-
-    video_addressing : entity work.video_address_generation(structural)
-        port map (
-            vid_ras_n => s_vid_ras_n,
-            c0_n      => s_c0_n,
-            c1        => s_c1,
-            c1_n      => s_c1_n,
-            c2        => s_c2,
-            c2_n      => s_c2_n,
-            c3        => s_c3,
-            c4        => s_c4,
-            c5        => s_c5,
-            c6        => s_c6,
-            c7        => s_c7,
-            v0        => s_v0,
-            v1        => s_v1,
-            v2        => s_v2,
-            v3        => s_v3,
-            v4        => s_v4,
-            v5        => s_v5,
-            v6        => s_v6,
-            v7        => s_v7,
-            border    => s_border,
-            a0        => a0,
-            a1        => a1,
-            a2        => a2,
-            a3        => a3,
-            a4        => a4,
-            a5        => a5,
-            a6        => a6,
-            ae_n      => open
         );
 
     flash : entity work.flash_clock(structural)
