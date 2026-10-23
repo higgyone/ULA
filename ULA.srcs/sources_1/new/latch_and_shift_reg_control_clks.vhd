@@ -64,8 +64,28 @@
 --   and it is exported so ras_cas_generation makes the video RAS/CAS in the
 --   same window: one gate, one source, two blocks.
 --
--- NOTE: sload (pixel 4) leads attr_output_latch_n (pixel 5) by one pixel
--- rather than firing together.
+-- NOTE: in the book's gates (architecture structural) sload is decoded in
+-- pixel 4, one pixel before attr_output_latch_n (pixel 5). The shift
+-- register still loads at the START of pixel 5, because the decoded sload
+-- only changes a few ns after the counter edge (ripple).
+--
+-- ── Architecture synchronous ─────────────────────────────────────────
+--   The four strobes are registered on clk_14 instead of decoded from the
+--   counter, so they cannot glitch. The system testbench (ula_tb) showed the
+--   gate strobes reopening the data latches for 1-3 ns just after the DRAM
+--   released the bus (the book's 24 ns clk7 delay, dropped here, used to
+--   prevent that), so the latches captured 0xFF.
+--   tick = c2 c1 c0 clk_7 (0..15, pixel p = ticks 2p, 2p+1). A registered
+--   strobe is active one tick AFTER the tick it decodes:
+--     pixel_data_latch_n  ticks 2, 10   (pixels 1, 5 first half)
+--     attr_data_latch_n   ticks 6, 14   (pixels 3, 7 first half)
+--     sload               ticks 10, 11  (PIXEL 5, not 4: see below)
+--     attr_output_latch_n ticks 10, 11  (pixel 5)
+--   sload moves to pixel 5 because a registered sload changes ON the clk_14
+--   edge, BEFORE the pixel clock edge (which comes through the divider). In
+--   pixel 4 it would load at pixel 4's start, one pixel early, and each
+--   character's attribute would lag its pixels by one pixel (ula_tb caught
+--   that too). In pixel 5 the load edge is pixel 5's start, as in the gates.
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -161,8 +181,11 @@ begin
                 s_attr_data_latch_n <= '0';
             end if;
 
-            -- shift register load: active ticks 8, 9 (pixel 4), only when video_en
-            if ((s_tick = "0111" or s_tick = "1000") and s_vid_en_n = '0') then
+            -- shift register load: active ticks 10, 11 (pixel 5), only when
+            -- video_en. One pixel later than the gates' pixel 4: a registered
+            -- sload changes on the clk_14 edge, BEFORE the pixel clock edge
+            -- (via the divider), so loading at pixel 5's start needs pixel 5
+            if ((s_tick = "1001" or s_tick = "1010") and s_vid_en_n = '0') then
                 s_sload <= '1';
             end if;
 
