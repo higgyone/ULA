@@ -100,7 +100,6 @@ ghdl -r --std=08 --workdir=$work <dut>_tb --stop-time=200ns
 ### Primitive flip-flops
 | Entity | File | Role |
 |--------|------|------|
-| `d_ff` | `D_FF.vhd` | D flip-flop, falling edge, q and q_bar outputs |
 | `clk_div_2` | `clk_div_2.vhd` | Divide-by-2 used for C0–C5 ripple chain |
 | `d_ff_nor` | `d_ff_nor.vhd` | Structural D FF built from NOR gates |
 | `trc_ff` | `trc_ff.vhd` | T FF with reset and carry |
@@ -313,11 +312,9 @@ same discipline: entity + every port map + every TB in one commit.
 **⏳ Still TODO — Vivado-PC tasks (touch `ULA.xpr`, must go through the IDE):**
 - Rename file **and** entity `Vert_Line_counter` → `vert_line_counter`
   (update its two port maps in `video_sync.vhd` + `vert_line_counter_tb.vhd`).
-- Rename file `D_FF.vhd` → `d_ff.vhd` (entity is already `d_ff`).
-- Rename file + entity `D_FF_tb` → `d_ff_tb`.
-- Retire `b3_tb.vhd` — a stale duplicate of `bit3_counter_tb` that instantiates
-  a non-existent `bit3_counter(Behavioral)` architecture (already broken; its
-  port map happens to match the new `clk, reset, …` order).
+- ~~Rename `D_FF.vhd` / `D_FF_tb`~~ — moot: both **retired 2026-10-23**
+  (nothing in the design used `d_ff`; `d_ff_nor` replaced it).
+- ~~Retire `b3_tb.vhd`~~ — done in `23e74e2`.
 
 **Caveat — renames touch `ULA.xpr`** and every renamed port/arch must be updated
 in all consumers and testbenches in the *same* commit (cf. the
@@ -331,9 +328,8 @@ Things that must be done in Vivado on the Vivado PC, because they require touchi
   portion of the naming/ordering cleanup is done (see "Naming & ordering
   consistency"); these renames remain because they touch `ULA.xpr`:
   `Vert_Line_counter` → `vert_line_counter` (file + entity; update the two port
-  maps), `D_FF.vhd` → `d_ff.vhd` (file only — entity is already `d_ff`),
-  `D_FF_tb` → `d_ff_tb` (file + entity), and retire the broken `b3_tb.vhd`
-  duplicate. Do each through the IDE / Tcl (`get_files` + `add_files` +
+  maps). (`D_FF` / `D_FF_tb` were retired and `b3_tb` deleted, so their
+  renames are gone.) Do it through the IDE / Tcl (`get_files` + `add_files` +
   `remove_files`), then `git mv` / `git rm` the working copies in the same commit.
 
 - **`master_horiz_counter_tb` imports duplicate — DONE.** The stale
