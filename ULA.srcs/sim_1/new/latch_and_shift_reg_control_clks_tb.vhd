@@ -156,14 +156,20 @@ architecture behavioral of latch_and_shift_reg_control_clks_tb is
 
 begin
 
+    -- Tests the book's gate version (structural). The synchronous version's
+    -- strobes are verified end to end by the system testbench (ula_tb);
+    -- clk_14 / clk_7 are unused by structural, so they are tied off here.
     dut : entity work.latch_and_shift_reg_control_clks(structural)
         port map (
+            clk_14              => '0',
+            clk_7               => '0',
             clk_7_n             => clk_7_n,
             c0_n                => c0_n,
             c0                  => c0,
             c3_n                => c3_n,
             c1                  => c1,
             c1_n                => c1_n,
+            c2                  => not c2_n,
             c2_n                => c2_n,
             border_n            => border_n,
             vid_c3_n            => vid_c3_n,

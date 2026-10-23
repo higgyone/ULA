@@ -79,13 +79,20 @@
 --   strobe is active one tick AFTER the tick it decodes:
 --     pixel_data_latch_n  ticks 2, 10   (pixels 1, 5 first half)
 --     attr_data_latch_n   ticks 6, 14   (pixels 3, 7 first half)
---     sload               ticks 10, 11  (PIXEL 5, not 4: see below)
---     attr_output_latch_n ticks 10, 11  (pixel 5)
---   sload moves to pixel 5 because a registered sload changes ON the clk_14
---   edge, BEFORE the pixel clock edge (which comes through the divider). In
---   pixel 4 it would load at pixel 4's start, one pixel early, and each
---   character's attribute would lag its pixels by one pixel (ula_tb caught
---   that too). In pixel 5 the load edge is pixel 5's start, as in the gates.
+--     sload               ticks 7, 8    (straddles the start of pixel 4)
+--     attr_output_latch_n ticks 8, 9    (pixel 4)
+--
+--   WINDOWS ARE CENTRED ON THE EDGE THEY ARE FOR. A registered strobe changes
+--   ON the clk_14 edge; the pixel clock changes ~3 ns AFTER that edge (it
+--   comes through the divider). So a strobe whose window starts or ends at
+--   the tick where the shift register clocks changes only ~3 ns before the
+--   edge that samples it, and whether the load happens depends on the order
+--   of simultaneous gate events (ula_tb found exactly that race). sload is
+--   therefore high for a whole tick either side of the pixel-4 clock edge,
+--   and the attribute output latch opens at the same pixel, so a character's
+--   pixels and its attribute switch together. At pixel 4 both inputs are
+--   stable: the display latch closed in pixel 1 (reopens in pixel 5), the
+--   attribute latch in pixel 3 (reopens in pixel 7).
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -181,16 +188,15 @@ begin
                 s_attr_data_latch_n <= '0';
             end if;
 
-            -- shift register load: active ticks 10, 11 (pixel 5), only when
-            -- video_en. One pixel later than the gates' pixel 4: a registered
-            -- sload changes on the clk_14 edge, BEFORE the pixel clock edge
-            -- (via the divider), so loading at pixel 5's start needs pixel 5
-            if ((s_tick = "1001" or s_tick = "1010") and s_vid_en_n = '0') then
+            -- sload: active ticks 7, 8, straddling the start of pixel 4 (the
+            -- shift register loads on that edge), only when video_en
+            if ((s_tick = "0110" or s_tick = "0111") and s_vid_en_n = '0') then
                 s_sload <= '1';
             end if;
 
-            -- attribute output latch: active ticks 10, 11 (pixel 5), every character
-            if (s_tick = "1001" or s_tick = "1010") then
+            -- attribute output latch: active ticks 8, 9 (pixel 4), so the attribute
+            -- changes at the same edge the shift register loads
+            if (s_tick = "0111" or s_tick = "1000") then
                 s_attr_output_latch_n <= '0';
             end if;
         end if;
