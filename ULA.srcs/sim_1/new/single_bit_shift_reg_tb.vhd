@@ -27,8 +27,8 @@ end entity single_bit_shift_reg_tb;
 
 architecture behavioral of single_bit_shift_reg_tb is
 
-    constant t      : time := 10 ns; -- clk period
-    constant settle : time := 4 ns;  -- > worst-case gate path after edge
+    constant t      : time := 20 ns; -- clk period
+    constant settle : time := 6 ns;  -- > worst-case gate path after edge (clk -> q is ~5 ns: one 2*tg gate)
 
     signal clk      : std_logic := '0';
     signal data_n   : std_logic := '1'; -- data   = 0

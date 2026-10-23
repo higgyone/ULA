@@ -180,7 +180,8 @@ Where a port maps directly to a named net on Chris Smith's schematic, the book's
 spelling wins for traceability — e.g. `shift8`'s `Sin` (serial-in) and `SLoad`
 (load/shift select) keep the book's mixed-case names rather than becoming
 `s_in`/`s_load`. (Bonus: it also avoids the `s_` internal-signal prefix landing
-on a port.) `Sin` is active-low. A future naming pass should **not** "correct"
+on a port.) `Sin` is **active high** (tied to SLoad; corrected 2026-10-23, see
+Phase 7). A future naming pass should **not** "correct"
 these — leave book-named ports alone.
 
 **Data-bus port naming (D0–D7) — the book's names.** The ULA's D pins are
@@ -938,5 +939,96 @@ None is wired into a top level yet. **Phase 6 is complete.**
   tri-state on `ae_n`, `/phicpu` open collector, the new `sound_io` analogue
   pin model, header notes, K1–K4 on-chip `'H'`) and the board/hardware items
   (DAC boundary, 14 MHz MMCM, 5 V ↔ 3.3 V, board resistor model).
-- `ULA.vhd` — instantiates all sub-modules; full Z80 bus; wired to the Arty A7-35T XDC
-- Full system testbench with Z80 bus model, multi-frame video timing verification
+- ✅ **`ULA.vhd`** (branch `ula-wiring`) — the top level: one port per pin
+  (`docs/pinout.md`), all 18 blocks wired (user wrote it, reviewed; since grouped into six subsystems, see below). Clock:
+  `s_clk_14_n <= not clk_14` (the book's common-emitter stage) → `clk_div_2`
+  (reset tied '0') → `s_clk_7` (Q → `ras_cas_generation`) / `s_clk_7_n`
+  (/clk7). `latch_and_shift_reg_control_clks` makes the pixel clock
+  `s_clk_7_pixel` → the colour mux's `clk_7_pixel` port (renamed from `clk_7`
+  so it can't be confused with /clk7). `vid_c3_n` = `border OR c3_n` is now
+  GENERATED in `latch_and_shift_reg_control_clks` (where the book draws it)
+  and exported to `ras_cas_generation`. Unused outputs `open`: hsync_5c/6c,
+  sync_5c_n, vid_cas_pulse, ram_16, cpuclk, ae_n, fl. `yuv_video.sync_n` =
+  `s_sync_6c_n` (6C001). `reset` is sim-only (the real chip has none).
+  `d7 <= 'H'`: an inout port with NO internal driver leaks its default 'U'
+  onto the net (LRM: a port with no sources drives its default value), which
+  made D7 — the FLASH bit — 'U' and every pixel 'X'. Any future inout pin
+  that the ULA never drives needs the same.
+- ✅ **System testbench `ula_tb`** (`sim_1/new`, in `ULA.xpr`) —
+  drives only the pins, through a board model: 14 MHz crystal, a 16K DRAM
+  preloaded with a test screen (every byte different, ink ≠ paper, no
+  FLASH), the '157 as a weak driver on A0..A6, 8k2 data / 10k keyboard
+  pull-ups, pin 32's 1k + the NPN with 180 Ω, issue-3 RAS (nothing on the far
+  end), no tape. Reads internal RGB / counter nets through VHDL-2008
+  **external names** (`<<signal .ula_tb.dut.s_red : std_logic>>`; xsim
+  supports them). **ALL TESTS PASSED (2026-10-23):** all 48 640 display
+  pixels of frame 0 (lines 2..191; pipeline delay 12 px, measured on line 2),
+  border cyan after `OUT (0xFE),5`, side borders + h-blank, Z80 clock 3.5 MHz,
+  one /INT at line 248 for 64 px, `IN (0xFE)` key/EAR/pull-ups, RAS released
+  ('Z') in a border ROM access, and RAS released during a video RAS **0
+  times** (the open vid_ras/border_n question: not seen). ~21 ms of gate-level
+  sim, a few minutes; compile with `xvhdl -prj` (the file list is too long for
+  one cmd line). Limitation: the Z80 never drives the data bus during a video
+  fetch (no 470 Ω model yet).
+  **Bugs it found and fixed (none visible to the block TBs):**
+  1. Latch strobes glitched 1–3 ns after CAS released the bus (the book's
+     24 ns clk7 delay, dropped as unsynthesisable, existed to stop that), so
+     the latches caught 0xFF → `latch_and_shift_reg_control_clks` gained
+     architecture **`synchronous`**: strobes registered on `clk_14` (new ports
+     `clk_14`, `clk_7`, `c2`); `structural` kept as the book's gates. Simply
+     restoring a 24 ns delay was tried and broke the attribute strobe.
+  2. D7 floating 'U' → `d7 <= 'H'` (above).
+  3. A 1 ns **simulation ring** in `single_bit_shift_register`: with every
+     gate at exactly `tg`, a start-up glitch circulated forever (an inertial
+     `after tg` only rejects pulses SHORTER than tg). Fix: one gate per loop
+     `after 2 * tg` (sim only, closer to silicon). The cell TB's margin went
+     to 20 ns / 6 ns.
+  4. **Sin polarity:** the book ties Sin to the active-high SLoad, so Sin is
+     active high; `shift8` fed it straight into an active-LOW input, shifting
+     in ink. Invisible in the display (a load every 8 px overwrites the fill
+     bits), visible in the BORDER. `shift8` now inverts it (`s_sin_n`).
+  5. **Strobe-vs-pixel-clock race:** a registered strobe changes ON the
+     clk_14 edge, the pixel clock ~3 ns after it, so a window starting or
+     ending at the shift register's clock tick changes 3 ns before the
+     sampling edge. Fix: windows CENTRED on their edge — `sload` ticks 7, 8
+     (straddling pixel 4's start), `attr_output_latch_n` ticks 8, 9. Rule for
+     any future synchronous strobe: never let it change on the tick its
+     consumer clocks.
+  **Lesson:** block TBs with ideal stimulus can't see start-up glitches,
+  races between clock domains, or fill bits; only the integrated system
+  can. Keep `ula_tb` as the regression gate for every future change.
+- ⏳ `latch_and_shift_reg_control_clks_tb` still tests `structural` only
+  (clocks tied off); the `synchronous` strobes are covered end to end by
+  `ula_tb`. A dedicated synchronous TB is still to write.
+- ✅ **Subsystems refactor (2026-10-23).** `ULA.vhd` now instantiates six
+  pure-wiring subsystems plus `interrupt`, instead of 18 blocks. `ula_tb` was
+  re-run unchanged after each one and stayed ALL TESTS PASSED.
+  | Subsystem | Blocks inside |
+  |---|---|
+  | `ula_timing` | clk_14 inverter, `clk_div_2`, `video_sync`, `test_modes` |
+  | `ula_video_fetch` | `latch_and_shift_reg_control_clks(synchronous)`, `ras_cas_generation`, `video_address_generation` |
+  | `ula_colour` | `flash_clock`, `attr_output_latch_border_select_mux`, `yuv_video` |
+  | `ula_memory_cpu` | `cpu_memory_access`, `contention_handler_3` |
+  | `ula_io_port` | `io_port_decode_0xfe`, `keyboard_input`, `border_reg` |
+  | `ula_sound` | `cassette_speaker_out`, `sound_io`, `cassette_input` |
+  Rules that came out of it:
+  - Nets used by one subsystem only stay inside it (`tclk_a`, `vid_c3_n`,
+    `vid_ras_n`, `flash_clk`, `mic`, `speaker`, `ear`). Only exported counter
+    taps that something reads leave `ula_timing` (26 of 36; the rest `open`).
+  - **Output also read inside its own subsystem** → drive an internal `s_`
+    signal from the instance, read that, and copy it to the port
+    (`clk_7_n <= s_clk_7_n;`). VHDL-93 can't read an `out` port. Used for
+    `clk_7_n`, `v8_n`, `red/green/blue/hl`, `port_rd_n/port_wr_n`.
+  - **An `out` with no driver is legal VHDL**, so a missing copy line or a
+    port map into a dead internal signal compiles clean. Only `ula_tb`
+    catches it, so run it after every wrapper.
+  - `ula_tb` reads `s_red/green/blue/hl`, `s_clk_7_pixel`, `s_vid_ras`,
+    `s_c0..s_c8`, `s_v0..s_v8` via external names, so those must stay
+    signals in `ULA.vhd`: `ula_timing` exports `v8` and `ula_colour` exports
+    RGB + BRIGHT for that reason (RGB is also the natural FPGA VGA output).
+  - Per-pin direction can differ by subsystem: `a0` is `out` in
+    `ula_video_fetch` and `in` in `ula_io_port` (the pin is `inout`);
+    `d0..d2` are `inout` inside `ula_io_port` (keyboard drives, border reads).
+- ⏳ Next: the XDC / FPGA wrapper (Phase 7 hardware items in
+  `docs/pinout.md`), and a dedicated TB for
+  `latch_and_shift_reg_control_clks(synchronous)`.

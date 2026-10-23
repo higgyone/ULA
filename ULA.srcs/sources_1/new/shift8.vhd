@@ -32,6 +32,14 @@
 --   Cell 0 (the LSB) has no right-hand neighbour, so its data_1_n comes from
 --   the external serial input Sin. Cell 7 (the MSB) is the serial output.
 --
+--   Sin is ACTIVE HIGH (the book ties it to SLoad, which is active high), so
+--   it is inverted into cell 0's active-low data_1_n (s_sin_n <= not sin).
+--   This matters in the BORDER: nothing loads there, so the register keeps
+--   shifting in from Sin, and those fill bits are what reach the screen.
+--   SLoad idles at '0', so Sin shifts in pixel 0 = paper = the border
+--   colour. (Inside the display a load every 8 pixels overwrites the fill
+--   bits.) ula_tb caught the earlier active-low model: the border showed ink.
+--
 -- Clock:
 --   All eight cells share clk. Each cell samples while clk is high and commits
 --   on the falling edge (clk 1->0), so the whole row shifts together on one
@@ -45,7 +53,7 @@ entity shift8 is
     port (
         clk    : in    std_logic;                    -- pixel clock; cells commit on the falling edge
         sload  : in    std_logic;                    -- '1' = LOAD the data_n byte, '0' = SHIFT left one place
-        sin    : in    std_logic;                    -- serial bit shifted into the LSB end (ACTIVE-LOW; don't-care in normal pixel use)
+        sin    : in    std_logic;                    -- serial bit into the LSB end, ACTIVE HIGH (book: tied to SLoad)
         data_n : in    std_logic_vector(7 downto 0); -- byte to load, ACTIVE-LOW (each wire is the inverse of its bit)
         q      : out   std_logic;                    -- serial output = MSB cell's q (leftmost pixel first)
         q_n    : out   std_logic                     -- inverse of q
@@ -73,18 +81,23 @@ architecture structural of shift8 is
     signal s_q_7   : std_logic;
     signal s_q_7_n : std_logic;
 
+    signal s_sin_n : std_logic;
+
 begin
+
+    s_sin_n <= not sin; -- Sin is active high (book); the first cell's shift input is active low
 
     -- Serial output taps off the top (MSB) cell.
     q   <= s_q_7;
     q_n <= s_q_7_n;
 
-    -- Cell 0 (LSB): shift-in comes from the external serial input Sin.
+    -- Cell 0 (LSB): shift-in comes from the external serial input Sin, inverted
+    -- into the cell's active-low shift input (see header).
     shift_0 : entity work.single_bit_shift_register
         port map (
             clk      => clk,
             data_n   => data_n(0),
-            data_1_n => sin,
+            data_1_n => s_sin_n,
             set      => sload,
             q        => s_q_0,
             q_n      => s_q_0_n

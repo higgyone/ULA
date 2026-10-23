@@ -47,13 +47,13 @@ belongs to the top level.
 | 17 | `/Y` | 49, 50 | analogue | inverted luminance + sync | `yuv_video.y_n` (mV) | ✅ sim |
 | 18 | D0 | 43 | open collector (weak pull-up) + TTL in | data bus | out: `keyboard_input.do_0`; in: `border_reg.di_0`, video latches bit 0 | ✅ |
 | 19 | K0 | 42 | emitter-follower in + weak pull-up; open-collector out (die test) | keyboard column 0 | in: `keyboard_input.k0`; out: `test_modes.k0` (`v8_n` in test mode B) | ✅ |
-| 20 | K1 | 41 | emitter-follower in + weak pull-up | keyboard column 1 | `keyboard_input.k1` | ✅ (top: fix 5) |
+| 20 | K1 | 41 | emitter-follower in + weak pull-up | keyboard column 1 | `keyboard_input.k1` | ✅ (`in`; pull-up: fix 5) |
 | 21 | D1 | 40 | open collector (weak pull-up) + TTL in | data bus | out: `keyboard_input.do_1`; in: `border_reg.di_1`, video latches bit 1 | ✅ |
 | 22 | D2 | 39 | open collector (weak pull-up) + TTL in | data bus | out: `keyboard_input.do_2`; in: `border_reg.di_2`, video latches bit 2 | ✅ |
-| 23 | K2 | 38 | emitter-follower in + weak pull-up | keyboard column 2 | `keyboard_input.k2` | ✅ (top: fix 5) |
-| 24 | K3 | 37 | emitter-follower in + weak pull-up | keyboard column 3 | `keyboard_input.k3` | ✅ (top: fix 5) |
+| 23 | K2 | 38 | emitter-follower in + weak pull-up | keyboard column 2 | `keyboard_input.k2` | ✅ (`in`; pull-up: fix 5) |
+| 24 | K3 | 37 | emitter-follower in + weak pull-up | keyboard column 3 | `keyboard_input.k3` | ✅ (`in`; pull-up: fix 5) |
 | 25 | D3 | 36 | open collector (weak pull-up) + TTL in | data bus | out: `keyboard_input.do_3`; in: `cassette_speaker_out.di_3` (MIC), video latches bit 3 | ✅ |
-| 26 | K4 | 35 | emitter-follower in + weak pull-up | keyboard column 4 | `keyboard_input.k4` | ✅ (top: fix 5) |
+| 26 | K4 | 35 | emitter-follower in + weak pull-up | keyboard column 4 | `keyboard_input.k4` | ✅ (`in`; pull-up: fix 5) |
 | 27 | D4 | 34 | open collector (weak pull-up) + TTL in | data bus | out: `keyboard_input.do_4`; in: `cassette_speaker_out.di_4` (speaker), video latches bit 4 | ✅ |
 | 28 | SOUND | 32, 33 | analogue | MIC / speaker out, EAR in, on one pin | `sound_io`: `sound` out, `tape_mv` in (mV); `ear` → `cassette_input`; `mic`/`speaker` from `cassette_speaker_out` | ✅ sim (fix 3 done) |
 | 29 | D5 | 31, 28 | **input only** | data bus | never driven; read by the video latches bit 5 | ✅ |
@@ -141,7 +141,7 @@ time. The design reproduces the book's gate as built.
 | 2 | `/phicpu` open collector: `'0'` / `'Z'`; TB adds the 1k pull-up and the PCB transistor | `contention_handler_3` + TB | ✅ done |
 | 3 | New behavioural `sound_io`: (speaker, mic) → 4 levels in mV; EAR = pin > 714 mV | new block + TB | ✅ done |
 | 4 | Header notes: 470 Ω on `/INT`; the `/RAS` "implementation error" | `interrupt`, `cpu_memory_access` | ✅ done |
-| 5 | Weak `'H'` on K1–K4 (on-chip pull-ups); A0 `inout` | top-level `ULA.vhd` | ⏳ Phase 7 |
+| 5 | Top-level directions: A0 and K0 `inout`, K1–K4 `in`. The K pull-ups (on-chip weak + PCB 10k) are NOT VHDL drivers: they are `'H'` in the system TB's board model and a `PULLUP` in the XDC | `ULA.vhd`, system TB, XDC | ⏳ Phase 7 |
 
 ## Phase 7: board and hardware items
 
@@ -150,6 +150,12 @@ time. The design reproduces the book's gate as built.
 - **Clock:** the Arty A7 has a 100 MHz oscillator. An MMCM gives exactly
   14.000 MHz (100 MHz × 7 = 700 MHz VCO, ÷ 50) for `clk_14`, in an FPGA wrapper
   outside the ULA model.
+- **Weak `'H'` does not synthesise.** Vivado treats `'H'` as a plain `'1'`, so
+  every open-collector output modelled as `'0'` / `'H'` (D0–D4, D6, K0,
+  `/INT`) would become a strong push-pull driver on the FPGA and fight the
+  bus. For hardware, those pins must release to `'Z'` with a `PULLUP` in the
+  XDC (in an FPGA wrapper, or a synthesis-only variant). Simulation is
+  unaffected: `'0'` / `'H'` is the right model there.
 - **Levels:** the Artix-7's I/O is 3.3 V and not 5 V tolerant; a real Spectrum
   board needs 5 V ↔ 3.3 V level shifting on every signal pin. The keyboard's
   reduced swing must still read as a low.

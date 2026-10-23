@@ -48,7 +48,7 @@ library ieee;
 
 entity attr_output_latch_border_select_mux is
     port (
-        clk_7               : in    std_logic;                    -- 7MHz clock
+        clk_7_pixel         : in    std_logic;                    -- pixel clock (clk7 pixel): shifts the pixels out; NOT /clk7
         flash_clk           : in    std_logic;
         sload               : in    std_logic;                    -- serial pixel load
         pixel_data_latch_n  : in    std_logic;                    -- latch pixel data
@@ -91,7 +91,7 @@ begin
     -- 1) serialise the display byte into an MSB-first pixel stream
     pix_serial : entity work.pixel_serialiser
         port map (
-            clk          => clk_7,
+            clk          => clk_7_pixel,
             sload        => sload,
             data_latch_n => pixel_data_latch_n,
             data         => pixel_data,

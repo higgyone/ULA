@@ -46,7 +46,7 @@ architecture behavioral of shift8_tb is
 
     signal clk    : std_logic                    := '0';
     signal sload  : std_logic                    := '1';             -- start in LOAD mode
-    signal sin    : std_logic                    := '1';             -- active-low serial-in: '1' feeds 0s into the LSB (don't-care here)
+    signal sin    : std_logic                    := '0';             -- active-high serial-in: '0' feeds 0s into the LSB (don't-care here)
     signal data_n : std_logic_vector(7 downto 0) := (others => '1'); -- active-low load bus; all '1' = load 0x00
     signal q      : std_logic;
     signal q_n    : std_logic;
