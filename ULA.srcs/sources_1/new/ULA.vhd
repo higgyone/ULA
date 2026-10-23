@@ -1,35 +1,88 @@
 ----------------------------------------------------------------------------------
--- Company:
--- Engineer:
+-- ula — the ZX Spectrum 48K ULA (Ferranti 6C001E-7), top level
 --
--- Create Date: 21.10.2026 16:37:50
--- Design Name:
--- Module Name: ULA - Behavioral
--- Project Name:
--- Target Devices:
--- Tool Versions:
--- Description:
+-- Gate-accurate recreation of the Spectrum's custom chip, following Chris
+-- Smith's "The ZX Spectrum ULA". This file only WIRES the verified blocks
+-- together: it holds no logic of its own except the clock input inverter.
+-- One port per pin of the 40-pin package; see docs/pinout.md for every pin's
+-- cell, pad type and board circuit.
 --
--- Dependencies:
+-- ── What the chip does ───────────────────────────────────────────────
+--   * video timing: 448 pixels x 312 lines (PAL), border, sync, interrupt
+--   * fetches the display and attribute bytes from the lower 16K DRAM and
+--     turns them into pixels, colour, FLASH and the border colour
+--   * analogue video out: inverted luminance /Y and the colour differences
+--     U and V, with the PAL colour burst
+--   * shares the lower 16K with the Z80: DRAM RAS / CAS / WE and address
+--     A0..A6, ROM chip select, CPU clock contention
+--   * I/O port 0xFE: keyboard and EAR in; border colour, MIC and speaker out
+--   * wafer test modes (MREQ and IORQ low together)
 --
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
+-- ── Clocks ───────────────────────────────────────────────────────────
+--   clk_14 (pin 39) --NOT (common-emitter stage)--> s_clk_14_n
+--     --> clk_div_2 (toggles on clk_14's RISING edge)
+--         Q      = s_clk_7    -> ras_cas_generation clk_7 (half-pixel phase)
+--         NOT Q  = s_clk_7_n  -> the book's /clk7: all the video timing
+--   latch_shift_clks: NOT /clk7 = s_clk_7_pixel (the book's clk7 pixel,
+--     delay chain dropped) -> the pixel shift register
+--   The inversion before the divider matters: it puts clk_7's edges just
+--   after clk_14's rising edge, which ras_cas_generation relies on (no
+--   resync; see CLAUDE.md). The divider has no reset, as in the book.
 --
+-- ── Pins and pad models ──────────────────────────────────────────────
+--   Simulation models each pad (docs/pinout.md):
+--     open collector + pull-up : D0..D4, D6 (do_N), K0, /INT -> '0' / 'H'
+--     inverting open collector : /phicpu (pin 32)            -> '0' / 'Z'
+--     tri-state totem pole     : /RAS, A0..A6                -> '0' / '1' / 'Z'
+--     inputs                   : D5 (input only), K1..K4, CPU control, A14/A15
+--     analogue (mV)            : /Y, U, V, SOUND out; tape_mv in
+--   A0 and K0 are inout: one block drives the pin, another reads it.
+--   Pin 28 (SOUND) is one analogue pin split into two ports: sound (what the
+--   ULA drives) and tape_mv (what the board's EAR network adds).
+--   Pull-ups are NOT modelled here (the K lines' 10k, the D bus's 8k2, pin
+--   32's 1k): they belong to the board model / XDC. Weak 'H' does not
+--   synthesise, so the FPGA needs 'Z' + PULLUP on those pins (Phase 7).
+--
+-- ── Not real pins ────────────────────────────────────────────────────
+--   reset    simulation only: gives the counters a known start. The real
+--            ULA has no reset; its counters power up anywhere and run.
+--   tape_mv  the tape signal on pin 28, in mV (AC: can be negative).
+--
+-- ── Wiring conventions ───────────────────────────────────────────────
+--   Every connection reads name => s_name (or name => name for a pin): one
+--   net, one name. The deliberate exceptions:
+--     sync_n      => s_sync_6c_n    the 6C001's composite sync (issue 6)
+--     pixel_data  => s_d            both fetch latches see the whole bus,
+--     attr_data   => s_d            the strobes pick which byte each takes
+--   Unused outputs are open: hsync_5c/6c and sync_5c_n (inside the composite
+--   sync), vid_cas_pulse, ram_16, cpuclk, ae_n and fl (used inside their
+--   own blocks). Some exported counter taps have no reader; they are kept
+--   for the waveform and trimmed by synthesis.
+--
+-- ── Blocks (instance : entity) ───────────────────────────────────────
+--   master_clock      clk_div_2                            14 -> 7 MHz
+--   test_clocks       test_modes                           wafer test modes, K0
+--   video_timing      video_sync                           counters, border, sync
+--   latch_shift_clks  latch_and_shift_reg_control_clks     fetch strobes, vid_c3_n
+--   strobe_generation ras_cas_generation                   video RAS / CAS
+--   mem_access        cpu_memory_access                    DRAM / ROM pins
+--   video_addressing  video_address_generation             A0..A6
+--   flash             flash_clock                          FLASH toggle
+--   attr_select_mux   attr_output_latch_border_select_mux  pixels -> RGB
+--   colour_output     yuv_video                            RGB -> /Y, U, V
+--   cpu_contention    contention_handler_3                 /phicpu, contention
+--   io_decode         io_port_decode_0xfe                  port read / write
+--   keyboard          keyboard_input                       K0..K4 -> D0..D4
+--   cassette_ip       cassette_input                       EAR -> D6
+--   border            border_reg                           D0..D2 -> border colour
+--   speaker_out       cassette_speaker_out                 D3, D4 -> MIC, speaker
+--   sounds            sound_io                             pin 28
+--   interrupts        interrupt                            /INT
 ----------------------------------------------------------------------------------
 
 library ieee;
     use ieee.std_logic_1164.all;
     use work.yuv_levels_pkg.all;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
--- use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
--- library UNISIM;
--- use UNISIM.VComponents.all;
 
 entity ula is
     port (
