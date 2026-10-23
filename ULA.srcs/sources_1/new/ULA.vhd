@@ -232,6 +232,8 @@ begin
 
     s_clk_14_n <= not clk_14;
 
+    d7 <= 'H'; -- D7's open-collector output never pulls low: released to the weak on-chip pull-up
+
     master_clock : entity work.clk_div_2(behavioral)
         port map (
             clk_in    => s_clk_14_n,
@@ -304,11 +306,14 @@ begin
             v8_n => s_v8_n
         );
 
-    latch_shift_clks : entity work.latch_and_shift_reg_control_clks (structural)
+    latch_shift_clks : entity work.latch_and_shift_reg_control_clks (synchronous)
         port map (
+            clk_14              => clk_14,
+            clk_7               => s_clk_7,
             clk_7_n             => s_clk_7_n,
             c0_n                => s_c0_n,
             c0                  => s_c0,
+            c2                  => s_c2,
             c3_n                => s_c3_n,
             c1                  => s_c1,
             c1_n                => s_c1_n,

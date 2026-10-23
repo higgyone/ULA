@@ -73,12 +73,15 @@ library ieee;
 
 entity latch_and_shift_reg_control_clks is
     port (
+        clk_14              : in    std_logic;
+        clk_7               : in    std_logic;
         clk_7_n             : in    std_logic; -- inverted 7 MHz clock (book's clk_7_n); logic runs on this
         c0_n                : in    std_logic; -- horizontal counter bit 0, complement
         c0                  : in    std_logic; -- horizontal counter bit 0
         c3_n                : in    std_logic; -- horizontal counter bit 3, complement
         c1                  : in    std_logic; -- horizontal counter bit 1
         c1_n                : in    std_logic; -- horizontal counter bit 1, complement
+        c2                  : in    std_logic;
         c2_n                : in    std_logic; -- horizontal counter bit 2, complement
         border_n            : in    std_logic; -- border region flag from video_sync (active-low)
         vid_c3_n            : out   std_logic; -- display fetch window, active low (border OR c3_n)
@@ -91,6 +94,92 @@ entity latch_and_shift_reg_control_clks is
         attr_output_latch_n : out   std_logic  -- -> integration cell attr_output_latch_n (ACTIVE-LOW)
     );
 end entity latch_and_shift_reg_control_clks;
+
+architecture synchronous of latch_and_shift_reg_control_clks is
+
+    -- keep: from structural
+    signal s_pix_clk       : std_logic;
+    signal s_vid_cas_pulse : std_logic;
+    signal s_border        : std_logic;
+    signal s_vid_en        : std_logic;
+    signal s_vid_en_n      : std_logic;
+    signal s_vid_c3_n      : std_logic;
+
+    -- new: position within the 8-pixel character, {c2, c1, c0, half-pixel}
+    signal s_tick : std_logic_vector(3 downto 0);
+
+    -- new: the registered strobes, starting inactive
+    signal s_pixel_data_latch_n  : std_logic := '1';
+    signal s_attr_data_latch_n   : std_logic := '1';
+    signal s_sload               : std_logic := '0';
+    signal s_attr_output_latch_n : std_logic := '1';
+
+begin
+
+    -- keep: video_en latch, pixel clock, vid_cas_pulse, vid_c3_n
+    gd_latch : entity work.data_latch_1_bit
+        port map (
+            e   => c3_n,
+            d   => border_n,
+            q   => s_vid_en,
+            q_n => s_vid_en_n
+        );
+
+    s_pix_clk       <= not(clk_7_n);
+    clk_7_pixel     <= s_pix_clk;
+    s_vid_cas_pulse <= not(clk_7_n or c0_n);
+    vid_cas_pulse   <= s_vid_cas_pulse;
+    s_border        <= not(border_n);
+    s_vid_c3_n      <= s_border or c3_n;
+    vid_c3_n        <= s_vid_c3_n;
+    video_en        <= s_vid_en;
+
+    -- new: tick 0..15 = 2 x pixel + half (clk_7 = '0' first half, '1' second)
+    s_tick <= c2 & c1 & c0 & clk_7;
+
+    -- new: the strobes, registered on clk_14 so they cannot glitch.
+    -- A registered output appears one tick after the tick it decodes,
+    -- so each line decodes the tick BEFORE the one the strobe is active in.
+    strobe_reg : process (clk_14) is
+    begin
+
+        if rising_edge(clk_14) then
+            -- defaults: everything inactive
+            s_pixel_data_latch_n  <= '1';
+            s_attr_data_latch_n   <= '1';
+            s_sload               <= '0';
+            s_attr_output_latch_n <= '1';
+
+            -- display byte: active ticks 2, 10 (pixels 1, 5 first half)
+            if ((s_tick = "0001" or s_tick = "1001") and s_vid_c3_n = '0') then
+                s_pixel_data_latch_n <= '0';
+            end if;
+
+            -- attribute byte: active ticks 6, 14 (pixels 3, 7 first half),
+            -- only inside the fetch window
+            if ((s_tick = "0101" or s_tick = "1101") and s_vid_c3_n = '0') then
+                s_attr_data_latch_n <= '0';
+            end if;
+
+            -- shift register load: active ticks 8, 9 (pixel 4), only when video_en
+            if ((s_tick = "0111" or s_tick = "1000") and s_vid_en_n = '0') then
+                s_sload <= '1';
+            end if;
+
+            -- attribute output latch: active ticks 10, 11 (pixel 5), every character
+            if (s_tick = "1001" or s_tick = "1010") then
+                s_attr_output_latch_n <= '0';
+            end if;
+        end if;
+
+    end process strobe_reg;
+
+    pixel_data_latch_n  <= s_pixel_data_latch_n;
+    attr_data_latch_n   <= s_attr_data_latch_n;
+    sload               <= s_sload;
+    attr_output_latch_n <= s_attr_output_latch_n;
+
+end architecture synchronous;
 
 architecture structural of latch_and_shift_reg_control_clks is
 
