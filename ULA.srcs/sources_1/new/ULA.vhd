@@ -41,7 +41,7 @@ entity ula is
         ioreq_n : in    std_logic;
         a14     : in    std_logic;
         a15     : in    std_logic;
-        tape_mv : in    integer;
+        tape_mv : in    integer; -- split pin with sounds as FPGA cannot do both input and output that is not std_logic
 
         k0 : inout std_logic;
         k1 : in    std_logic;
@@ -68,7 +68,7 @@ entity ula is
         u   : out   millivolts_t;
         v   : out   millivolts_t;
 
-        sound : out   millivolts_t;
+        sound : out   millivolts_t; -- split pin with tape_mv as FPGA cannot do both input and output that is not std_logic
 
         d0 : inout std_logic;
         d1 : inout std_logic;
@@ -332,6 +332,141 @@ begin
             a5        => a5,
             a6        => a6,
             ae_n      => open
+        );
+
+    flash : entity work.flash_clock(structural)
+        port map (
+            v8_n      => s_v8_n,
+            tclk_b    => s_tclk_b,
+            flash_clk => s_flash_clk
+        );
+
+    attr_select_mux : entity work.attr_output_latch_border_select_mux(structural)
+        port map (
+            clk_7_pixel         => s_clk_7_pixel,
+            flash_clk           => s_flash_clk,
+            sload               => s_sload,
+            pixel_data_latch_n  => s_pixel_data_latch_n,
+            pixel_data          => s_d,
+            attr_data_latch_n   => s_attr_data_latch_n,
+            attr_data           => s_d,
+            border_colour       => s_border_colour,
+            video_en            => s_video_en,
+            attr_output_latch_n => s_attr_output_latch_n,
+            vsync               => s_vsync,
+            hblank_n            => s_hblank_n,
+            blue                => s_blue,
+            green               => s_green,
+            red                 => s_red,
+            hl                  => s_hl,
+            fl                  => open
+        );
+
+    colour_output : entity work.yuv_video(structural)
+        port map (
+            red    => s_red,
+            green  => s_green,
+            blue   => s_blue,
+            hl     => s_hl,
+            sync_n => s_sync_6c_n,
+            c4     => s_c4,
+            c5     => s_c5,
+            c6     => s_c6,
+            c7_n   => s_c7_n,
+            c8_n   => s_c8_n,
+            v0     => s_v0,
+            y_n    => y_n,
+            u      => u,
+            v      => v
+        );
+
+    cpu_contention : entity work.contention_handler_3(structural)
+        port map (
+            c0_n       => s_c0_n,
+            a14        => a14,
+            ioreq_n    => ioreq_n,
+            a15        => a15,
+            c2         => s_c2,
+            c3         => s_c3,
+            border     => s_border,
+            mreq_n     => mreq_n,
+            cpuclk     => open,
+            phicpu_n   => phicpu_n,
+            ioreqtw3_n => s_ioreqtw3_n
+        );
+
+    io_decode : entity work.io_port_decode_0xfe(structural)
+        port map (
+            a0         => a0,
+            ioreq_n    => ioreq_n,
+            ioreqtw3_n => s_ioreqtw3_n,
+            rd_n       => rd_n,
+            wr_n       => wr_n,
+            port_rd_n  => s_port_rd_n,
+            port_wr_n  => s_port_wr_n
+        );
+
+    keyboard : entity work.keyboard_input(structural)
+        port map (
+            k0        => k0,
+            k1        => k1,
+            k2        => k2,
+            k3        => k3,
+            k4        => k4,
+            port_rd_n => s_port_rd_n,
+            do_0      => d0,
+            do_1      => d1,
+            do_2      => d2,
+            do_3      => d3,
+            do_4      => d4
+        );
+
+    cassette_ip : entity work.cassette_input(structural)
+        port map (
+            port_rd_n => s_port_rd_n,
+            ear       => s_ear,
+            do_6      => d6
+        );
+
+    border : entity work.border_reg(structural)
+        port map (
+            di_0      => d0,
+            di_1      => d1,
+            di_2      => d2,
+            port_wr_n => s_port_wr_n,
+            b0        => s_border_colour(0),
+            b1        => s_border_colour(1),
+            b2        => s_border_colour(2)
+        );
+
+    speaker_out : entity work.cassette_speaker_out(structural)
+        port map (
+            di_3      => d3,
+            di_4      => d4,
+            port_wr_n => s_port_wr_n,
+            mic       => s_mic,
+            speaker   => s_speaker
+        );
+
+    sounds : entity work.sound_io(behavioral)
+        port map (
+            speaker => s_speaker,
+            mic     => s_mic,
+            tape_mv => tape_mv,
+            sound   => sound,
+            ear     => s_ear
+        );
+
+    interrupts : entity work.interrupt(structural)
+        port map (
+            v0    => s_v0,
+            v1    => s_v1,
+            v2    => s_v2,
+            c6    => s_c6,
+            c7    => s_c7,
+            c8    => s_c8,
+            vsync => s_vsync,
+            int_n => int_n
         );
 
 end architecture structural;
