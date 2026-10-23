@@ -954,7 +954,7 @@ None is wired into a top level yet. **Phase 6 is complete.**
   onto the net (LRM: a port with no sources drives its default value), which
   made D7 — the FLASH bit — 'U' and every pixel 'X'. Any future inout pin
   that the ULA never drives needs the same.
-- ✅ **System testbench `ula_tb`** (`sim_1/new`, ⏳ not yet in `ULA.xpr`) —
+- ✅ **System testbench `ula_tb`** (`sim_1/new`, in `ULA.xpr`) —
   drives only the pins, through a board model: 14 MHz crystal, a 16K DRAM
   preloaded with a test screen (every byte different, ink ≠ paper, no
   FLASH), the '157 as a weak driver on A0..A6, 8k2 data / 10k keyboard
