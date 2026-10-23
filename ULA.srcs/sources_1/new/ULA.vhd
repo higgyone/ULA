@@ -194,7 +194,6 @@ architecture structural of ula is
     signal s_vid_cas_bd : std_logic;
 
     -- colours
-    signal s_flash_clk     : std_logic;
     signal s_border_colour : std_logic_vector(2 downto 0);
     signal s_red           : std_logic;
     signal s_green         : std_logic;
@@ -301,6 +300,36 @@ begin
             video_en            => s_video_en
         );
 
+    colour_subsystem : entity work.ula_colour(structural)
+        port map (
+            clk_7_pixel         => s_clk_7_pixel,
+            tclk_b              => s_tclk_b,
+            v8_n                => s_v8_n,
+            pixel_data_latch_n  => s_pixel_data_latch_n,
+            attr_data_latch_n   => s_attr_data_latch_n,
+            attr_output_latch_n => s_attr_output_latch_n,
+            sload               => s_sload,
+            video_en            => s_video_en,
+            d                   => s_d,
+            border_colour       => s_border_colour,
+            vsync               => s_vsync,
+            hblank_n            => s_hblank_n,
+            sync_6c_n           => s_sync_6c_n,
+            c4                  => s_c4,
+            c5                  => s_c5,
+            c6                  => s_c6,
+            c7_n                => s_c7_n,
+            c8_n                => s_c8_n,
+            v0                  => s_v0,
+            red                 => s_red,
+            green               => s_green,
+            blue                => s_blue,
+            hl                  => s_hl,
+            y_n                 => y_n,
+            u                   => u,
+            v                   => v
+        );
+
     mem_access : entity work.cpu_memory_access(structural)
         port map (
             a14        => a14,
@@ -317,52 +346,6 @@ begin
             ras_n      => ras_n,
             cas_n      => cas_n,
             we_n       => we_n
-        );
-
-    flash : entity work.flash_clock(structural)
-        port map (
-            v8_n      => s_v8_n,
-            tclk_b    => s_tclk_b,
-            flash_clk => s_flash_clk
-        );
-
-    attr_select_mux : entity work.attr_output_latch_border_select_mux(structural)
-        port map (
-            clk_7_pixel         => s_clk_7_pixel,
-            flash_clk           => s_flash_clk,
-            sload               => s_sload,
-            pixel_data_latch_n  => s_pixel_data_latch_n,
-            pixel_data          => s_d,
-            attr_data_latch_n   => s_attr_data_latch_n,
-            attr_data           => s_d,
-            border_colour       => s_border_colour,
-            video_en            => s_video_en,
-            attr_output_latch_n => s_attr_output_latch_n,
-            vsync               => s_vsync,
-            hblank_n            => s_hblank_n,
-            blue                => s_blue,
-            green               => s_green,
-            red                 => s_red,
-            hl                  => s_hl,
-            fl                  => open
-        );
-
-    colour_output : entity work.yuv_video(structural)
-        port map (
-            red    => s_red,
-            green  => s_green,
-            blue   => s_blue,
-            hl     => s_hl,
-            sync_n => s_sync_6c_n,
-            c4     => s_c4,
-            c5     => s_c5,
-            c6     => s_c6,
-            c7_n   => s_c7_n,
-            c8_n   => s_c8_n,
-            v0     => s_v0,
-            y_n    => y_n,
-            u      => u,
-            v      => v
         );
 
     cpu_contention : entity work.contention_handler_3(structural)
