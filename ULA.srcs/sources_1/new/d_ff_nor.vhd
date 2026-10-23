@@ -7,6 +7,34 @@
 -- topology mirrors the discrete NOR-gate flip-flops drawn in Chris
 -- Smith's "The ZX Spectrum ULA" schematic.
 --
+-- ── Two models: gate_model (simulation) / fpga_flipflop (FPGA) ──────
+--   The architecture has two generate branches, picked by the constant
+--   FPGA_BUILD from ula_build_pkg (two files declare that package:
+--   ula_build_pkg_sim.vhd = false is used in simulation,
+--   ula_build_pkg_fpga.vhd = true in synthesis):
+--
+--   FPGA_BUILD = false  the six NOR gates below, with `after TG`.
+--                       Gate-accurate; every testbench uses this.
+--   FPGA_BUILD = true   a real FPGA flip-flop (FDRE) on the falling edge
+--                       of clk, q_n = NOT q. Same characteristic table.
+--
+--   Why: on an FPGA the cross-coupled NORs become LUTs feeding back into
+--   themselves (combinational loops). Whether the master closes before
+--   the slave opens then depends on routing delays that change on every
+--   build, and Vivado cannot time a loop. The FPGA's own flip-flop is
+--   edge-triggered by construction, with characterised setup / hold that
+--   Vivado analyses. Only the storage cell changes; every block built on
+--   d_ff_nor (the counters, dividers, FLASH clock) keeps its gates.
+--
+--   The branch not taken does not exist: generate is decided when the
+--   design is built, not while it runs. Run ula_tb with the FPGA package
+--   compiled instead of the sim one to simulate the FPGA branch.
+--
+--   s_q starts at '0' (:= '0'). On an FPGA that IS the power-up value
+--   (the bitstream loads every flip-flop's initial value), so the FPGA
+--   build starts in the same state as the gate model's "Case A" init.
+--   The counters have no reset, so this matters.
+--
 -- Topology:
 --
 --      s_a_out = NOR(s_d_out, s_b_out)               -.
@@ -54,12 +82,12 @@
 -- is ~4 gates ≈ 4·TG, which must settle inside the testbench's setup
 -- margin (T/2 = 5 ns before the falling-edge sample on the 10 ns sim
 -- clock). A larger TG would miss that sample. `after` is ignored by
--- synthesis — like the init values above, this affects simulation only;
--- real silicon timing comes from place-and-route.
+-- synthesis (and the gate model isn't synthesised at all: see above).
 ----------------------------------------------------------------------
 
 library ieee;
     use ieee.std_logic_1164.all;
+    use work.ula_build_pkg.all;
 
 entity d_ff_nor is
     port (
@@ -82,9 +110,9 @@ architecture behavioral of d_ff_nor is
     --        s_e_out = NOR(s_b_out, s_f_out) = NOR(1, 1) = 0 ✓ => q=0
     --        s_f_out = NOR(s_c_out, s_e_out) = NOR(0, 0) = 1 ✓ => q_n=1
     --
-    -- Synthesis ignores these — real silicon power-up state is whatever
-    -- the layout produces. The init values exist solely to give xsim a
-    -- consistent starting point and avoid a known U-propagation quirk
+    -- These six exist only in the gate model (synthesis builds the
+    -- fpga_flipflop branch instead, so they are unused and removed there).
+    -- The init values give xsim a consistent starting point and avoid a known U-propagation quirk
     -- where cross-coupled NORs with one input still 'U' would never
     -- trigger their partner's re-evaluation.
     signal s_a_out : std_logic := '0';
@@ -94,18 +122,38 @@ architecture behavioral of d_ff_nor is
     signal s_e_out : std_logic := '0';
     signal s_f_out : std_logic := '1';
 
+    -- fpga_flipflop branch: the stored bit. '0' is the FPGA power-up value.
+    signal s_q : std_logic := '0';
+
     constant tg : time := 1 ns;   -- modelled NOR propagation delay (sim only)
 
 begin
 
-    s_a_out <= not (s_d_out or s_b_out)        after tg;
-    s_b_out <= not (s_a_out or clk)        after tg;
-    s_c_out <= not (s_b_out or clk or s_d_out) after tg;
-    s_d_out <= not (d   or s_c_out)        after tg;
-    s_e_out <= not (s_b_out or s_f_out)        after tg;
-    s_f_out <= not (s_c_out or s_e_out)        after tg;
+    gate_model : if not FPGA_BUILD generate
+        s_a_out <= not (s_d_out or s_b_out)        after tg;
+        s_b_out <= not (s_a_out or clk)        after tg;
+        s_c_out <= not (s_b_out or clk or s_d_out) after tg;
+        s_d_out <= not (d   or s_c_out)        after tg;
+        s_e_out <= not (s_b_out or s_f_out)        after tg;
+        s_f_out <= not (s_c_out or s_e_out)        after tg;
 
-    q   <= s_e_out;
-    q_n <= s_f_out;
+        q   <= s_e_out;
+        q_n <= s_f_out;
+    else generate
+
+        fpga_flipflop : process (clk) is
+        begin
+
+            if falling_edge(clk) then
+                s_q <= d;
+            end if;
+
+        end process fpga_flipflop;
+
+        q   <= s_q;
+        q_n <= not s_q;
+
+    end generate gate_model;
 
 end architecture behavioral;
+
