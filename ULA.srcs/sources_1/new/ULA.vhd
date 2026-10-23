@@ -330,74 +330,50 @@ begin
             v                   => v
         );
 
-    mem_access : entity work.cpu_memory_access(structural)
+    memory_cpu_subsystem : entity work.ula_memory_cpu(structural)
         port map (
             a14        => a14,
             a15        => a15,
             mreq_n     => mreq_n,
-            wr_n       => wr_n,
+            ioreq_n    => ioreq_n,
             rd_n       => rd_n,
+            wr_n       => wr_n,
             vid_ras    => s_vid_ras,
             vid_cas_ac => s_vid_cas_ac,
             vid_cas_bd => s_vid_cas_bd,
-            border_n   => s_border_n,
-            ram_16     => open,
-            rom_cs_n   => rom_cs_n,
-            ras_n      => ras_n,
-            cas_n      => cas_n,
-            we_n       => we_n
-        );
-
-    cpu_contention : entity work.contention_handler_3(structural)
-        port map (
             c0_n       => s_c0_n,
-            a14        => a14,
-            ioreq_n    => ioreq_n,
-            a15        => a15,
             c2         => s_c2,
             c3         => s_c3,
             border     => s_border,
-            mreq_n     => mreq_n,
-            cpuclk     => open,
+            border_n   => s_border_n,
+            ras_n      => ras_n,
+            cas_n      => cas_n,
+            we_n       => we_n,
+            rom_cs_n   => rom_cs_n,
             phicpu_n   => phicpu_n,
             ioreqtw3_n => s_ioreqtw3_n
         );
 
-    io_decode : entity work.io_port_decode_0xfe(structural)
+    io_port_subsystem : entity work.ula_io_port(structural)
         port map (
-            a0         => a0,
-            ioreq_n    => ioreq_n,
-            ioreqtw3_n => s_ioreqtw3_n,
-            rd_n       => rd_n,
-            wr_n       => wr_n,
-            port_rd_n  => s_port_rd_n,
-            port_wr_n  => s_port_wr_n
-        );
-
-    keyboard : entity work.keyboard_input(structural)
-        port map (
-            k0        => k0,
-            k1        => k1,
-            k2        => k2,
-            k3        => k3,
-            k4        => k4,
-            port_rd_n => s_port_rd_n,
-            do_0      => d0,
-            do_1      => d1,
-            do_2      => d2,
-            do_3      => d3,
-            do_4      => d4
-        );
-
-    border : entity work.border_reg(structural)
-        port map (
-            di_0      => d0,
-            di_1      => d1,
-            di_2      => d2,
-            port_wr_n => s_port_wr_n,
-            b0        => s_border_colour(0),
-            b1        => s_border_colour(1),
-            b2        => s_border_colour(2)
+            a0            => a0,
+            ioreq_n       => ioreq_n,
+            ioreqtw3_n    => s_ioreqtw3_n,
+            rd_n          => rd_n,
+            wr_n          => wr_n,
+            k0            => k0,
+            k1            => k1,
+            k2            => k2,
+            k3            => k3,
+            k4            => k4,
+            d0            => d0,
+            d1            => d1,
+            d2            => d2,
+            d3            => d3,
+            d4            => d4,
+            port_rd_n     => s_port_rd_n,
+            port_wr_n     => s_port_wr_n,
+            border_colour => s_border_colour
         );
 
     sound_subsystem : entity work.ula_sound(structural)
