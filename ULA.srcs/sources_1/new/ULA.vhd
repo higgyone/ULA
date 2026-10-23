@@ -221,11 +221,6 @@ architecture structural of ula is
     signal s_port_rd_n  : std_logic;
     signal s_port_wr_n  : std_logic;
 
-    -- sounds
-    signal s_mic     : std_logic;
-    signal s_speaker : std_logic;
-    signal s_ear     : std_logic;
-
 begin
 
     s_d <= d7 & d6 & d5 & d4 & d3 & d2 & d1 & d0; -- the data bus as one byte, for the two video fetch latches (read only)
@@ -479,13 +474,6 @@ begin
             do_4      => d4
         );
 
-    cassette_ip : entity work.cassette_input(structural)
-        port map (
-            port_rd_n => s_port_rd_n,
-            ear       => s_ear,
-            do_6      => d6
-        );
-
     border : entity work.border_reg(structural)
         port map (
             di_0      => d0,
@@ -497,22 +485,15 @@ begin
             b2        => s_border_colour(2)
         );
 
-    speaker_out : entity work.cassette_speaker_out(structural)
+    sound_subsystem : entity work.ula_sound(structural)
         port map (
-            di_3      => d3,
-            di_4      => d4,
+            port_rd_n => s_port_rd_n,
             port_wr_n => s_port_wr_n,
-            mic       => s_mic,
-            speaker   => s_speaker
-        );
-
-    sounds : entity work.sound_io(behavioral)
-        port map (
-            speaker => s_speaker,
-            mic     => s_mic,
-            tape_mv => tape_mv,
-            sound   => sound,
-            ear     => s_ear
+            d3        => d3,
+            d4        => d4,
+            tape_mv   => tape_mv,
+            d6        => d6,
+            sound     => sound
         );
 
     interrupts : entity work.interrupt(structural)
