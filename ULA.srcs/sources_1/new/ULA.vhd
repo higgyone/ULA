@@ -2,10 +2,10 @@
 -- ula — the ZX Spectrum 48K ULA (Ferranti 6C001E-7), top level
 --
 -- Gate-accurate recreation of the Spectrum's custom chip, following Chris
--- Smith's "The ZX Spectrum ULA". This file only WIRES the verified blocks
--- together: it holds no logic of its own except the clock input inverter.
--- One port per pin of the 40-pin package; see docs/pinout.md for every pin's
--- cell, pad type and board circuit.
+-- Smith's "The ZX Spectrum ULA". This file only WIRES six subsystems and the
+-- interrupt block together; its only logic is gathering the data bus into
+-- s_d and releasing D7. One port per pin of the 40-pin package; see
+-- docs/pinout.md for every pin's cell, pad type and board circuit.
 --
 -- ── What the chip does ───────────────────────────────────────────────
 --   * video timing: 448 pixels x 312 lines (PAL), border, sync, interrupt
@@ -18,16 +18,42 @@
 --   * I/O port 0xFE: keyboard and EAR in; border colour, MIC and speaker out
 --   * wafer test modes (MREQ and IORQ low together)
 --
+-- ── Subsystems (instance : entity, and the blocks inside) ────────────
+--   timing_subsystem       ula_timing        clk_14 inverter, clk_div_2,
+--                                            video_sync, test_modes
+--   video_fetch_subsystem  ula_video_fetch   latch_and_shift_reg_control_clks,
+--                                            ras_cas_generation,
+--                                            video_address_generation
+--   colour_subsystem       ula_colour        flash_clock,
+--                                            attr_output_latch_border_select_mux,
+--                                            yuv_video
+--   memory_cpu_subsystem   ula_memory_cpu    cpu_memory_access,
+--                                            contention_handler_3
+--   io_port_subsystem      ula_io_port       io_port_decode_0xfe,
+--                                            keyboard_input, border_reg
+--   sound_subsystem        ula_sound         cassette_speaker_out, sound_io,
+--                                            cassette_input
+--   interrupts             interrupt         /INT (a single block)
+--   Each subsystem is pure wiring with its own header. Nets used by only one
+--   subsystem live inside it (vid_c3_n, vid_ras_n, flash_clk, mic, speaker,
+--   ear, tclk_a); this file carries only the nets that cross between them.
+--
+--   Data flow:
+--     timing --clocks, counter taps, border, sync--> everything else
+--     video_fetch --fetch strobes, pixel clock--> colour
+--     video_fetch --vid_ras / vid_cas--> memory_cpu --ioreqtw3_n--> io_port
+--     io_port --port_rd_n / port_wr_n--> sound;  --border_colour--> colour
+--
 -- ── Clocks ───────────────────────────────────────────────────────────
---   clk_14 (pin 39) --NOT (common-emitter stage)--> s_clk_14_n
---     --> clk_div_2 (toggles on clk_14's RISING edge)
---         Q      = s_clk_7    -> ras_cas_generation clk_7 (half-pixel phase)
+--   clk_14 (pin 39) --NOT (common-emitter stage)--> clk_div_2 (in ula_timing)
+--         Q      = s_clk_7    -> ras_cas_generation (half-pixel phase)
 --         NOT Q  = s_clk_7_n  -> the book's /clk7: all the video timing
---   latch_shift_clks: NOT /clk7 = s_clk_7_pixel (the book's clk7 pixel,
---     delay chain dropped) -> the pixel shift register
---   The inversion before the divider matters: it puts clk_7's edges just
---   after clk_14's rising edge, which ras_cas_generation relies on (no
---   resync; see CLAUDE.md). The divider has no reset, as in the book.
+--   latch_and_shift_reg_control_clks (in ula_video_fetch): NOT /clk7 =
+--     s_clk_7_pixel (the book's clk7 pixel) -> the pixel shift register.
+--   The fetch strobes are registered on clk_14 (architecture synchronous).
+--   The inversion before the divider puts clk_7's edges just after clk_14's
+--   rising edge, which ras_cas_generation relies on (no resync; see
+--   CLAUDE.md). The divider has no reset, as in the book.
 --
 -- ── Pins and pad models ──────────────────────────────────────────────
 --   Simulation models each pad (docs/pinout.md):
@@ -36,7 +62,11 @@
 --     tri-state totem pole     : /RAS, A0..A6                -> '0' / '1' / 'Z'
 --     inputs                   : D5 (input only), K1..K4, CPU control, A14/A15
 --     analogue (mV)            : /Y, U, V, SOUND out; tape_mv in
---   A0 and K0 are inout: one block drives the pin, another reads it.
+--   A0 and K0 are inout: one subsystem drives the pin, another reads it
+--   (A0: video_fetch drives, io_port reads; K0: timing's test_modes drives,
+--   io_port's keyboard reads).
+--   D7 is inout but nothing in the ULA drives it, so it is released to 'H'
+--   here: an inout port with no driver would put its default 'U' on the bus.
 --   Pin 28 (SOUND) is one analogue pin split into two ports: sound (what the
 --   ULA drives) and tape_mv (what the board's EAR network adds).
 --   Pull-ups are NOT modelled here (the K lines' 10k, the D bus's 8k2, pin
@@ -50,34 +80,19 @@
 --
 -- ── Wiring conventions ───────────────────────────────────────────────
 --   Every connection reads name => s_name (or name => name for a pin): one
---   net, one name. The deliberate exceptions:
---     sync_n      => s_sync_6c_n    the 6C001's composite sync (issue 6)
---     pixel_data  => s_d            both fetch latches see the whole bus,
---     attr_data   => s_d            the strobes pick which byte each takes
---   Unused outputs are open: hsync_5c/6c and sync_5c_n (inside the composite
---   sync), vid_cas_pulse, ram_16, cpuclk, ae_n and fl (used inside their
---   own blocks). Some exported counter taps have no reader; they are kept
---   for the waveform and trimmed by synthesis.
+--   net, one name. The exceptions now sit inside the subsystems:
+--   sync_n => sync_6c_n (the 6C001's composite sync, in ula_colour) and
+--   pixel_data / attr_data => d (both fetch latches see the whole bus, the
+--   strobes pick which byte each takes).
+--   A subsystem output that is also read inside its own subsystem goes
+--   through an internal s_ signal and a copy line (VHDL-93 can't read an
+--   out port): clk_7_n, v8_n, red/green/blue/hl, port_rd_n / port_wr_n.
 --
--- ── Blocks (instance : entity) ───────────────────────────────────────
---   master_clock      clk_div_2                            14 -> 7 MHz
---   test_clocks       test_modes                           wafer test modes, K0
---   video_timing      video_sync                           counters, border, sync
---   latch_shift_clks  latch_and_shift_reg_control_clks     fetch strobes, vid_c3_n
---   strobe_generation ras_cas_generation                   video RAS / CAS
---   mem_access        cpu_memory_access                    DRAM / ROM pins
---   video_addressing  video_address_generation             A0..A6
---   flash             flash_clock                          FLASH toggle
---   attr_select_mux   attr_output_latch_border_select_mux  pixels -> RGB
---   colour_output     yuv_video                            RGB -> /Y, U, V
---   cpu_contention    contention_handler_3                 /phicpu, contention
---   io_decode         io_port_decode_0xfe                  port read / write
---   keyboard          keyboard_input                       K0..K4 -> D0..D4
---   cassette_ip       cassette_input                       EAR -> D6
---   border            border_reg                           D0..D2 -> border colour
---   speaker_out       cassette_speaker_out                 D3, D4 -> MIC, speaker
---   sounds            sound_io                             pin 28
---   interrupts        interrupt                            /INT
+-- ── Nets kept for the testbench ──────────────────────────────────────
+--   ula_tb reads s_red, s_green, s_blue, s_hl, s_clk_7_pixel, s_vid_ras,
+--   s_c0..s_c8 and s_v0..s_v8 through VHDL-2008 external names
+--   (.ula_tb.dut.s_xxx). They must stay as signals in this file. s_v8 has no
+--   other reader; RGB + BRIGHT are also the natural FPGA VGA output.
 ----------------------------------------------------------------------------------
 
 library ieee;

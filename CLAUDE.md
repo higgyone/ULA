@@ -940,7 +940,7 @@ None is wired into a top level yet. **Phase 6 is complete.**
   pin model, header notes, K1–K4 on-chip `'H'`) and the board/hardware items
   (DAC boundary, 14 MHz MMCM, 5 V ↔ 3.3 V, board resistor model).
 - ✅ **`ULA.vhd`** (branch `ula-wiring`) — the top level: one port per pin
-  (`docs/pinout.md`), all 18 blocks wired (user wrote it, reviewed). Clock:
+  (`docs/pinout.md`), all 18 blocks wired (user wrote it, reviewed; since grouped into six subsystems, see below). Clock:
   `s_clk_14_n <= not clk_14` (the book's common-emitter stage) → `clk_div_2`
   (reset tied '0') → `s_clk_7` (Q → `ras_cas_generation`) / `s_clk_7_n`
   (/clk7). `latch_and_shift_reg_control_clks` makes the pixel clock
@@ -1000,7 +1000,35 @@ None is wired into a top level yet. **Phase 6 is complete.**
 - ⏳ `latch_and_shift_reg_control_clks_tb` still tests `structural` only
   (clocks tied off); the `synchronous` strobes are covered end to end by
   `ula_tb`. A dedicated synchronous TB is still to write.
-- ⏳ Next: regroup `ULA.vhd` into subsystems (timing, video_fetch, colour,
-  memory_cpu, io_port, sound + interrupt), re-running `ula_tb` unchanged as
-  the safety net; then the XDC / FPGA wrapper (Phase 7 hardware items in
-  `docs/pinout.md`).
+- ✅ **Subsystems refactor (2026-10-23).** `ULA.vhd` now instantiates six
+  pure-wiring subsystems plus `interrupt`, instead of 18 blocks. `ula_tb` was
+  re-run unchanged after each one and stayed ALL TESTS PASSED.
+  | Subsystem | Blocks inside |
+  |---|---|
+  | `ula_timing` | clk_14 inverter, `clk_div_2`, `video_sync`, `test_modes` |
+  | `ula_video_fetch` | `latch_and_shift_reg_control_clks(synchronous)`, `ras_cas_generation`, `video_address_generation` |
+  | `ula_colour` | `flash_clock`, `attr_output_latch_border_select_mux`, `yuv_video` |
+  | `ula_memory_cpu` | `cpu_memory_access`, `contention_handler_3` |
+  | `ula_io_port` | `io_port_decode_0xfe`, `keyboard_input`, `border_reg` |
+  | `ula_sound` | `cassette_speaker_out`, `sound_io`, `cassette_input` |
+  Rules that came out of it:
+  - Nets used by one subsystem only stay inside it (`tclk_a`, `vid_c3_n`,
+    `vid_ras_n`, `flash_clk`, `mic`, `speaker`, `ear`). Only exported counter
+    taps that something reads leave `ula_timing` (26 of 36; the rest `open`).
+  - **Output also read inside its own subsystem** → drive an internal `s_`
+    signal from the instance, read that, and copy it to the port
+    (`clk_7_n <= s_clk_7_n;`). VHDL-93 can't read an `out` port. Used for
+    `clk_7_n`, `v8_n`, `red/green/blue/hl`, `port_rd_n/port_wr_n`.
+  - **An `out` with no driver is legal VHDL**, so a missing copy line or a
+    port map into a dead internal signal compiles clean. Only `ula_tb`
+    catches it, so run it after every wrapper.
+  - `ula_tb` reads `s_red/green/blue/hl`, `s_clk_7_pixel`, `s_vid_ras`,
+    `s_c0..s_c8`, `s_v0..s_v8` via external names, so those must stay
+    signals in `ULA.vhd`: `ula_timing` exports `v8` and `ula_colour` exports
+    RGB + BRIGHT for that reason (RGB is also the natural FPGA VGA output).
+  - Per-pin direction can differ by subsystem: `a0` is `out` in
+    `ula_video_fetch` and `in` in `ula_io_port` (the pin is `inout`);
+    `d0..d2` are `inout` inside `ula_io_port` (keyboard drives, border reads).
+- ⏳ Next: the XDC / FPGA wrapper (Phase 7 hardware items in
+  `docs/pinout.md`), and a dedicated TB for
+  `latch_and_shift_reg_control_clks(synchronous)`.
