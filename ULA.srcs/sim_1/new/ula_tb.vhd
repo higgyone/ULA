@@ -735,8 +735,10 @@ begin
         done <= true;
         wait for 1 us;
 
-        assert pixel_checks > 49000
-            report "FAIL: only " & integer'image(pixel_checks) & " pixels were checked"
+        -- lines 2..191 x 256 pixels; fewer means a line or pixel was skipped
+        assert pixel_checks = 190 * 256
+            report "FAIL: " & integer'image(pixel_checks) & " pixels were checked, expected "
+                   & integer'image(190 * 256) & " (lines 2..191 x 256)"
             severity failure;
         assert int_pulses = 1
             report "FAIL: " & integer'image(int_pulses) & " /INT pulses in one frame, expected 1"
