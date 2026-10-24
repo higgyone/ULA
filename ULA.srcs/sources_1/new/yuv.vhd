@@ -68,16 +68,36 @@
 -- ── U: R = 1550 ohm ──────────────────────────────────────────────────
 --   Sinks: fixed black-level 0.235 mA (ALWAYS on), red_ii_n 0.216 mA,
 --   green_ii_n 0.431 mA, blue_ii 0.652 mA, burst_ii_n 0.587 mA.
---   No BRIGHT term (BRIGHT is luminance-only), no clamp: every state lies
---   between blue 1012 mV and yellow 3026 mV.
+--   No BRIGHT term (BRIGHT is luminance-only). Every state lies between
+--   blue 1012 mV and yellow 3026 mV, so the 259 mV clamp (see "Clamps" below)
+--   never engages here; it is kept for symmetry and as a guard.
 --
 -- ── V: R = 3.1k ──────────────────────────────────────────────────────
 --   Sinks: red_star 0.457 mA, green_star_n 0.383 mA, blue_star_n 0.078 mA,
---   burst_star 0.309 mA, burst_star_n 0.309 mA. No fixed sink, no clamp.
+--   burst_star 0.309 mA, burst_star_n 0.309 mA. No fixed sink. Clamped at
+--   259 mV (see "Clamps" below).
 --   The PAL V-switch is applied UPSTREAM (yuv_control_signals, via timing),
 --   so the same pixel arrives here as a different sink pattern on even and
 --   odd lines; this block needs no timing input. Each even-line value and its
 --   odd-line counterpart sum to about 2 x the V zero point (3850 mV).
+--
+-- ── Clamps: Y, U and V all saturate at 259 mV ───────────────────────
+--   Every channel's output is an emitter follower that can drop at most
+--   4041 mV across its resistor, so no output can fall below
+--   4300 - 4041 = 259 mV. Each channel computes a SIGNED raw sum
+--   (s_*_raw_*) and clamps it to 259 mV, so the output always stays inside
+--   millivolts_t.
+--     Y  bright white really reaches the floor (-59 mV unclamped).
+--     V  every steady state lies between 496 and 3342 mV (book: lowest
+--        0.495 V, red and inverted cyan). Only "colour during the burst"
+--        could go lower: up to all five sinks, -462 mV unclamped. The pixel is
+--        blanked during the burst, so that state cannot persist. But for a
+--        moment it can: the burst path is a couple of gates and the colour
+--        path is the 4-NOR V-switch, so when both change together v briefly
+--        sees "burst + old colour". Without the clamp that moment pushed v
+--        out of millivolts_t and aborted the simulation; with it, v touches
+--        259 mV for a delta and recovers, as the transistor would.
+--     U  never below 1012 mV; clamped for symmetry and as a guard.
 --
 -- ── The U/V zero point (the book's "black/white") ────────────────────
 --   U = 0.493(B-Y) and V = 0.877(R-Y) are colour DIFFERENCES: any grey
@@ -123,7 +143,7 @@
 --   pal_v_burst (burst). Outputs are millivolts_t. Converting to DAC codes
 --   belongs in a separate boundary module, so the DAC choice stays out of here.
 --
--- Verified by yuv_tb (111 checks): exhaustive sweeps of all three channels
+-- Verified by yuv_tb (114 checks): exhaustive sweeps of all three channels
 -- against reference models built independently from the currents, plus the
 -- book's anchor values, ordering, symmetry and pair-sum checks.
 ----------------------------------------------------------------------------------
@@ -211,10 +231,16 @@ architecture behavioural of yuv is
     constant v_blue_u  : integer := 1011; -- 0.652 mA x 1.55k = 1010.6 mV
     constant v_burst_u : integer := 910;  -- 0.587 mA x 1.55k =  909.9 mV
 
+    -- same output stage as Y: the floor is the same 259 mV
+    constant v_min_u : integer := 259;
+
     signal s_v_red_c_u   : millivolts_t;
     signal s_v_green_c_u : millivolts_t;
     signal s_v_blue_c_u  : millivolts_t;
     signal s_v_burst_c_u : millivolts_t;
+
+    -- unclamped sum, signed (see the header's "Clamps")
+    signal s_u_raw_u : integer range -1000 to V_TOP;
 
     -- V channel
 
@@ -224,11 +250,17 @@ architecture behavioural of yuv is
     constant v_burst_v   : integer := 958;  -- 0.309 mA x 3.1k =  957.9 mV (burst_star sink)
     constant v_burst_n_v : integer := 958;  -- 0.309 mA x 3.1k =  957.9 mV (burst_star_n sink)
 
+    -- same output stage as Y: the floor is the same 259 mV
+    constant v_min_v : integer := 259;
+
     signal s_v_red_c_v     : millivolts_t;
     signal s_v_green_c_v   : millivolts_t;
     signal s_v_blue_c_v    : millivolts_t;
     signal s_v_burst_c_v   : millivolts_t;
     signal s_v_burst_n_c_v : millivolts_t;
+
+    -- unclamped sum, signed: all five V sinks reach -462 mV (header "Clamps")
+    signal s_v_raw_v : integer range -1000 to V_TOP;
 
 begin
 
@@ -262,7 +294,9 @@ begin
     s_v_burst_c_u <= v_burst_u when burst_ii_n = '1' else
                      0;
 
-    u <= V_TOP - s_v_red_c_u - s_v_green_c_u - s_v_blue_c_u - s_v_burst_c_u - v_black_u;
+    s_u_raw_u <= V_TOP - s_v_red_c_u - s_v_green_c_u - s_v_blue_c_u - s_v_burst_c_u - v_black_u;
+    u         <= v_min_u when s_u_raw_u < v_min_u else
+                 s_u_raw_u; -- output transistor saturates (never reached on U)
 
     -- V channel
     s_v_red_c_v     <= v_red_v when red_star = '1' else
@@ -276,6 +310,8 @@ begin
     s_v_burst_n_c_v <= v_burst_n_v when burst_star_n = '1' else
                        0;
 
-    v <= V_TOP - s_v_red_c_v - s_v_green_c_v - s_v_blue_c_v - s_v_burst_c_v - s_v_burst_n_c_v;
+    s_v_raw_v <= V_TOP - s_v_red_c_v - s_v_green_c_v - s_v_blue_c_v - s_v_burst_c_v - s_v_burst_n_c_v;
+    v         <= v_min_v when s_v_raw_v < v_min_v else
+                 s_v_raw_v; -- output transistor saturates (burst + colour moments)
 
 end architecture behavioural;

@@ -33,8 +33,9 @@
 -- built. burst_ii_n is '1' for the whole line except the burst window, so the
 -- burst sink is ON in active video and switches OFF during the burst.
 --
--- There is no BRIGHT term (BRIGHT is luminance-only) and no clamp: every state
--- lies between 1012 mV (blue) and 3026 mV (yellow), well inside the range.
+-- There is no BRIGHT term (BRIGHT is luminance-only). Every state
+-- lies between 1012 mV (blue) and 3026 mV (yellow), so the DUT's 259 mV clamp
+-- never engages on U and the U model needs none.
 --
 -- ── The U/V zero point (the book's "black/white") ───────────────────
 -- U = 0.493(B-Y) and V = 0.877(R-Y) are colour DIFFERENCES: any grey (R=G=B)
@@ -124,18 +125,19 @@
 --      symmetric -- so ordering is checked separately.
 --   9. U SYMMETRY: each complementary pair sums to 2 x zero within +/-10 mV
 --      (see the 8 mV note above). This catches a wrong or swapped current.
---  10. V SWEEP: all 2**5 = 32 combinations of the five V inputs against the
---      V reference model, EXCEPT the 2 whose reference value is below 0 mV.
---      Those draw every colour sink AND both burst sinks at once (-220 and
---      -462 mV) -- "a coloured pixel during an even-line burst" -- which the
---      circuit cannot produce: the pixel is blanked during the burst, so
---      black_star forces green_star_n to '0'. The real floor is 496 mV (red,
---      or cyan on an inverted line; book 0.495 V) and the book gives V no
---      clamp, so the DUT is right not to have one. Driving them anyway would
---      push v outside millivolts_t and abort the run with a bound-check
---      failure. The TB asserts every skipped case is one of those impossible
---      states and that exactly 2 were skipped, so the skip cannot hide a real
---      out-of-range result.
+--  10. V SWEEP and CLAMP: all 2**5 = 32 combinations of the five V inputs
+--      against the V reference model, which clamps at 259 mV like Y's. Two
+--      combinations reach the clamp: they draw the colour sinks AND both
+--      burst sinks at once (-220 and -462 mV unclamped), "a coloured pixel
+--      during an even-line burst". In a steady state the pixel is blanked
+--      during the burst, so black_star forces green_star_n to '0' and the real
+--      floor is 496 mV (red, or cyan on an inverted line; book 0.495 V). But
+--      ula_tb found these states DO occur for a moment, from a ripple glitch
+--      between the short burst path and the long V-switch path. Unclamped,
+--      that pushed v out of millivolts_t and aborted the run; the output
+--      transistor saturates at 259 mV instead, and so does yuv.vhd. The TB
+--      asserts the clamped cases are exactly those 2, and checks the worst one
+--      by name: red during the even-line burst (all five sinks) -> 259 mV.
 --  11. V LANDMARKS: zero point 1925, red 496 and cyan 3342 (normal-line
 --      extremes), burst 967 on even lines and 2883 on odd lines.
 --  12. V ORDERING: cyan > zero > red on a normal line -- catches an inverted
@@ -180,7 +182,7 @@ architecture behavioral of yuv_tb is
     constant v_top : integer := 4300; -- 5.0 V rail - 0.7 V Vbe, no sinks conducting
     constant v_min : integer := 259;  -- 4300 - 4041 max drop, transistor saturated
 
-    -- U channel: its own summing resistor, same top of range, no clamp
+    -- U channel: its own summing resistor, same top of range (never near the clamp)
     constant r_u_ohms     : integer := 1550;
     constant i_black_u_ua : integer := 235; -- fixed black-level sink, always on
     constant i_red_u_ua   : integer := 216;
@@ -189,7 +191,7 @@ architecture behavioral of yuv_tb is
     constant i_burst_u_ua : integer := 587;
     constant u_sym_tol    : integer := 10;  -- mV; book currents asymmetric by ~8 mV
 
-    -- V channel: R = 3.1k (as Y), same top of range, no fixed sink, no clamp
+    -- V channel: R = 3.1k (as Y), same top of range, no fixed sink, clamp v_min
     constant r_v_ohms       : integer := 3100;
     constant i_red_v_ua     : integer := 457;
     constant i_green_v_ua   : integer := 383;
@@ -355,7 +357,7 @@ architecture behavioral of yuv_tb is
     end procedure check_y;
 
     -- U reference model. Every sink conducts when its input is '1'; the
-    -- black-level sink always conducts. No BRIGHT term, no clamp.
+    -- black-level sink always conducts. No BRIGHT term; never near the clamp.
 
     function expected_u (
         r_n,
@@ -433,10 +435,10 @@ architecture behavioral of yuv_tb is
 
     end procedure check_u;
 
-    -- V reference model. Every sink conducts when its input is '1'. No fixed
-    -- sink, no clamp.
+    -- V reference model, UNCLAMPED. Every sink conducts when its input is '1'.
+    -- No fixed sink. Can go negative (all five sinks: -462 mV).
 
-    function expected_v (
+    function expected_v_raw (
         r,
         g_n,
         b_n,
@@ -469,6 +471,31 @@ architecture behavioral of yuv_tb is
         end if;
 
         return v_top - total;
+
+    end function expected_v_raw;
+
+    -- V reference model as the output: the transistor saturates at v_min, the
+    -- same 259 mV floor as Y.
+
+    function expected_v (
+        r,
+        g_n,
+        b_n,
+        burst,
+        burst_n : std_logic
+    ) return integer is
+
+        variable raw : integer;
+
+    begin
+
+        raw := expected_v_raw(r, g_n, b_n, burst, burst_n);
+
+        if (raw < v_min) then
+            return v_min; -- transistor saturated
+        end if;
+
+        return raw;
 
     end function expected_v;
 
@@ -607,8 +634,8 @@ begin
         variable v_burst_even : integer;
         variable v_burst_odd  : integer;
 
-        -- V sweep: combinations skipped as physically impossible
-        variable v_skipped   : integer := 0;
+        -- V sweep: burst + colour combinations that reach the clamp
+        variable v_clamped   : integer := 0;
         variable v_sweep_exp : integer;
 
     begin
@@ -835,9 +862,10 @@ begin
         --==============================================================
 
         --------------------------------------------------------------
-        -- SWEEP: all 32 combinations of the five V inputs, skipping the
-        -- 2 impossible ones whose value would be below 0 mV (see header
-        -- item 10). std_logic'val(n + 2) maps 0/1 to '0'/'1'.
+        -- SWEEP: all 32 combinations of the five V inputs against the
+        -- clamped model. The 2 whose unclamped value is below 259 mV must
+        -- be the "colour during the burst" states, and must read 259 (see
+        -- header item 10). std_logic'val(n + 2) maps 0/1 to '0'/'1'.
         --------------------------------------------------------------
         for r in 0 to 1 loop
 
@@ -849,28 +877,29 @@ begin
 
                         for bn in 0 to 1 loop
 
-                            v_sweep_exp := expected_v(std_logic'val(r + 2),
-                                                      std_logic'val(g + 2),
-                                                      std_logic'val(b + 2),
-                                                      std_logic'val(bu + 2),
-                                                      std_logic'val(bn + 2));
+                            v_sweep_exp := expected_v_raw(std_logic'val(r + 2),
+                                                          std_logic'val(g + 2),
+                                                          std_logic'val(b + 2),
+                                                          std_logic'val(bu + 2),
+                                                          std_logic'val(bn + 2));
 
-                            if (v_sweep_exp < 0) then
+                            if (v_sweep_exp < v_min) then
                                 -- only "coloured pixel during the even-line burst"
-                                -- may be skipped: both burst sinks on AND
-                                -- green_star_n on, which blanking makes impossible
+                                -- may reach the clamp: both burst sinks on AND
+                                -- green_star_n on, which blanking prevents except
+                                -- for a ripple glitch
                                 assert r = 1 and g = 1 and bu = 1 and bn = 1
-                                    report "FAIL V: REACHABLE state below 0 mV: "
-                                           & integer'image(v_sweep_exp)
+                                    report "FAIL V: reachable state at clamp: "
+                                           & integer'image(v_sweep_exp) & " mV raw"
                                     severity failure;
-                                v_skipped := v_skipped + 1;
-                            else
-                                check_v(red_star, green_star_n, blue_star_n,
-                                        burst_star, burst_star_n, v, checks,
-                                        std_logic'val(r + 2), std_logic'val(g + 2),
-                                        std_logic'val(b + 2), std_logic'val(bu + 2),
-                                        std_logic'val(bn + 2));
+                                v_clamped := v_clamped + 1;
                             end if;
+
+                            check_v(red_star, green_star_n, blue_star_n,
+                                    burst_star, burst_star_n, v, checks,
+                                    std_logic'val(r + 2), std_logic'val(g + 2),
+                                    std_logic'val(b + 2), std_logic'val(bu + 2),
+                                    std_logic'val(bn + 2));
 
                         end loop;
 
@@ -882,13 +911,28 @@ begin
 
         end loop;
 
-        assert v_skipped = 2
-            report "FAIL V: expected 2 impossible states skipped, got "
-                   & integer'image(v_skipped)
+        assert v_clamped = 2
+            report "FAIL V: expected 2 burst + colour states at the clamp, got "
+                   & integer'image(v_clamped)
             severity failure;
 
-        report "PASS: V sweep, 30 of 32 combinations ("
-               & integer'image(v_skipped) & " impossible states skipped)"
+        report "PASS: V sweep, all 32 combinations (" & integer'image(v_clamped)
+               & " burst + colour states clamped at 259 mV)"
+            severity note;
+
+        -- The worst case named: red on a normal line during the even-line
+        -- burst draws all five sinks (-462 mV unclamped). This is the ripple
+        -- glitch ula_tb hit; the output must sit at the 259 mV floor.
+        check_v(red_star, green_star_n, blue_star_n, burst_star, burst_star_n,
+                v, checks, '1', '1', '1', '1', '1');
+
+        assert v = v_min
+            report "FAIL V: red during the even-line burst expected 259 mV, got "
+                   & integer'image(v)
+            severity failure;
+
+        report "PASS: V red during the even-line burst (all five sinks, -462 "
+               & "unclamped) -> 259 mV, the transistor's floor"
             severity note;
 
         --------------------------------------------------------------
