@@ -52,9 +52,17 @@
 -- ── Assumption the caller must meet: BLANKING ────────────────────────
 --   red/green/blue must be '0' during horizontal blanking. The burst window
 --   lies inside it, and the V channel relies on the pixel being black while the
---   burst is on: a coloured pixel during an even-line burst would drive v below
---   0 mV, outside millivolts_t (see yuv_tb). The digital RGB path upstream is
---   responsible for this blanking; this block does not enforce it.
+--   burst is on: a coloured pixel during an even-line burst would pull v below
+--   its steady-state floor. The digital RGB path upstream is responsible for
+--   this blanking; this block does not enforce it.
+--
+--   In the full chip the rule is briefly broken anyway: ripple through the
+--   counters lets the short burst path change a few deltas ahead of the long
+--   colour path (the 4-NOR V-switch), so for a moment v sees "burst + colour".
+--   ula_tb found this. yuv now clamps v (and u) at 259 mV, the output
+--   transistor's floor, so the moment passes harmlessly instead of pushing v
+--   out of millivolts_t. A coloured pixel held through the burst would still
+--   be a real fault: v would sit at 259 mV instead of the burst level.
 --
 -- ── Ports ────────────────────────────────────────────────────────────
 --   red, green, blue  pixel colour bits, active high (black during blanking)
