@@ -9,15 +9,18 @@
 --      the clk_div_2 cells' clk_out_n; c6_n..c8_n are bit3_counter's
 --      output_n (each flip-flop's q_n).
 --
--- No finish: the clock is free-running, so run it for a fixed time, e.g.
--- `run 200 us` (about 3 lines). A clean run prints a "line complete" note per
--- line and no "mismatch" errors. Must run at the real 143 ns pixel period
--- (see the constant below).
+-- Stops itself (finish) after lines_to_check full lines, so `run all` ends.
+-- A clean run prints a "line complete" note per line, no "mismatch" errors,
+-- and ALL TESTS PASSED. Must run at the real 143 ns pixel period (see the
+-- constant below).
 ----------------------------------------------------------------------------------
 
 library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
+
+library std;
+    use std.env.all;
 
 entity master_horiz_counter_tb is
 --  Port ( );
@@ -57,6 +60,9 @@ architecture behavioral of master_horiz_counter_tb is
     signal   c8_n    : std_logic;
     signal   clk_hc6 : std_logic;
     signal   hc_rst  : std_logic;
+
+    -- full lines to verify before stopping (one line = 448 x 143 ns = 64 us)
+    constant lines_to_check : integer := 3;
 
 begin
 
@@ -133,6 +139,7 @@ begin
         variable act     : integer range 0 to 511;
         variable expnext : integer range 0 to 447;
         variable locked  : boolean := false;
+        variable lines   : integer := 0;
 
     begin
 
@@ -158,6 +165,13 @@ begin
                         if (expnext = 447) then
                             report "MHC: line complete -- 448 counts verified (0..447)."
                                 severity note;
+                            lines := lines + 1;
+                            if (lines = lines_to_check) then
+                                report "ALL TESTS PASSED (" & integer'image(lines)
+                                       & " lines, count and complements)"
+                                    severity note;
+                                finish;
+                            end if;
                         end if;
                     end if;
                     -- predict next count and lock on

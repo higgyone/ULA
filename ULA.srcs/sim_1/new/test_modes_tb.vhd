@@ -101,8 +101,11 @@ begin
             flash_clk => flash_clk
         );
 
-    count_flash : process (flash_clk) is
+    -- wait-based, not a sensitivity list: it reads the signals it drives
+    count_flash : process is
     begin
+
+        wait on flash_clk;
 
         if (rising_edge(flash_clk) or falling_edge(flash_clk)) then
             flash_edges <= flash_edges + 1;
