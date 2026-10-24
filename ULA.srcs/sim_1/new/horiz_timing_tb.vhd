@@ -63,6 +63,15 @@ begin
             c6      => c6,
             c7      => c7,
             c8      => c8,
+            c0_n    => open,
+            c1_n    => open,
+            c2_n    => open,
+            c3_n    => open,
+            c4_n    => open,
+            c5_n    => open,
+            c6_n    => open,
+            c7_n    => open,
+            c8_n    => open,
             clk_hc6 => clk_hc6,
             hc_rst  => hc_rst
         );
@@ -74,7 +83,27 @@ begin
             tclk_a   => tclk_a,
             hsync_5c => hsync_5c,
             hsync_6c => hsync_6c,
-            hblank_n => hblank_n
+            hblank_n => hblank_n,
+            c0       => open,
+            c0_n     => open,
+            c1       => open,
+            c1_n     => open,
+            c2       => open,
+            c2_n     => open,
+            c3       => open,
+            c3_n     => open,
+            c4       => open,
+            c4_n     => open,
+            c5       => open,
+            c5_n     => open,
+            c6       => open,
+            c6_n     => open,
+            c7       => open,
+            c7_n     => open,
+            c8       => open,
+            c8_n     => open,
+            clk_hc6  => open,
+            hc_rst   => open
         );
 
     process is

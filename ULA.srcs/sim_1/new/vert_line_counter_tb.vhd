@@ -69,6 +69,15 @@ begin
             v6      => v6,
             v7      => v7,
             v8      => v8,
+            v0_n    => open,
+            v1_n    => open,
+            v2_n    => open,
+            v3_n    => open,
+            v4_n    => open,
+            v5_n    => open,
+            v6_n    => open,
+            v7_n    => open,
+            v8_n    => open,
             vrst    => vrst
         );
 
