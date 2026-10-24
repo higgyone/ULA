@@ -1034,5 +1034,39 @@ None is wired into a top level yet. **Phase 6 is complete.**
   - Per-pin direction can differ by subsystem: `a0` is `out` in
     `ula_video_fetch` and `in` in `ula_io_port` (the pin is `inout`);
     `d0..d2` are `inout` inside `ula_io_port` (keyboard drives, border reads).
-- ⏳ Next: the XDC / FPGA wrapper (Phase 7 hardware items in
-  `docs/pinout.md`).
+- ✅ **FPGA build: 0 combinational loops (2026-10-24, branch `fpga-standalone`).**
+  First synthesis (`synth_design -mode out_of_context`, top `ula`) gave 271
+  combinational loops / 145 `LUTLP-1`: every cross-coupled NOR became a LUT
+  feeding itself (untimeable, routing-dependent races). Fix (option B):
+  - Package **`ula_build_pkg`** in two files: `ula_build_pkg_sim.vhd`
+    (`fpga_build = false`, used in **simulation only**) and
+    `ula_build_pkg_fpga.vhd` (`true`, **synthesis only**). For CLI xsim runs,
+    compile the sim one; swap in the fpga one to simulate the FPGA build.
+  - Each storage primitive has `gate_model : if not fpga_build generate ...
+    else generate ...`: the book's gates (unchanged) vs a real FPGA element.
+    `d_ff_nor` → falling-edge FF; `data_latch_1_bit` → latch (`if e = '0'`,
+    no else, `d` in the sensitivity list); `single_bit_shift_register` →
+    falling-edge FF with the mux inside the edge block (**invert the
+    active-low inputs**: `not data_n` / `not data_1_n`); `contention_handler_3`
+    → the CPU clock hold as a set-dominant latch,
+    `cpuclk = c0 or (cpuclk and H)`, H derived from the gates (header).
+    Every FPGA `s_q` has `:= '0'` (the FPGA power-up value).
+  - Rule for a branch: every signal has exactly one driver per build, so
+    anything read outside the generate is driven in both branches (a
+    double driver on std_logic is not a compile error: sim shows `X`).
+  - Results: loops 271 → **0**, `latch_loops` 0; 236 LUTs, **39 FFs + 35
+    latches**. Every block TB touched and `ula_tb` pass with BOTH packages.
+  - All VHDL files are VHDL-2008 in `ULA.xpr` (synthesis read them as
+    VHDL-93 before; `pal_v_burst` reads an `out` port). Synthesis top is
+    `ula`. `D_FF` / `D_FF_tb` retired.
+  - Left for the XDC step: `no_clock` / `TIMING-17` / `TIMING-20` (no
+    clocks declared) and `PLHOLDVIO-2` ×8 (LUT-driven ripple clocks:
+    `create_generated_clock` + hold check). `HPDR-2`: `ula_timing.k0`
+    should be `out` (only driven inside), harmless.
+- **Scope (2026-10-24):** this repo finishes the ULA; the Z80 + full
+  Spectrum (block-RAM memory, VGA scan doubler) is a separate later repo.
+  Definition of done: (1) 0 loops ✅; (2) ULA-only XDC + clean OOC timing;
+  (3) interface doc for the Spectrum repo; (4) tidy-ups (Vert_Line_counter
+  rename, GHDL regression, docs); (5) Arty smoke test (ULA + MMCM, sync /
+  taps on LEDs or a Pmod).
+- ⏳ Next: step 2, the ULA-only XDC (`clk_14`, generated clocks).
