@@ -309,9 +309,9 @@ same discipline: entity + every port map + every TB in one commit.
   `VBorderUpper`→`v_border_upper` in `video_sync` (rename only — the equations
   in the "Verified Correct" list are byte-for-byte unchanged).
 
-**⏳ Still TODO — Vivado-PC tasks (touch `ULA.xpr`, must go through the IDE):**
-- Rename file **and** entity `Vert_Line_counter` → `vert_line_counter`
-  (update its two port maps in `video_sync.vhd` + `vert_line_counter_tb.vhd`).
+**✅ Done 2026-10-24:** file `Vert_Line_counter.vhd` → `vert_line_counter.vhd`
+(the entity was already lowercase after the VSG pass, so no port maps changed;
+`ULA.xpr` re-pointed through Vivado in its own housekeeping commit).
 - ~~Rename `D_FF.vhd` / `D_FF_tb`~~ — moot: both **retired 2026-10-23**
   (nothing in the design used `d_ff`; `d_ff_nor` replaced it).
 - ~~Retire `b3_tb.vhd`~~ — done in `23e74e2`.
@@ -324,13 +324,9 @@ in all consumers and testbenches in the *same* commit (cf. the
 
 Things that must be done in Vivado on the Vivado PC, because they require touching `ULA.xpr` through the IDE (raw edits to the project file are risky):
 
-- **Naming-pass file/entity renames — TODO (the only open item).** The source-edit
-  portion of the naming/ordering cleanup is done (see "Naming & ordering
-  consistency"); these renames remain because they touch `ULA.xpr`:
-  `Vert_Line_counter` → `vert_line_counter` (file + entity; update the two port
-  maps). (`D_FF` / `D_FF_tb` were retired and `b3_tb` deleted, so their
-  renames are gone.) Do it through the IDE / Tcl (`get_files` + `add_files` +
-  `remove_files`), then `git mv` / `git rm` the working copies in the same commit.
+- **Naming-pass file/entity renames — DONE (2026-10-24).** The last one,
+  `Vert_Line_counter.vhd` → `vert_line_counter.vhd`, is done; `D_FF` /
+  `D_FF_tb` were retired and `b3_tb` deleted.
 
 - **`master_horiz_counter_tb` imports duplicate — DONE.** The stale
   `ULA.srcs/sources_1/imports/new/master_horiz_counter_tb.vhd` (which Vivado was
@@ -554,7 +550,7 @@ on the next rising edge (50 ns later), well clear. Synthetic `Clk_HC6` +
 scratch dir:
 ```
 xvhdl.bat d_ff_nor.vhd tce_ff.vhd trce_ff.vhd trc_ff.vhd \
-          Vert_Line_counter.vhd vert_line_counter_tb.vhd   # -> library work
+          vert_line_counter.vhd vert_line_counter_tb.vhd   # -> library work
 xelab.bat work.vert_line_counter_tb -s vlc_sim             # elaborate
 xsim.bat  vlc_sim -tclbatch run.tcl                         # run.tcl = "run all\nexit"
 ```
@@ -1061,12 +1057,21 @@ None is wired into a top level yet. **Phase 6 is complete.**
     `ula`. `D_FF` / `D_FF_tb` retired.
   - Left for the XDC step: `no_clock` / `TIMING-17` / `TIMING-20` (no
     clocks declared) and `PLHOLDVIO-2` ×8 (LUT-driven ripple clocks:
-    `create_generated_clock` + hold check). `HPDR-2`: `ula_timing.k0`
-    should be `out` (only driven inside), harmless.
+    `create_generated_clock` + hold check). `HPDR-2` fixed 2026-10-24:
+    `ula_timing.k0` is now `out` (only driven inside; the `ula` pin stays
+    `inout`).
 - **Scope (2026-10-24):** this repo finishes the ULA; the Z80 + full
   Spectrum (block-RAM memory, VGA scan doubler) is a separate later repo.
   Definition of done: (1) 0 loops ✅; (2) ULA-only XDC + clean OOC timing;
   (3) interface doc for the Spectrum repo; (4) tidy-ups (Vert_Line_counter
   rename, GHDL regression, docs); (5) Arty smoke test (ULA + MMCM, sync /
   taps on LEDs or a Pmod).
-- ⏳ Next: step 2, the ULA-only XDC (`clk_14`, generated clocks).
+- ✅ Step 3: **[`docs/ula_interface.md`](docs/ula_interface.md)** (2026-10-24)
+  — what to import (both `ula_build_pkg` files, one per flow; VHDL-2008;
+  submodule), clock / reset, every port at the FPGA level, the DRAM protocol
+  (`ula_tb`'s board model, data 40 ns after CAS), and what an all-FPGA
+  Spectrum must add: in/out/oe signals instead of `'Z'` / `'H'`, digital
+  RGB + BRIGHT + syncs for VGA, `cpuclk` exported for the Z80.
+- ✅ Step 4 tidy-ups (2026-10-24): `vert_line_counter.vhd` rename,
+  `ula_timing.k0` → `out`. ⏳ GHDL regression on the other PC (user).
+- ⏳ Next: step 2, the ULA-only XDC (`clk_14`, generated clocks), then step 5.
