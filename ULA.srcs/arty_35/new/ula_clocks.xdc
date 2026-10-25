@@ -177,9 +177,13 @@ create_clock -name port_wr_clk -period 1142.857 [get_pins io_port_subsystem/io_d
 ## port_wr comes from the Z80 core's clock (cpu_clk) and is related.
 set_clock_groups -asynchronous -group [get_clocks port_wr_clk] -group [get_clocks -filter {NAME != port_wr_clk}]
 
-## ---- Known exception: multiple_clock (1) on the CPU clock latch's own G -------
+## ---- The CPU clock latch's own enable: stop the leaking clocks -------------------
 ## Its gate is built from counter bits (the contention window) and the border,
 ## so c3_clk and v8_clk leak into it. That latch IS a clock generator (its
 ## output is cpu_clk); its inputs are data deciding when the clock stops.
-## set_clock_sense -stop_propagation on G was tried: it also cut cpu_clk off
-## from its master. Left as this one documented warning.
+## Left alone, the leaked clocks loop round through the mask latches it clocks
+## and CRASH Vivado's timing engine (access violation at the first timing
+## update). Blocking them here fixes that; cpu_clk itself is unaffected, and
+## check_timing then lists this one G pin under no_clock (it is the clock
+## generator: honest).
+set_clock_sense -stop_propagation -clocks [get_clocks {c3_clk v8_clk}] [get_pins memory_cpu_subsystem/cpu_contention/gate_model.fpga_model.s_q_reg/G]
