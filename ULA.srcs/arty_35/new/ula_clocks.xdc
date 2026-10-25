@@ -98,8 +98,32 @@ create_generated_clock -name flash1_clk -source [get_pins colour_subsystem/flash
 create_generated_clock -name flash2_clk -source [get_pins colour_subsystem/flash/ripple1/gate_model.fpga_model.s_q_reg/Q] -edges {2 4 6} [get_pins colour_subsystem/flash/ripple2/gate_model.fpga_model.s_q_reg/Q]
 create_generated_clock -name flash3_clk -source [get_pins colour_subsystem/flash/ripple2/gate_model.fpga_model.s_q_reg/Q] -edges {2 4 6} [get_pins colour_subsystem/flash/ripple3/gate_model.fpga_model.s_q_reg/Q]
 
+## ---- pdl_clk / adl_clk / aol_clk: the data-latch strobes ------------------------
+## The registered strobes (latch_and_shift_reg_control_clks, architecture
+## synchronous) are flip-flops on clk_14's rising edge whose OUTPUT is the
+## enable (G) of the 8-bit pixel, attribute and attribute-output latches:
+## a flip-flop output used as a clock. Active LOW, a tick or two at a time:
+##   tick = one clk_14 cycle, 16 per character; tick k starts at clk_14 edge
+##   3 + 2(k - 2) (tick 2 starts as clk_7 falls, at 71.429 = clk_14 edge 3).
+##   rise = where the low pulse ends, fall = where the next one starts,
+##   next rise = one period after the rise.
+## pixel_data_latch_n   low tick 2 (and 10): fall 3, rise 5, period 8 ticks
+##                      -> {5 19 21}, 571.432 ns, waveform {142.858 642.861}
+## attr_data_latch_n    low tick 6 (and 14): fall 11, rise 13, period 8 ticks
+##                      -> {13 27 29}, 571.432 ns
+## attr_output_latch_n  low ticks 8, 9: fall 15, rise 19, period 16 ticks
+##                      -> {19 47 51}, 1142.864 ns
+## Which pixel of the character "tick 2" is cannot be pinned (the counter's
+## start value is arbitrary to timing); what matters is that the edges sit on
+## the right clk_7 phase, since the latch outputs feed the pixel shift
+## register. In the display the strobes fire only inside the fetch window;
+## timing analysis treats them as periodic, which is the worst case.
+create_generated_clock -name pdl_clk -source [get_ports clk_14] -edges {5 19 21} [get_pins video_fetch_subsystem/latch_shift_clks/s_pixel_data_latch_n_reg/Q]
+create_generated_clock -name adl_clk -source [get_ports clk_14] -edges {13 27 29} [get_pins video_fetch_subsystem/latch_shift_clks/s_attr_data_latch_n_reg/Q]
+create_generated_clock -name aol_clk -source [get_ports clk_14] -edges {19 47 51} [get_pins video_fetch_subsystem/latch_shift_clks/s_attr_output_latch_n_reg/Q]
+
 ## ---- Still to do ------------------------------------------------------------
-##  - latches enabled by registered strobes (pixel / attribute data latches)
-##  - latches enabled by counter decodes (video_en on c3_n, burst parity on
-##    sync_n, row A0 on vid_ras_n)
-##  - CPU-side latches (border, MIC / speaker, CPU clock hold)
+##  - row A0 latch: enable from s_ras_r_reg (ras_cas_generation)
+##  - the two contention mask latches: enable = the CPU clock latch's output
+##  - multiple_clock (7): latches whose enable is a decode (burst parity on
+##    sync_n) or CPU-side (border, MIC / speaker, CPU clock hold)
