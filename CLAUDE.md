@@ -1074,4 +1074,35 @@ None is wired into a top level yet. **Phase 6 is complete.**
   RGB + BRIGHT + syncs for VGA, `cpuclk` exported for the Z80.
 - ✅ Step 4 tidy-ups (2026-10-24): `vert_line_counter.vhd` rename,
   `ula_timing.k0` → `out`. ⏳ GHDL regression on the other PC (user).
-- ⏳ Next: step 2, the ULA-only XDC (`clk_14`, generated clocks), then step 5.
+- ✅ **Step 2: [`ula_clocks.xdc`](ULA.srcs/arty_35/new/ula_clocks.xdc)** (2026-10-25,
+  in the `arty_35` constraints set; written by the user lesson by lesson, every
+  line commented with its reasoning). Out-of-context synthesis with
+  `-flatten_hierarchy none` (the case-analysis pins are hierarchical). Result:
+  **setup met everywhere**; `no_clock` 214 → 9 (all one pin: the CPU clock
+  latch's own enable, deliberately blocked); `loops 0`.
+  - **16 clocks:** `clk_14` (primary) → `clk_7` (÷2) → `c3_clk` → `c5_clk` →
+    `v8_clk` → `flash0..3_clk` (the ripple chain); `pdl/adl/aol_clk` (the
+    registered data-latch strobes), `ras_clk` (row-A0 latch), `sync_clk`
+    (burst parity latch), `cpu_clk` (contention mask latches), `port_wr_clk`
+    (border / MIC / speaker; a primary clock on an internal pin, async group).
+  - **Rules learned:** `-source` = where the MASTER clock is defined (port or
+    the master's `Q`); `-edges` count the master's own waveform (odd = rising,
+    even = falling), used for falling-edge flip-flops and non-50 % clocks; a
+    registered strobe is one tick late; C0..C3 and C4 are gated clocks (no
+    constraint); a clock defined on a pin blocks clocks leaking from upstream.
+  - `set_case_analysis 0` on `test_clocks/tclk_a` and `tclk_b` (test modes).
+  - `set_clock_sense -stop_propagation` of `c3_clk`/`v8_clk` at the CPU clock
+    latch's `G`: without it the leaked clocks loop round and **crash Vivado's
+    timing engine** (access violation).
+  - Exceptions, each with its proof: multicycle `-hold 1 -start` on `sload` →
+    pixel clock; hold-only false path pixel latch → shift cells.
+  - **12 hold reports left, documented, not fixed:** ripple-chain artefacts.
+    Vivado's late clock arrival for a generated clock follows the gating
+    ENABLE inputs (e.g. `c3_clk` via C0 → C1 → C2), adding ~8.8 ns per stage
+    that the real edge never has. Revisit if the Arty smoke test misbehaves.
+  - **XDC gotchas met:** `get_ports` vs `get_pins`; one `-`, not `--`; the
+    file is a script read top to bottom (clock groups last); end the file with
+    a newline (an appended line got glued on: "Duplicate option '-from'");
+    "Run Synthesis" (a run) ≠ `synth_design` in the console (opens nothing,
+    uses the run's settings).
+- ⏳ Next: step 5, the Arty smoke test.
