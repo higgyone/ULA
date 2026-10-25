@@ -31,9 +31,21 @@
 ##              clocks that are not 50 % duty (v8_clk).
 ## ============================================================================
 
-## ---- Primary clock: the 14 MHz crystal (pin 39) -----------------------------
-## 1 / 14 MHz = 71.429 ns; default waveform {0 35.715} = 50 % duty.
-create_clock -name clk_14 -period 71.429 [get_ports clk_14]
+## ---- Primary clock: NOT here -------------------------------------------------------
+## clk_14 is declared where the ULA's clock comes from, not inside the ULA:
+##   * ULA as the top (out-of-context timing runs): ula_standalone.xdc, which
+##     creates clk_14 on the ULA's own clk_14 port;
+##   * ULA inside a board top (arty_top): the Clocking Wizard's MMCM output,
+##     which Vivado derives automatically from the board clock and which flows
+##     into the ULA's clk_14 pin.
+## Either way every generated clock below uses -source [get_ports clk_14] and
+## so hangs off whichever clock arrives there. (A conditional create_clock was
+## tried: XDC does not support 'if'.)
+##
+## This file is SCOPED to the ula entity (SCOPED_TO_REF ula, or
+## read_xdc -ref ula): Vivado applies it inside every instance of ula, so the
+## paths below start at the ULA's own hierarchy (timing_subsystem/...) and
+## get_ports means the ULA's ports, wherever the ULA sits.
 
 ## ---- clk_7: the 14 -> 7 MHz divider (clk_div_2 master_clock) ----------------
 ## Toggles on clk_14's RISING edge (crystal inverted by the book's common-
@@ -216,7 +228,11 @@ set_multicycle_path -hold 1 -start -from [get_cells video_fetch_subsystem/latch_
 ## SETUP stays checked (the load does need the latch data in time: +120.9 ns).
 ## Proof: the strobe tick windows (header of latch_and_shift_reg_control_clks,
 ## checked by its sync TB).
-set_false_path -hold -from [get_cells colour_subsystem/attr_select_mux/pix_serial/data_latch_8/latch_*/gate_model.fpga_model.s_q_reg] -to [get_clocks clk_7]
+## Written -through the latch's q_n output PIN (a port of data_latch_1_bit, so
+## it exists from the start) rather than -from the latch CELL: inside a top,
+## the file is read while synthesis is still building the latches, and the
+## cell is not a valid startpoint yet ("no valid startpoints").
+set_false_path -hold -through [get_pins colour_subsystem/attr_select_mux/pix_serial/data_latch_8/latch_*/q_n] -to [get_clocks clk_7]
 
 ## ============================================================================
 ## Known, understood hold reports (NOT fixed): the ripple chain, 12 paths

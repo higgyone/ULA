@@ -12,7 +12,8 @@
 --                                ula   CPU strobes inactive, keys up, no tape
 --                                  |
 --     int_n --> edge detect --> count 25 frames --> toggle --> led(0)  (1 Hz)
---     int_n, phicpu_n, ras_n, cas_n, a0 --> Pmod JA (ja(0)..ja(4)) for the scope
+--     int_n, phicpu_n, ras_n, cas_n --> Pmod JA (ja(0)..ja(3)) for the scope;
+--     ja(4) = the 1 Hz blink (a slow scope reference)
 --
 -- ── What the LEDs show ───────────────────────────────────────────────
 --   led(1) (LD5) on      the MMCM has locked: 14 MHz is running.
@@ -27,7 +28,10 @@
 --   ja(1)  pin 2  /phicpu  the CPU clock, inverted: 3.5 MHz (285.7 ns)
 --   ja(2)  pin 3  /RAS     video fetch bursts in the 256 display pixels of
 --   ja(3)  pin 4  /CAS     each display line; nothing in the border
---   ja(4)  pin 7  A0       the video address bit during fetches
+--   ja(4)  pin 7  blink    the 1 Hz LED signal (scope reference)
+--   (A0 is not brought out: it is a tri-state ULA pin, and a tri-state net
+--   cannot drive an ordinary output pin: Vivado warns 'Inout buffer is not
+--   created'.)
 --
 -- ── Notes ────────────────────────────────────────────────────────────
 --   * clk_wiz_14 is IP: instantiated through a component declaration copied
@@ -46,6 +50,13 @@
 --     second register first (a synchroniser).
 --   * No reset: the registers start from their initial values, which the
 --     bitstream loads at power-up.
+--   * dont_touch on the ula instance: synthesis would otherwise remove every
+--     part of the ULA whose outputs are unused here (colour, FLASH, the data
+--     latches). The smoke test should put ALL of it on the silicon, and
+--     ula_clocks.xdc then finds every cell it names.
+--   * Expected critical warning: 'Generated clock cpu_clk has only disabled
+--     paths from master clock clk_7'. The CPU inputs are tied inactive here,
+--     so the contention logic is constant. A harness effect, not a ULA one.
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -60,6 +71,9 @@ entity arty_top is
 end entity arty_top;
 
 architecture behavioral of arty_top is
+
+    attribute dont_touch : string;
+    attribute dont_touch of ula_subsystem : label is "true";
 
     -- clocking
     signal s_clk_14 : std_logic;
@@ -183,7 +197,7 @@ begin
     ja(1)          <= s_phicpu_n;
     ja(2)          <= s_ras_n;
     ja(3)          <= s_cas_n;
-    ja(4)          <= s_a0;
+    ja(4)          <= s_blink;
     ja(7 downto 5) <= "000";
 
 end architecture behavioral;
