@@ -58,9 +58,18 @@ create_generated_clock -name c3_clk -source [get_pins timing_subsystem/video_tim
 ## waveform {1214.293 5785.749}. Checked: C6..C8 and V0..V8 all report c5_clk.
 create_generated_clock -name c5_clk -source [get_pins timing_subsystem/video_timing/ht/mhc/count_5/ff/gate_model.fpga_model.s_q_reg/C] -edges {2 6 10} [get_pins timing_subsystem/video_timing/ht/mhc/count_5/ff/gate_model.fpga_model.s_q_reg/Q]
 
+## ---- Test modes off: tclk_a = tclk_b = '0' -------------------------------------
+## The wafer test clocks (test_modes) are only active with MREQ and IORQ low
+## together, which a real Z80 never does; in normal use both are '0'. Without
+## this Vivado sees rd_n / wr_n / mreq_n / ioreq_n as possible clocks for C6..C8
+## (clk_hc6 = NOR(tclk_a, c5_n)) and the FLASH divider (NOR(v8_n, tclk_b)).
+## The constant goes on the INTERNAL test-clock pins, not on the CPU ports:
+## fixing a port would switch off real CPU paths. Needs the hierarchy kept
+## (synth with -flatten_hierarchy none) for these pins to exist.
+set_case_analysis 0 [get_pins timing_subsystem/test_clocks/tclk_a]
+set_case_analysis 0 [get_pins timing_subsystem/test_clocks/tclk_b]
+
 ## ---- Still to do ------------------------------------------------------------
-##  - test modes: tclk_a / tclk_b make rd_n, wr_n, mreq_n look like clocks
-##    (set_case_analysis)
 ##  - V-counter outputs as clocks (FLASH divider off v8, ...)
 ##  - latches enabled by registered strobes (pixel / attribute data latches)
 ##  - latches enabled by counter decodes (video_en on c3_n, burst parity on
