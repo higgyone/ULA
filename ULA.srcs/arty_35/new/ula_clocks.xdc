@@ -122,8 +122,20 @@ create_generated_clock -name pdl_clk -source [get_ports clk_14] -edges {5 19 21}
 create_generated_clock -name adl_clk -source [get_ports clk_14] -edges {13 27 29} [get_pins video_fetch_subsystem/latch_shift_clks/s_attr_data_latch_n_reg/Q]
 create_generated_clock -name aol_clk -source [get_ports clk_14] -edges {19 47 51} [get_pins video_fetch_subsystem/latch_shift_clks/s_attr_output_latch_n_reg/Q]
 
+## ---- ras_clk: the video RAS register, enable of the row-A0 latch -------------------
+## s_ras_r_reg (ras_cas_generation, synchronous) is a clk_14 register; through
+## vid_ras_n its output enables video_address_generation's row_a0_latch.
+## Its own time base: tick = c1 c0 clk_7, 0..7 per 4-pixel DRAM cycle; tick k
+## starts at clk_14 edge 3 + 2k. The decode sets RAS for ticks 0..5, but a
+## register is ONE TICK LATE (at the edge that starts tick k, clk_7 and the
+## counter bits still show tick k-1), so the OUTPUT is high in ticks 1..6 and
+## low in 7 and 0 (the precharge gap across the cycle boundary).
+## rise = tick 1 = edge 5, fall = tick 7 = edge 17, next rise 5 + 16 = 21.
+## Period 8 ticks = 571.432 ns, waveform {142.858 571.432}.
+create_generated_clock -name ras_clk -source [get_ports clk_14] -edges {5 17 21} [get_pins video_fetch_subsystem/strobe_generation/s_ras_r_reg/Q]
+
 ## ---- Still to do ------------------------------------------------------------
-##  - row A0 latch: enable from s_ras_r_reg (ras_cas_generation)
 ##  - the two contention mask latches: enable = the CPU clock latch's output
+##    (cpuclk = c0 or (cpuclk and H): 3.5 MHz, stretched by contention)
 ##  - multiple_clock (7): latches whose enable is a decode (burst parity on
 ##    sync_n) or CPU-side (border, MIC / speaker, CPU clock hold)
