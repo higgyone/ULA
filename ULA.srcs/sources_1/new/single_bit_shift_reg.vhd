@@ -182,7 +182,7 @@ begin
         q   <= s_g_out;
         q_n <= s_h_out;
 
-    else generate
+    else fpga_model : generate
 
         fpga_shift_flipflop : process (clk) is
         begin

@@ -139,7 +139,7 @@ begin
 
         q   <= s_e_out;
         q_n <= s_f_out;
-    else generate
+    else fpga_model : generate
 
         fpga_flipflop : process (clk) is
         begin

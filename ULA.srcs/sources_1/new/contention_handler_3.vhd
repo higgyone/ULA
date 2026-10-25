@@ -215,7 +215,7 @@ begin
         s_cpuclk_n <= not(s_g_out_n) after tg;
         s_cpuclk   <= not(s_g_out) after tg;
 
-    else generate
+    else fpga_model : generate
 
         -- H: hold the clock high (derivation: c2/c3 window, not border,
         -- I/O not past T2, and ULA I/O or contended memory not under way)

@@ -134,7 +134,7 @@ begin
 
         q_n <= s_c_out;
         q   <= s_d_out;
-    else generate
+    else fpga_model : generate
 
         fpga_datalatch : process (e, d) is
         begin
