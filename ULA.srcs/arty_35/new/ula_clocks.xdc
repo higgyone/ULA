@@ -187,3 +187,53 @@ set_clock_groups -asynchronous -group [get_clocks port_wr_clk] -group [get_clock
 ## check_timing then lists this one G pin under no_clock (it is the clock
 ## generator: honest).
 set_clock_sense -stop_propagation -clocks [get_clocks {c3_clk v8_clk}] [get_pins memory_cpu_subsystem/cpu_contention/gate_model.fpga_model.s_q_reg/G]
+
+## ============================================================================
+## Timing exceptions. Each is a PROMISE about the design; a false promise
+## hides real failures. Each one names what proves it.
+## ============================================================================
+
+## ---- Multicycle: sload -> pixel shift register (hold) -------------------------
+## By default Vivado assumes sload can change on EVERY clk_14 edge, so it checks
+## hold against the clk_7 falling edge at the same instant (the shift register
+## clocks then): requirement 0 ns, and the pixel clock arrives ~2 ns after
+## clk_14 (through the divider), so -1.2 ns. But sload only changes on clk_14
+## edges where clk_7 RISES (ticks 7 and 9), never on the load edge (tick 8).
+## So the hold check moves back ONE clk_14 cycle (-start = count on the launch
+## clock): requirement -71.429 ns, slack +70.2. Setup is unchanged (71.4 ns,
+## real). -end would count on clk_7 and move it two ticks: too far.
+## Proof: latch_and_shift_reg_control_clks_sync_tb's race check (sload stable
+## +/-20 ns around every falling pixel-clock edge, 86 898 edges).
+set_multicycle_path -hold 1 -start -from [get_cells video_fetch_subsystem/latch_shift_clks/s_sload_reg] -to [get_clocks clk_7]
+
+## ---- False path (hold only): pixel data latch -> pixel shift register ----------
+## The pixel latch opens in tick 2, on a clk_7 falling edge, i.e. just as the
+## shift register clocks, so Vivado sees a hold race (-0.06 ns). But the latch
+## output only reaches the shift cells' D through the load / shift mux, which
+## selects it only while sload = 1 (ticks 7, 8); in tick 2 sload is 0 and the
+## mux passes the neighbour's bit. By tick 7 the latch has been closed since
+## tick 3. A change on this path can never be captured -> no hold check.
+## SETUP stays checked (the load does need the latch data in time: +120.9 ns).
+## Proof: the strobe tick windows (header of latch_and_shift_reg_control_clks,
+## checked by its sync TB).
+set_false_path -hold -from [get_cells colour_subsystem/attr_select_mux/pix_serial/data_latch_8/latch_*/gate_model.fpga_model.s_q_reg] -to [get_clocks clk_7]
+
+## ============================================================================
+## Known, understood hold reports (NOT fixed): the ripple chain, 12 paths
+## ============================================================================
+## After the above, setup is met everywhere and 12 hold paths still fail, all
+## of one shape: a clock-making flip-flop's OUTPUT feeding a flip-flop clocked
+## by that stage's MASTER, e.g. C5's own toggle (Q -> D, -7.5 ns), V8 into the
+## c5_clk domain (-4.4 .. -9.1), each FLASH stage into the one before
+## (-11 .. -30 ns). They are an artefact of how Vivado times ripple clocks:
+## for the LATEST arrival of a generated clock it also follows the gating
+## ENABLE inputs, e.g. c3_clk via C0 -> C1 -> C2 (c3's clock is
+## c0.c1.c2.clk_7), adding ~8.8 ns per stage that the real edge never has (the
+## edge always comes from clk_7; the enables are stable long before it). The
+## launch side uses the short, real route, so a false skew appears. In the
+## real circuit these are ordinary toggles and counter feedbacks, and the
+## gate-level simulations (counter TBs, ula_tb) run them at full speed.
+## Decision (2026-10-25): document, don't fight Vivado's ripple model; if the
+## Arty smoke test misbehaves, these paths are the first place to look.
+## Fixing it properly would mean synchronous counters on clk_14 with enables
+## (gives up the gate-level structure of the backbone).
