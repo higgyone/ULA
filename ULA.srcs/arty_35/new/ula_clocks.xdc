@@ -134,8 +134,52 @@ create_generated_clock -name aol_clk -source [get_ports clk_14] -edges {19 47 51
 ## Period 8 ticks = 571.432 ns, waveform {142.858 571.432}.
 create_generated_clock -name ras_clk -source [get_ports clk_14] -edges {5 17 21} [get_pins video_fetch_subsystem/strobe_generation/s_ras_r_reg/Q]
 
-## ---- Still to do ------------------------------------------------------------
-##  - the two contention mask latches: enable = the CPU clock latch's output
-##    (cpuclk = c0 or (cpuclk and H): 3.5 MHz, stretched by contention)
-##  - multiple_clock (7): latches whose enable is a decode (burst parity on
-##    sync_n) or CPU-side (border, MIC / speaker, CPU clock hold)
+## ---- Clocks that leak into logic ------------------------------------------------
+## Several clock nets are ALSO data (C3 and V8 are address / decode inputs,
+## RAS feeds the row-A0 latch). Vivado follows a clock through ANY logic, so
+## they leaked into latch enables built from decodes (multiple_clock: c3_clk,
+## ras_clk, v8_clk all on the border latch's G). The fix is to declare the
+## REAL clock where the enable is formed: a clock defined on a pin BLOCKS the
+## clocks arriving from upstream at that pin.
+
+## ---- sync_clk: composite sync = enable of pal_v_burst's line-parity latch ------
+## sync_n is decoded from the counters, so it changes on clk_7's falling edges.
+## Line = 448 pixels = 896 clk_7 edge numbers; low 32 pixels (the hsync pulse),
+## high 416: rise 2, fall 2 + 832 = 834, next rise 2 + 896 = 898. In the four
+## vsync lines sync_n differs, but its edges stay on the same clk_7 phase, so
+## the repeating-hsync model is safe. Waveform {71.429 59500.359}. Target is
+## our own hierarchical pin (ula_timing's output), not a synthesis LUT name.
+create_generated_clock -name sync_clk -source [get_pins timing_subsystem/master_clock/ff/gate_model.fpga_model.s_q_reg/Q] -edges {2 834 898} [get_pins timing_subsystem/sync_6c_n]
+
+## ---- cpu_clk: the Z80 clock latch (contention_handler_3) -------------------------
+## cpuclk = c0 or (cpuclk and H): c0 = clk_7 / 2 (3.5 MHz) on clk_7's falling
+## edges, so {2 4 6}. Contention only STRETCHES it (held high), so the plain
+## 3.5 MHz waveform is its fastest = the worst case to time. Declared on the
+## latch's OUTPUT; it reaches the two contention mask latches' enables.
+create_generated_clock -name cpu_clk -source [get_pins timing_subsystem/master_clock/ff/gate_model.fpga_model.s_q_reg/Q] -edges {2 4 6} [get_pins memory_cpu_subsystem/cpu_contention/gate_model.fpga_model.s_q_reg/Q]
+
+## ---- port_wr_clk: the CPU's port 0xFE write strobe ------------------------------
+## Enables the border and MIC / speaker latches. With no Z80 in a ULA-only
+## analysis it is driven from outside (CPU pins), so it is a PRIMARY clock on
+## an internal pin: the port decoder's output, which feeds both latch groups.
+## Period = 4 T-states, a stand-in; the clock groups below make it irrelevant.
+create_clock -name port_wr_clk -period 1142.857 [get_pins io_port_subsystem/io_decode/port_wr_n]
+
+## ---- Clock groups: the CPU writes are asynchronous to the video ---------------
+## Every other clock is derived from clk_14, so they are RELATED and the paths
+## between them must be timed (that is why they are generated clocks). A CPU
+## port write happens whenever the program says, with no fixed edge
+## relationship to the video (a mid-line border write changes colour mid-line:
+## that is how border effects work), so no timing between the two groups.
+## Must be LAST: -filter collects the clocks that exist when this line is read.
+## Never use async groups just to quieten a report: related clocks put in
+## separate groups hide real failures. Revisit in the Spectrum repo, where
+## port_wr comes from the Z80 core's clock (cpu_clk) and is related.
+set_clock_groups -asynchronous -group [get_clocks port_wr_clk] -group [get_clocks -filter {NAME != port_wr_clk}]
+
+## ---- Known exception: multiple_clock (1) on the CPU clock latch's own G -------
+## Its gate is built from counter bits (the contention window) and the border,
+## so c3_clk and v8_clk leak into it. That latch IS a clock generator (its
+## output is cpu_clk); its inputs are data deciding when the clock stops.
+## set_clock_sense -stop_propagation on G was tried: it also cut cpu_clk off
+## from its master. Left as this one documented warning.
