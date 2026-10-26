@@ -100,7 +100,6 @@ ghdl -r --std=08 --workdir=$work <dut>_tb --stop-time=200ns
 ### Primitive flip-flops
 | Entity | File | Role |
 |--------|------|------|
-| `d_ff` | `D_FF.vhd` | D flip-flop, falling edge, q and q_bar outputs |
 | `clk_div_2` | `clk_div_2.vhd` | Divide-by-2 used for C0–C5 ripple chain |
 | `d_ff_nor` | `d_ff_nor.vhd` | Structural D FF built from NOR gates |
 | `trc_ff` | `trc_ff.vhd` | T FF with reset and carry |
@@ -310,14 +309,12 @@ same discipline: entity + every port map + every TB in one commit.
   `VBorderUpper`→`v_border_upper` in `video_sync` (rename only — the equations
   in the "Verified Correct" list are byte-for-byte unchanged).
 
-**⏳ Still TODO — Vivado-PC tasks (touch `ULA.xpr`, must go through the IDE):**
-- Rename file **and** entity `Vert_Line_counter` → `vert_line_counter`
-  (update its two port maps in `video_sync.vhd` + `vert_line_counter_tb.vhd`).
-- Rename file `D_FF.vhd` → `d_ff.vhd` (entity is already `d_ff`).
-- Rename file + entity `D_FF_tb` → `d_ff_tb`.
-- Retire `b3_tb.vhd` — a stale duplicate of `bit3_counter_tb` that instantiates
-  a non-existent `bit3_counter(Behavioral)` architecture (already broken; its
-  port map happens to match the new `clk, reset, …` order).
+**✅ Done 2026-10-24:** file `Vert_Line_counter.vhd` → `vert_line_counter.vhd`
+(the entity was already lowercase after the VSG pass, so no port maps changed;
+`ULA.xpr` re-pointed through Vivado in its own housekeeping commit).
+- ~~Rename `D_FF.vhd` / `D_FF_tb`~~ — moot: both **retired 2026-10-23**
+  (nothing in the design used `d_ff`; `d_ff_nor` replaced it).
+- ~~Retire `b3_tb.vhd`~~ — done in `23e74e2`.
 
 **Caveat — renames touch `ULA.xpr`** and every renamed port/arch must be updated
 in all consumers and testbenches in the *same* commit (cf. the
@@ -327,14 +324,9 @@ in all consumers and testbenches in the *same* commit (cf. the
 
 Things that must be done in Vivado on the Vivado PC, because they require touching `ULA.xpr` through the IDE (raw edits to the project file are risky):
 
-- **Naming-pass file/entity renames — TODO (the only open item).** The source-edit
-  portion of the naming/ordering cleanup is done (see "Naming & ordering
-  consistency"); these renames remain because they touch `ULA.xpr`:
-  `Vert_Line_counter` → `vert_line_counter` (file + entity; update the two port
-  maps), `D_FF.vhd` → `d_ff.vhd` (file only — entity is already `d_ff`),
-  `D_FF_tb` → `d_ff_tb` (file + entity), and retire the broken `b3_tb.vhd`
-  duplicate. Do each through the IDE / Tcl (`get_files` + `add_files` +
-  `remove_files`), then `git mv` / `git rm` the working copies in the same commit.
+- **Naming-pass file/entity renames — DONE (2026-10-24).** The last one,
+  `Vert_Line_counter.vhd` → `vert_line_counter.vhd`, is done; `D_FF` /
+  `D_FF_tb` were retired and `b3_tb` deleted.
 
 - **`master_horiz_counter_tb` imports duplicate — DONE.** The stale
   `ULA.srcs/sources_1/imports/new/master_horiz_counter_tb.vhd` (which Vivado was
@@ -558,7 +550,7 @@ on the next rising edge (50 ns later), well clear. Synthetic `Clk_HC6` +
 scratch dir:
 ```
 xvhdl.bat d_ff_nor.vhd tce_ff.vhd trce_ff.vhd trc_ff.vhd \
-          Vert_Line_counter.vhd vert_line_counter_tb.vhd   # -> library work
+          vert_line_counter.vhd vert_line_counter_tb.vhd   # -> library work
 xelab.bat work.vert_line_counter_tb -s vlc_sim             # elaborate
 xsim.bat  vlc_sim -tclbatch run.tcl                         # run.tcl = "run all\nexit"
 ```
@@ -1038,5 +1030,117 @@ None is wired into a top level yet. **Phase 6 is complete.**
   - Per-pin direction can differ by subsystem: `a0` is `out` in
     `ula_video_fetch` and `in` in `ula_io_port` (the pin is `inout`);
     `d0..d2` are `inout` inside `ula_io_port` (keyboard drives, border reads).
-- ⏳ Next: the XDC / FPGA wrapper (Phase 7 hardware items in
-  `docs/pinout.md`).
+- ✅ **FPGA build: 0 combinational loops (2026-10-24, branch `fpga-standalone`).**
+  First synthesis (`synth_design -mode out_of_context`, top `ula`) gave 271
+  combinational loops / 145 `LUTLP-1`: every cross-coupled NOR became a LUT
+  feeding itself (untimeable, routing-dependent races). Fix (option B):
+  - Package **`ula_build_pkg`** in two files: `ula_build_pkg_sim.vhd`
+    (`fpga_build = false`, used in **simulation only**) and
+    `ula_build_pkg_fpga.vhd` (`true`, **synthesis only**). For CLI xsim runs,
+    compile the sim one; swap in the fpga one to simulate the FPGA build.
+  - Each storage primitive has `gate_model : if not fpga_build generate ...
+    else generate ...`: the book's gates (unchanged) vs a real FPGA element.
+    `d_ff_nor` → falling-edge FF; `data_latch_1_bit` → latch (`if e = '0'`,
+    no else, `d` in the sensitivity list); `single_bit_shift_register` →
+    falling-edge FF with the mux inside the edge block (**invert the
+    active-low inputs**: `not data_n` / `not data_1_n`); `contention_handler_3`
+    → the CPU clock hold as a set-dominant latch,
+    `cpuclk = c0 or (cpuclk and H)`, H derived from the gates (header).
+    Every FPGA `s_q` has `:= '0'` (the FPGA power-up value).
+  - Rule for a branch: every signal has exactly one driver per build, so
+    anything read outside the generate is driven in both branches (a
+    double driver on std_logic is not a compile error: sim shows `X`).
+  - Results: loops 271 → **0**, `latch_loops` 0; 236 LUTs, **39 FFs + 35
+    latches**. Every block TB touched and `ula_tb` pass with BOTH packages.
+  - All VHDL files are VHDL-2008 in `ULA.xpr` (synthesis read them as
+    VHDL-93 before; `pal_v_burst` reads an `out` port). Synthesis top is
+    `ula`. `D_FF` / `D_FF_tb` retired.
+  - Left for the XDC step: `no_clock` / `TIMING-17` / `TIMING-20` (no
+    clocks declared) and `PLHOLDVIO-2` ×8 (LUT-driven ripple clocks:
+    `create_generated_clock` + hold check). `HPDR-2` fixed 2026-10-24:
+    `ula_timing.k0` is now `out` (only driven inside; the `ula` pin stays
+    `inout`).
+- **Scope (2026-10-24):** this repo finishes the ULA; the Z80 + full
+  Spectrum (block-RAM memory, VGA scan doubler) is a separate later repo.
+  Definition of done: (1) 0 loops ✅; (2) ULA-only XDC + clean OOC timing;
+  (3) interface doc for the Spectrum repo; (4) tidy-ups (Vert_Line_counter
+  rename, GHDL regression, docs); (5) Arty smoke test (ULA + MMCM, sync /
+  taps on LEDs or a Pmod).
+- ✅ Step 3: **[`docs/ula_interface.md`](docs/ula_interface.md)** (2026-10-24)
+  — what to import (both `ula_build_pkg` files, one per flow; VHDL-2008;
+  submodule), clock / reset, every port at the FPGA level, the DRAM protocol
+  (`ula_tb`'s board model, data 40 ns after CAS), and what an all-FPGA
+  Spectrum must add: in/out/oe signals instead of `'Z'` / `'H'`, digital
+  RGB + BRIGHT + syncs for VGA, `cpuclk` exported for the Z80.
+- ✅ Step 4 tidy-ups (2026-10-24): `vert_line_counter.vhd` rename,
+  `ula_timing.k0` → `out`. ⏳ GHDL regression on the other PC (user).
+- ✅ **Step 2: [`ula_clocks.xdc`](ULA.srcs/arty_35/new/ula_clocks.xdc)** (2026-10-25,
+  in the `arty_35` constraints set; written by the user lesson by lesson, every
+  line commented with its reasoning). Out-of-context synthesis with
+  `-flatten_hierarchy none` (the case-analysis pins are hierarchical). Result:
+  **setup met everywhere**; `no_clock` 214 → 9 (all one pin: the CPU clock
+  latch's own enable, deliberately blocked); `loops 0`.
+  - **16 clocks:** `clk_14` (primary) → `clk_7` (÷2) → `c3_clk` → `c5_clk` →
+    `v8_clk` → `flash0..3_clk` (the ripple chain); `pdl/adl/aol_clk` (the
+    registered data-latch strobes), `ras_clk` (row-A0 latch), `sync_clk`
+    (burst parity latch), `cpu_clk` (contention mask latches), `port_wr_clk`
+    (border / MIC / speaker; a primary clock on an internal pin, async group).
+  - **Rules learned:** `-source` = where the MASTER clock is defined (port or
+    the master's `Q`); `-edges` count the master's own waveform (odd = rising,
+    even = falling), used for falling-edge flip-flops and non-50 % clocks; a
+    registered strobe is one tick late; C0..C3 and C4 are gated clocks (no
+    constraint); a clock defined on a pin blocks clocks leaking from upstream.
+  - `set_case_analysis 0` on `test_clocks/tclk_a` and `tclk_b` (test modes).
+  - `set_clock_sense -stop_propagation` of `c3_clk`/`v8_clk` at the CPU clock
+    latch's `G`: without it the leaked clocks loop round and **crash Vivado's
+    timing engine** (access violation).
+  - Exceptions, each with its proof: multicycle `-hold 1 -start` on `sload` →
+    pixel clock; hold-only false path pixel latch → shift cells.
+  - **12 hold reports left, documented, not fixed:** ripple-chain artefacts.
+    Vivado's late clock arrival for a generated clock follows the gating
+    ENABLE inputs (e.g. `c3_clk` via C0 → C1 → C2), adding ~8.8 ns per stage
+    that the real edge never has. Revisit if the Arty smoke test misbehaves.
+  - **XDC gotchas met:** `get_ports` vs `get_pins`; one `-`, not `--`; the
+    file is a script read top to bottom (clock groups last); end the file with
+    a newline (an appended line got glued on: "Duplicate option '-from'");
+    "Run Synthesis" (a run) ≠ `synth_design` in the console (opens nothing,
+    uses the run's settings).
+- ✅ **Step 5: Arty smoke test PASSED on the board (2026-10-26).**
+  [`arty_top.vhd`](ULA.srcs/sources_1/new/arty_top.vhd): Clocking Wizard IP
+  `clk_wiz_14` (100 → 14.000 MHz; the wizard chose ÷5 ×49.875 ÷71.25, VCO
+  997.5 MHz), the ULA with CPU inputs inactive (`dont_touch` on the instance
+  so the whole ULA is built), a 1 Hz LED from `/INT` (edge detect `"was not
+  '0', is '0'"` because open-collector `'H'` ≠ `'1'` in simulation), scope
+  signals on Pmod JA. Bitstream `ULA.runs/impl_2/arty_top.bit` (synth_2 /
+  impl_2 are the current runs). Measured: MMCM locked; `/INT` 19.97 ms period,
+  **9.14 µs** wide (64 px); `/RAS` bursts 35.44 µs every 64 µs (247 px of
+  fetch windows, pixel 8.5..255.5); `/phicpu` 3.5 MHz with an **820 Ω
+  pull-up** (open collector: fast fall, slow RC rise). The ripple counters
+  Vivado reported hold "violations" on run correctly on silicon.
+  - **Constraints in a top:** `ula_clocks.xdc` is `SCOPED_TO_REF ula`; the
+    `clk_14` primary clock moved to `ula_standalone.xdc` (disabled in the
+    project; only for the ULA as top), because inside `arty_top` the MMCM's
+    clock flows in (XDC has no `if`). Master XDC: `clk100mhz` lower case (VSG
+    lowercased the port; XDC is case-sensitive), its `create_clock` commented
+    out (the IP constrains its own input: two clocks on one pin doubled every
+    derived clock), unused board groups commented. False path written
+    `-through` the latch's `q_n` pin (`-from` the cell had no valid startpoint
+    while synthesis was still building it). A tri-state net cannot drive an
+    ordinary output (A0 left off the Pmod).
+  - **Routed timing:** hold met everywhere (the router fixed the ripple hold
+    reports). Setup reports remain: latch **time borrowing** (e.g. the
+    `video_en` latch: Vivado assumes data may arrive any time the latch is
+    open; its input never changes then) and the ripple-chain artefacts.
+- ✅ **Latch time borrowing (2026-10-26).** The `video_en` latch (`gd_latch`,
+  open while c3 = 1) failed setup by −1085 ns: Vivado assumed data could
+  arrive any time in its 1143 ns window and borrow into the next stage. Its
+  input `border_n = NOR(c8, v8, v6·v7)` only changes at counter wraps where C3
+  FALLS, i.e. as the latch closes, and the ULA wants the old value there. So:
+  `set_max_time_borrow 0` (no change while open) plus `set_multicycle_path
+  -setup 2` / `-hold 1` `-through …/gd_latch/d` (the change at the close
+  belongs to the next window; moving setup by N needs `-hold N−1`).
+  **Final routed timing of `arty_top`:** hold met everywhere; setup 13
+  reports, worst −21 ns, all the documented ripple-chain artefacts (V8 → 14 MHz
+  registers / V counter, flash0 → v8, flash2 → flash1). Board behaviour
+  confirms they are harmless.
+- ⏳ Next: README / docs pass, PR `fpga-standalone` → `main`.

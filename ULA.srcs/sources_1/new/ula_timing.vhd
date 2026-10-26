@@ -46,7 +46,7 @@ entity ula_timing is
         wr_n    : in    std_logic;
         mreq_n  : in    std_logic;
         ioreq_n : in    std_logic;
-        k0      : inout std_logic; -- keyboard pin K0; test B drives v8 out on it
+        k0      : out   std_logic; -- keyboard pin K0 (inout at the top): only driven here, test B puts v8 on it
 
         clk_7   : out   std_logic; -- 7 MHz, clk_14 divided by 2
         clk_7_n : out   std_logic; -- /clk7, clocks the horizontal counter

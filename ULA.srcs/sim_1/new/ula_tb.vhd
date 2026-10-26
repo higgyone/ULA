@@ -403,13 +403,12 @@ begin
 
         type line_t is array (0 to 447) of std_logic_vector(3 downto 0);
 
-        variable line0  : line_t;
-        variable lat    : integer := -1;
-        variable ok     : boolean;
-        variable got    : std_logic_vector(3 downto 0);
-        variable x      : integer;
-        variable n      : integer := 0;
-        variable prev_c : integer := -1;
+        variable line0 : line_t;
+        variable lat   : integer := -1;
+        variable ok    : boolean;
+        variable got   : std_logic_vector(3 downto 0);
+        variable x     : integer;
+        variable n     : integer := 0;
 
     begin
 

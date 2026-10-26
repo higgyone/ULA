@@ -99,12 +99,49 @@
 --   phicpu_n    pin 32: cpuclk through the inverting peripheral transistor,
 --               open collector: '0' while cpuclk = '1', else 'Z' (1k PCB
 --               pull-up). The PCB transistor inverts it back for the Z80.
---   ioreqtw3_n  ULA-port I/O access in T2 / TW / T3, active low (no consumer
---               yet)
+--   ioreqtw3_n  ULA-port I/O access in T2 / TW / T3, active low; read by
+--               io_port_decode_0xfe (via ula_memory_cpu -> ula_io_port)
+--
+-- ── Two models: gate_model (simulation) / fpga_cpuclk_latch (FPGA) ───
+--   The CPU clock hold is a loop in plain gates: cpuclk feeds back into
+--   s_e_out and s_f_out. On an FPGA that is a combinational loop (two LUTs,
+--   the last LUTLP-1 in the design once the primitives had FPGA branches).
+--   So, as in d_ff_nor / data_latch_1_bit, two generate branches picked by
+--   fpga_build from ula_build_pkg (sim: false, synthesis: true).
+--
+--   Multiplying the gates out gives one equation:
+--     cpuclk(next) = c0  or  (cpuclk and H)
+--     H = (c2 or c3) and (not border) and (not s_ioreqtw3)
+--         and ( ioreq or (a14 and not a15 and not s_mreqt23) )
+--   (De Morgan on each NOR; (X+Y)(X+Z) = X+YZ on the address legs; then
+--   absorption.) H is "a hold is wanted": in the window, not in the border,
+--   and ULA-port I/O not past T2, or contended memory (0x4000..0x7FFF) not
+--   already under way. It contains no cpuclk, so it is plain logic.
+--   The equation is a set-dominant latch:
+--     c0 = '1'            -> '1'  (follows c0)
+--     c0 = '0', H = '0'   -> '0'  (follows c0)
+--     c0 = '0', H = '1'   -> holds: once high, the clock stays high = the
+--                                   Z80 is held (contention)
+--
+--   fpga_build = false  the gates, unchanged (gate_model branch).
+--   fpga_build = true   s_hold = H and a latch process on (s_c0, s_hold):
+--                       if c0 = '1' -> '1', elsif H = '0' -> '0', no else.
+--                       It drives s_cpuclk and s_g_out_n (= cpuclk, the mask
+--                       latches' enable). Vivado reports "inferring latch".
+--
+--   Shared by both builds, outside the generate: the input inverters and the
+--   feed-forward gates (s_a_out .. s_c_out), cpuclk / phicpu_n, and the two
+--   mask latches. Rule: every signal has exactly one driver in each build,
+--   so anything read outside the branches (s_cpuclk, s_g_out_n) is driven in
+--   BOTH branches. The FPGA build still feeds back (s_q -> mask latch enable
+--   -> s_ioreqtw3 / s_mreqt23 -> H), but through real latches, which Vivado
+--   can time. contention_handler_3_tb passes with both packages (64 cycle
+--   checks, 1110 clock phases checked for runts).
 ----------------------------------------------------------------------------------
 
 library ieee;
     use ieee.std_logic_1164.all;
+    use work.ula_build_pkg.all;
 
 entity contention_handler_3 is
     port (
@@ -144,6 +181,9 @@ architecture structural of contention_handler_3 is
     signal s_g_out   : std_logic;
     signal s_g_out_n : std_logic;
 
+    signal s_hold : std_logic;        -- H: a hold is wanted (FPGA branch)
+    signal s_q    : std_logic := '0'; -- the CPU clock latch (FPGA branch)
+
 begin
 
     s_c0    <= not(c0_n) after tg;
@@ -157,22 +197,53 @@ begin
     -- outside the contention window: c2 = c3 = '0'
     s_c_out <= not(c2 or c3) after tg;
 
-    -- memory / address hold
-    s_d_out <= not(s_a_out or s_b_out or s_c_out or s_e_out_n) after tg;
+    gate_model : if not fpga_build generate
 
-    -- checking enabled
-    s_e_out   <= not(border or s_ioreqtw3 or s_mreqt23 or s_cpuclk_n) after tg;
-    s_e_out_n <= not(s_e_out) after tg;
+        -- memory / address hold
+        s_d_out <= not(s_a_out or s_b_out or s_c_out or s_e_out_n) after tg;
 
-    -- ULA-port I/O hold
-    s_f_out <= not(s_c_out or border or s_cpuclk_n or ioreq_n or s_ioreqtw3) after tg;
+        -- checking enabled
+        s_e_out   <= not(border or s_ioreqtw3 or s_mreqt23 or s_cpuclk_n) after tg;
+        s_e_out_n <= not(s_e_out) after tg;
 
-    -- the clock: follows c0, held at '0' by either hold
-    s_g_out    <= not(s_d_out or s_c0 or s_f_out) after tg;
-    s_g_out_n  <= not(s_g_out) after tg;
-    s_cpuclk_n <= not(s_g_out_n) after tg;
-    s_cpuclk   <= not(s_g_out) after tg;
-    cpuclk     <= s_cpuclk;
+        -- ULA-port I/O hold
+        s_f_out <= not(s_c_out or border or s_cpuclk_n or ioreq_n or s_ioreqtw3) after tg;
+
+        -- the clock: follows c0, held at '0' by either hold
+        s_g_out    <= not(s_d_out or s_c0 or s_f_out) after tg;
+        s_g_out_n  <= not(s_g_out) after tg;
+        s_cpuclk_n <= not(s_g_out_n) after tg;
+        s_cpuclk   <= not(s_g_out) after tg;
+
+    else fpga_model : generate
+
+        -- H: hold the clock high (derivation: c2/c3 window, not border,
+        -- I/O not past T2, and ULA I/O or contended memory not under way)
+        s_hold <= (c2 or c3)
+                  and (not border)
+                  and (not s_ioreqtw3)
+                  and (s_ioreq or (a14 and (not a15) and (not s_mreqt23)));
+
+        -- cpuclk(next) = c0 or (cpuclk and H): a latch, set by c0,
+        -- cleared when c0 is low and no hold is wanted, otherwise held
+        fpga_cpuclk_latch : process (s_c0, s_hold) is
+        begin
+
+            if (s_c0 = '1') then
+                s_q <= '1';
+            elsif (s_hold = '0') then
+                s_q <= '0';
+            end if;
+
+        end process fpga_cpuclk_latch;
+
+        s_cpuclk  <= s_q;
+        s_g_out_n <= s_q; -- = cpuclk: the mask latches' enable
+
+    end generate gate_model;
+
+    -- ── shared again: everything below only reads s_cpuclk / s_g_out_n ──
+    cpuclk <= s_cpuclk;
 
     -- pin 32: the ULA's inverting peripheral (output) transistor
     phicpu_n <= '0' after tg when s_cpuclk = '1' else

@@ -209,26 +209,25 @@ begin
     end process cover_track;
 
     -- End-of-sim coverage report. Warns (not errors) on any missed state.
-    report_cov : process (sim_done) is
+    report_cov : process is
     begin
 
-        if (sim_done) then
+        wait until sim_done;
 
-            for k in 0 to 6 loop
+        for k in 0 to 6 loop
 
-                assert states_visited(k) = '1'
-                    report "Coverage gap: state " & integer'image(k) &
-                           " was never visited."
-                    severity warning;
+            assert states_visited(k) = '1'
+                report "Coverage gap: state " & integer'image(k) &
+                       " was never visited."
+                severity warning;
 
-            end loop;
+        end loop;
 
-            report "bit3_counter_tb: simulation complete."
-                severity note;
+        report "bit3_counter_tb: simulation complete."
+            severity note;
 
-            -- stop the free-running clock: end the simulation
-            finish;
-        end if;
+        -- stop the free-running clock: end the simulation
+        finish;
 
     end process report_cov;
 

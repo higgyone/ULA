@@ -69,13 +69,44 @@
 -- Initial values seed a valid "holding 0" resting state (clk='0', set='0',
 -- q='0') so the network has a consistent starting point and avoids the
 -- U-propagation quirk where cross-coupled NORs with a still-'U' input
--- never trigger their partner's re-evaluation. `after` and the init
--- values are ignored by synthesis — real silicon power-up state comes from
--- place-and-route.
+-- never trigger their partner's re-evaluation. `after` and these init
+-- values are simulation-only: the gate model is not synthesised (below).
+--
+-- ── Two models: gate_model (simulation) / fpga_shift_flipflop (FPGA) ─
+--   Two generate branches, picked by fpga_build from ula_build_pkg
+--   (ula_build_pkg_sim.vhd = false in simulation, ula_build_pkg_fpga.vhd
+--   = true in synthesis), the same scheme as d_ff_nor:
+--
+--   fpga_build = false  the nine NORs + inverter above, with `after TG`
+--                       (and the 2·TG ring fix). Every testbench uses this.
+--   fpga_build = true   a real FPGA flip-flop on the falling edge of clk,
+--                       with the load / shift mux inside the edge block:
+--                         set = '1' -> s_q <= not data_n
+--                         set = '0' -> s_q <= not data_1_n
+--                       Vivado packs the mux into the LUT in front of the
+--                       flip-flop's D input: one LUT + one FF per cell.
+--
+--   THE ACTIVE-LOW TRAP: both data inputs carry the inverse of the bit, and
+--   the gates invert them on the way in. The FPGA branch must do the same
+--   (`not data_n`, `not data_1_n`). Without the not(), q is the complement
+--   of the bit; single_bit_shift_reg_tb fails at once ("initial load 0"),
+--   and in the chip every pixel would be inverted (ink and paper swapped).
+--   It is the same inversion that lets shift8 chain the cells with no extra
+--   gates: q_n of one cell into the active-low data_1_n of the next.
+--
+--   Only clk is in the sensitivity list: set, data_n and data_1_n are read
+--   only at the edge, as in the gate model (sampled while clk is high,
+--   stored on the falling edge). Contrast data_latch_1_bit, a latch, which needs d.
+--
+--   Why: on an FPGA the gate model's master and slave latches become LUTs
+--   feeding back into themselves (4 looped LUTs per cell, 32 for shift8),
+--   which Vivado cannot time. s_q := '0' is the FPGA power-up value,
+--   matching the gate model's "holding 0" seed.
 ----------------------------------------------------------------------
 
 library ieee;
     use ieee.std_logic_1164.all;
+    use work.ula_build_pkg.all;
 
 -- Operating modes (in plain words):
 --   The cell remembers one bit and, on each falling edge of clk, replaces it
@@ -121,27 +152,54 @@ architecture structure of single_bit_shift_register is
     signal s_g_out : std_logic := '0';
     signal s_h_out : std_logic := '1';
     signal s_i_out : std_logic := '1';
+    -- (the nine above exist only in the gate model; synthesis removes them)
+
+    -- fpga_shift_flipflop branch: the stored (true) bit. '0' is the FPGA
+    -- power-up value.
+    signal s_q : std_logic := '0';
 
     constant tg : time := 1 ns;   -- modelled NOR propagation delay (sim only)
 
 begin
 
-    -- input mux: set selects parallel data (data_n) vs shift-in (data_1_n)
-    s_f_out <= not(set or data_1_n)         after tg;
-    s_e_out <= not(set)                     after tg;
-    s_d_out <= not(s_e_out or data_n)         after tg;
+    gate_model : if not fpga_build generate
 
-    -- master latch (gated by clk)
-    s_c_out <= not(clk or s_b_out)            after tg;
-    s_b_out <= not(clk or s_a_out)            after tg;
-    s_a_out <= not(s_b_out or s_i_out)          after 2 * tg; -- slower: breaks 1 ns rings (see header)
-    s_i_out <= not(s_c_out or s_d_out or s_f_out) after tg;
+        -- input mux: set selects parallel data (data_n) vs shift-in (data_1_n)
+        s_f_out <= not(set or data_1_n)         after tg;
+        s_e_out <= not(set)                     after tg;
+        s_d_out <= not(s_e_out or data_n)         after tg;
 
-    -- slave SR latch
-    s_h_out <= not(s_c_out or s_g_out)          after tg;
-    s_g_out <= not(s_b_out or s_h_out)          after 2 * tg; -- slower: breaks 1 ns rings (see header)
+        -- master latch (gated by clk)
+        s_c_out <= not(clk or s_b_out)            after tg;
+        s_b_out <= not(clk or s_a_out)            after tg;
+        s_a_out <= not(s_b_out or s_i_out)          after 2 * tg; -- slower: breaks 1 ns rings (see header)
+        s_i_out <= not(s_c_out or s_d_out or s_f_out) after tg;
 
-    q   <= s_g_out;
-    q_n <= s_h_out;
+        -- slave SR latch
+        s_h_out <= not(s_c_out or s_g_out)          after tg;
+        s_g_out <= not(s_b_out or s_h_out)          after 2 * tg; -- slower: breaks 1 ns rings (see header)
+
+        q   <= s_g_out;
+        q_n <= s_h_out;
+
+    else fpga_model : generate
+
+        fpga_shift_flipflop : process (clk) is
+        begin
+
+            if falling_edge(clk) then
+                if (set = '1') then
+                    s_q <= not(data_n);
+                else
+                    s_q <= not(data_1_n);
+                end if;
+            end if;
+
+        end process fpga_shift_flipflop;
+
+        q   <= s_q;
+        q_n <= not s_q;
+
+    end generate gate_model;
 
 end architecture structure;

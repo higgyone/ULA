@@ -56,12 +56,43 @@
 -- within one simulation instant and xsim/GHDL delta-spin to their
 -- iteration guard (a t=0 hang). The four internal signals are seeded to
 -- the "transparent, holding 0" resting state (e='0', d='0', q='0') so the
--- network starts defined instead of 'U'. Both are ignored by synthesis —
--- real silicon power-up state comes from place-and-route.
+-- network starts defined instead of 'U'. Both are simulation-only: the
+-- gate model is not synthesised at all (see below).
+--
+-- ── Two models: gate_model (simulation) / fpga_datalatch (FPGA) ─────
+--   Two generate branches, picked by fpga_build from ula_build_pkg
+--   (ula_build_pkg_sim.vhd = false in simulation, ula_build_pkg_fpga.vhd
+--   = true in synthesis), the same scheme as d_ff_nor:
+--
+--   fpga_build = false  the four NOR gates above, with `after TG`.
+--                       Gate-accurate; every testbench uses this.
+--   fpga_build = true   a real FPGA latch (LDCE): a process that assigns
+--                       s_q <= d only while e = '0', with no else, so s_q
+--                       must remember its value when e = '1'. Same
+--                       characteristic table.
+--
+--   Why: on an FPGA the cross-coupled NORs become a LUT feeding back into
+--   itself (a combinational loop) that Vivado cannot time. 19 instances
+--   use this cell (the pixel, attribute and attribute-output latches, the
+--   border and MIC / speaker registers, video_en, the row-A0 latch, the
+--   burst parity latch, and contention_handler_3's two latches, whose CPU
+--   clock hold feeds back through them).
+--
+--   Latch, not flip-flop: there is no clock edge. The process must be
+--   sensitive to d as well as e, because q follows d continuously while
+--   transparent; with only e in the list, simulation would update q only
+--   when e changes while the hardware latch follows d (a sim/hardware
+--   mismatch). Vivado reports "inferring latch" for this cell: in most
+--   designs that warning means a forgotten else, here it is intended.
+--
+--   s_q := '0' is the power-up value on the FPGA (the bitstream loads it),
+--   matching the gate model's seed. It matters: some of these latches stay
+--   closed long after power-up (border_reg until the first OUT to 0xFE).
 ----------------------------------------------------------------------
 
 library ieee;
     use ieee.std_logic_1164.all;
+    use work.ula_build_pkg.all;
 
 entity data_latch_1_bit is
     port (
@@ -83,20 +114,39 @@ architecture structural of data_latch_1_bit is
     signal s_b_out : std_logic := '1';
     signal s_c_out : std_logic := '1';
     signal s_d_out : std_logic := '0';
+    -- (the four above exist only in the gate model; synthesis removes them)
+
+    -- fpga_datalatch branch: the stored bit. '0' is the FPGA power-up value.
+    signal s_q : std_logic := '0';
 
     constant tg : time := 1 ns;   -- modelled NOR propagation delay (sim only)
 
 begin
 
-    -- input stage (gated by active-low enable e)
-    s_b_out <= not (e or d)       after tg;
-    s_a_out <= not (e or s_b_out)     after tg;
+    gate_model : if not FPGA_BUILD generate
+        -- input stage (gated by active-low enable e)
+        s_b_out <= not (e or d)       after tg;
+        s_a_out <= not (e or s_b_out)     after tg;
 
-    -- cross-coupled SR latch
-    s_c_out <= not (s_a_out or s_d_out)   after tg;
-    s_d_out <= not (s_b_out or s_c_out)   after tg;
+        -- cross-coupled SR latch
+        s_c_out <= not (s_a_out or s_d_out)   after tg;
+        s_d_out <= not (s_b_out or s_c_out)   after tg;
 
-    q_n <= s_c_out;
-    q   <= s_d_out;
+        q_n <= s_c_out;
+        q   <= s_d_out;
+    else fpga_model : generate
+
+        fpga_datalatch : process (e, d) is
+        begin
+
+            if (e = '0') then
+                s_q <= d;
+            end if;
+
+        end process fpga_datalatch;
+
+        q   <= s_q;
+        q_n <= not(s_q);
+    end generate gate_model;
 
 end architecture structural;

@@ -64,21 +64,23 @@
 --   The stimulus follows the real ULA's order of events: the pixel is BLANKED
 --   before the burst window opens, and the parity only changes during sync,
 --   OUTSIDE the window. Changing the colour and the counter in the same
---   instant is not just unrealistic, it is FATAL: the burst path is a couple
---   of gates, the colour path is the 4-NOR V-switch plus black_star, so for a
---   few delta cycles yuv sees "burst on + previous colour", the V sum dips
---   below 0 mV and the run dies with a bound-check failure in yuv.vhd. The
---   same applies at the top level: the real counters give the right order,
---   but a hand-driven stimulus must too.
+--   instant is unrealistic: the burst path is a couple of gates, the colour
+--   path is the 4-NOR V-switch plus black_star, so for a few delta cycles yuv
+--   sees "burst on + previous colour" and the unclamped V sum dips below
+--   0 mV. When this TB was written that aborted the run with a bound-check
+--   failure in yuv.vhd. ula_tb later found the real counters' ripple produces
+--   the same moment in the full chip, so yuv now clamps u and v at 259 mV (the
+--   output transistor's floor) and the moment is harmless. The ordering is
+--   kept because it is what the real ULA does.
 --
---   Sync during the burst is fatal for a related reason: a HAZARD in the
+--   Sync during the burst is avoided for a related reason: a HAZARD in the
 --   gate-level parity latch (data_latch_1_bit). When its enable (sync_n)
 --   falls while holding q = '0', the two input NORs both act on the old b_o,
 --   and for one tg (1 ns) q and q_n are BOTH '0', with d unchanged. timing
 --   (= q_n) blips, the V-switch passes through wrong colour patterns, and
---   with the burst sinks on the V sum dips below zero. Harmless in the real
---   ULA, since sync and burst never overlap, and outside the burst window the
---   worst V sum is 496 mV, so a blip during sync cannot go negative.
+--   with the burst sinks on the V sum dips towards the clamp. Harmless in the
+--   real ULA, since sync and burst never overlap, and outside the burst window
+--   the worst V sum is 496 mV, so a blip during sync stays in range.
 --
 -- Any mismatch is fatal; a clean run prints "ALL TESTS PASSED".
 ----------------------------------------------------------------------------------
@@ -488,7 +490,7 @@ begin
                 -- ULA does (blanked from pixel 320, burst opens at 384).
                 -- Changing both at once lets the short burst path settle a
                 -- few deltas ahead of the long colour path, so yuv briefly
-                -- sees "burst on + old colour" and v dips below 0 mV.
+                -- sees "burst on + old colour" (now absorbed by yuv's clamp).
                 drive(0, '0', '1');
                 set_code(code);
                 in_burst := (code = burst_code);
