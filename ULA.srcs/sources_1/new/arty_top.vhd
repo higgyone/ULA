@@ -25,13 +25,26 @@
 --
 -- ── What the scope should show (Pmod JA, 3.3 V; GND = pins 5 / 11) ─────
 --   ja(0)  pin 1  /INT     low 64 pixels = 9.14 us, every 19.97 ms
---   ja(1)  pin 2  /phicpu  the CPU clock, inverted: 3.5 MHz (285.7 ns)
+--   ja(1)  pin 2  /phicpu  the CPU clock, inverted: 3.5 MHz (285.7 ns).
+--                           OPEN COLLECTOR ('0' / 'Z', like the real pin 32):
+--                           needs a pull-up resistor, as on the Spectrum PCB
+--                           (1 k there). Pmod pin 2 -> ~1 k -> pin 6 (3.3 V).
+--                           Without it the pin floats half the time. Vivado
+--                           pushes the tri-state out to an OBUFT, so a logic
+--                           'pull-up' in this file cannot replace the resistor.
 --   ja(2)  pin 3  /RAS     video fetch bursts in the 256 display pixels of
 --   ja(3)  pin 4  /CAS     each display line; nothing in the border
 --   ja(4)  pin 7  blink    the 1 Hz LED signal (scope reference)
 --   (A0 is not brought out: it is a tri-state ULA pin, and a tri-state net
 --   cannot drive an ordinary output pin: Vivado warns 'Inout buffer is not
 --   created'.)
+--
+-- ── Result on the board (2026-10-26) ────────────────────────────────
+--   LD5 on, LD4 ~1 Hz. /INT period 19.97 ms, width 9.14 us (64 px; measure at
+--   ~2 us/div: at 5 ms/div the scope's coarse sampling read 8.8 us). /RAS
+--   bursts 35.44 us every 64 us (expected 247 px = 35.3 us: fetch windows run
+--   pixel 8.5 .. 255.5). /phicpu 3.5 MHz with an 820 R pull-up: fast fall
+--   (driven), slow rise (RC through the resistor), as open collector should.
 --
 -- ── Notes ────────────────────────────────────────────────────────────
 --   * clk_wiz_14 is IP: instantiated through a component declaration copied

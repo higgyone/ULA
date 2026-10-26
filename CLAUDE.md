@@ -1105,4 +1105,31 @@ None is wired into a top level yet. **Phase 6 is complete.**
     a newline (an appended line got glued on: "Duplicate option '-from'");
     "Run Synthesis" (a run) ≠ `synth_design` in the console (opens nothing,
     uses the run's settings).
-- ⏳ Next: step 5, the Arty smoke test.
+- ✅ **Step 5: Arty smoke test PASSED on the board (2026-10-26).**
+  [`arty_top.vhd`](ULA.srcs/sources_1/new/arty_top.vhd): Clocking Wizard IP
+  `clk_wiz_14` (100 → 14.000 MHz; the wizard chose ÷5 ×49.875 ÷71.25, VCO
+  997.5 MHz), the ULA with CPU inputs inactive (`dont_touch` on the instance
+  so the whole ULA is built), a 1 Hz LED from `/INT` (edge detect `"was not
+  '0', is '0'"` because open-collector `'H'` ≠ `'1'` in simulation), scope
+  signals on Pmod JA. Bitstream `ULA.runs/impl_2/arty_top.bit` (synth_2 /
+  impl_2 are the current runs). Measured: MMCM locked; `/INT` 19.97 ms period,
+  **9.14 µs** wide (64 px); `/RAS` bursts 35.44 µs every 64 µs (247 px of
+  fetch windows, pixel 8.5..255.5); `/phicpu` 3.5 MHz with an **820 Ω
+  pull-up** (open collector: fast fall, slow RC rise). The ripple counters
+  Vivado reported hold "violations" on run correctly on silicon.
+  - **Constraints in a top:** `ula_clocks.xdc` is `SCOPED_TO_REF ula`; the
+    `clk_14` primary clock moved to `ula_standalone.xdc` (disabled in the
+    project; only for the ULA as top), because inside `arty_top` the MMCM's
+    clock flows in (XDC has no `if`). Master XDC: `clk100mhz` lower case (VSG
+    lowercased the port; XDC is case-sensitive), its `create_clock` commented
+    out (the IP constrains its own input: two clocks on one pin doubled every
+    derived clock), unused board groups commented. False path written
+    `-through` the latch's `q_n` pin (`-from` the cell had no valid startpoint
+    while synthesis was still building it). A tri-state net cannot drive an
+    ordinary output (A0 left off the Pmod).
+  - **Routed timing:** hold met everywhere (the router fixed the ripple hold
+    reports). Setup reports remain: latch **time borrowing** (e.g. the
+    `video_en` latch: Vivado assumes data may arrive any time the latch is
+    open; its input never changes then) and the ripple-chain artefacts.
+- ⏳ Next: the time-borrowing lesson (`set_max_time_borrow 0` where a latch's
+  input is stable while it is open), README / docs pass, PR to `main`.
