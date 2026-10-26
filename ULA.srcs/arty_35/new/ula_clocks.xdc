@@ -253,3 +253,26 @@ set_false_path -hold -through [get_pins colour_subsystem/attr_select_mux/pix_ser
 ## Arty smoke test misbehaves, these paths are the first place to look.
 ## Fixing it properly would mean synchronous counters on clk_14 with enables
 ## (gives up the gate-level structure of the backbone).
+## ---- Latch timing: the video_en latch (gd_latch) ---------------------------
+## A latch has a WINDOW, not an edge: open (transparent) while c3 = 1 here,
+## closed when c3 falls. By default Vivado lets data arrive any time up to the
+## close and carry on through ("time borrowing", up to the whole 1143 ns
+## window), then checks the next stage: video_en -> sload (71 ns) failed by
+## -1085 ns, and -584 ns into the attribute output latches.
+## The facts: border_n (its input) = NOR(c8, v8, v6.v7) changes ONLY at pixel
+## 0 / 256 and at line changes, i.e. counter wraps where C3 FALLS = exactly
+## when this latch CLOSES. The ULA wants the OLD value there, and gets it: V8 /
+## C8 change tens of ns after C3 (ripple). So:
+##  1. while open the input never changes -> no borrowing (max_time_borrow 0:
+##     treat it like a flip-flop at its OPENING edge);
+##  2. the change at the close belongs to the NEXT window -> setup checked
+##     against the next opening, one c3 period (1143 ns) later: -setup 2.
+##     Moving setup by N moves hold too, so -hold N-1 (= 1) puts it back:
+##     the standard pair.
+## -through the latch's d PIN (exists from the start; the cell does not while
+## synthesis is still building it). Result: these paths pass (+1128 ns).
+## Proof: the border_n equation (every term changes only at a C3-falling wrap);
+## the border edges are checked by video_sync_tb and the sync-strobe TB.
+set_max_time_borrow 0 [get_cells video_fetch_subsystem/latch_shift_clks/gd_latch/gate_model.fpga_model.s_q_reg]
+set_multicycle_path -setup 2 -through [get_pins video_fetch_subsystem/latch_shift_clks/gd_latch/d]
+set_multicycle_path -hold  1 -through [get_pins video_fetch_subsystem/latch_shift_clks/gd_latch/d]
