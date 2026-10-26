@@ -4,8 +4,8 @@ Gate-accurate VHDL recreation of the Ferranti/Amstrad ULA (6C001E-7) used in
 the **ZX Spectrum 48K**, targeting a Digilent **Arty A7-35T** FPGA board
 (Artix-7 XC7A35T) and developed in **Vivado**.
 
-The implementation follows Chris Smith's book *The ZX Spectrum ULA*, schematic
-pages 90 and 92, gate by gate. Buy the book, it is great!
+The implementation follows Chris Smith's book *The ZX Spectrum ULA*, as closely as possible. 
+Buy the book, it is great!
 
 ## Status: complete
 
