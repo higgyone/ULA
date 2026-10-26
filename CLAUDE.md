@@ -1131,5 +1131,16 @@ None is wired into a top level yet. **Phase 6 is complete.**
     reports). Setup reports remain: latch **time borrowing** (e.g. the
     `video_en` latch: Vivado assumes data may arrive any time the latch is
     open; its input never changes then) and the ripple-chain artefacts.
-- ⏳ Next: the time-borrowing lesson (`set_max_time_borrow 0` where a latch's
-  input is stable while it is open), README / docs pass, PR to `main`.
+- ✅ **Latch time borrowing (2026-10-26).** The `video_en` latch (`gd_latch`,
+  open while c3 = 1) failed setup by −1085 ns: Vivado assumed data could
+  arrive any time in its 1143 ns window and borrow into the next stage. Its
+  input `border_n = NOR(c8, v8, v6·v7)` only changes at counter wraps where C3
+  FALLS, i.e. as the latch closes, and the ULA wants the old value there. So:
+  `set_max_time_borrow 0` (no change while open) plus `set_multicycle_path
+  -setup 2` / `-hold 1` `-through …/gd_latch/d` (the change at the close
+  belongs to the next window; moving setup by N needs `-hold N−1`).
+  **Final routed timing of `arty_top`:** hold met everywhere; setup 13
+  reports, worst −21 ns, all the documented ripple-chain artefacts (V8 → 14 MHz
+  registers / V counter, flash0 → v8, flash2 → flash1). Board behaviour
+  confirms they are harmless.
+- ⏳ Next: README / docs pass, PR `fpga-standalone` → `main`.

@@ -251,6 +251,12 @@ set_false_path -hold -through [get_pins colour_subsystem/attr_select_mux/pix_ser
 ## gate-level simulations (counter TBs, ula_tb) run them at full speed.
 ## Decision (2026-10-25): document, don't fight Vivado's ripple model; if the
 ## Arty smoke test misbehaves, these paths are the first place to look.
+## UPDATE 2026-10-26: the smoke test ran correctly on the board (/INT 19.97 ms
+## and 9.14 us, /RAS bursts, 3.5 MHz CPU clock). In arty_top's ROUTED timing
+## the router fixes every hold check (hold met everywhere), and the same
+## ripple pairs show up as SETUP reports instead: 13 paths, worst -21 ns
+## (V8 into the 14 MHz registers and the vertical counter, flash0 -> v8,
+## flash2 -> flash1). Same cause, same verdict: artefacts.
 ## Fixing it properly would mean synchronous counters on clk_14 with enables
 ## (gives up the gate-level structure of the backbone).
 ## ---- Latch timing: the video_en latch (gd_latch) ---------------------------
